@@ -1,6 +1,4 @@
 '''
-Created on Feb 16, 2016
-
 @author: ahmed allam <ahmed.allam@yale.edu>
 '''
 import pickle

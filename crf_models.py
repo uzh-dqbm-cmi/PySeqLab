@@ -1,6 +1,4 @@
 '''
-Created on Aug 31, 2016
-
 @author: ahmed allam <ahmed.allam@yale.edu>
 '''
 import os
