@@ -1,5 +1,4 @@
 '''
-Created on Aug 31, 2016
 
 @author: Ahmed Allam <ahmed.allam@yale.edu>
 '''
