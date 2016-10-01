@@ -1,10 +1,6 @@
 # README #
 
-PySeqLab is a package for sequence learning and segmentation learning.
-
-### Status ###
-
-Currently, it is in the last phase of development.
+PySeqLab is a package for sequence labelling and segmentation learning tasks.
 
 ### TODO ###
 
