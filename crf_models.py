@@ -401,10 +401,11 @@ class HOCRFModelRepresentation(object):
             pos = ref_str.find(token, i)
             
             if(pos != -1 and pos != pos_stack[-1]):
-                num_sep = len([c for c in ref_str[:pos] if c == "|"])
-                start = pos - num_sep + 1
-                end = start + num_elem - 1 
-                found_pos.append(end)
+                if(pos == 0):
+                    found_pos.append(num_elem)
+                else:
+                    elems_before = [elem for elem in ref_str[:pos].split("|") if elem and elem != "|"]
+                    found_pos.append(len(elems_before) + num_elem)
                 i = pos + 1
                 pos_stack.append(pos)
             elif(pos != -1 and pos == pos_stack[-1]):
@@ -424,7 +425,7 @@ class HOCRF(object):
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
         self.seqs_info = seqs_info
-        self.load_fromdisk = True
+        self.load_fromdisk = False
         self.func_dict = {"alpha": self._loadalpha,
                          "beta": self._loadbeta,
                          "f_potential": self._loadfpotential,
@@ -594,27 +595,28 @@ class HOCRF(object):
             for z in z_zk_pisj:
                 for pi, sj in z_zk_pisj[z]:
                     O_featurepattern_count[t, pi, sj, z] = {}
+                    O_potential_features[t, pi, sj, z] = {}
                     len_elempi = len(pi.split("|"))       
                     if(pi == ""):
                         len_pi = 0
                     else:
-                        len_pi = len_elempi  
+                        len_pi = len_elempi 
                     for zk, positions in z_zk_pisj[z][pi, sj]:
                         for pos_kp in positions:
                             t_kp = t - len_pi + pos_kp - 1
                             boundary = (t_kp, t_kp)
-#                             flag = 0
                             if(boundary in activefeatures):
                                 if(zk in activefeatures[boundary]):
                                     f_val = list(activefeatures[boundary][zk].values())
                                     w_indx = list(activefeatures[boundary][zk].keys())
-                                    O_potential_features[t, z, pi, sj, zk] = {'w_indx': w_indx,
-                                                                              'f_val': f_val}
+                                    O_potential_features[t, pi, sj, z][t_kp, zk] = {'w_indx': w_indx,
+                                                                                    'f_val': f_val}
                                     flag  = 1
                                     
                                     O_featurepattern_count[t, pi, sj, z][t_kp, zk] = flag
                     if(not O_featurepattern_count[t, pi, sj, z]):
                         del O_featurepattern_count[t, pi, sj, z]
+                        del O_potential_features[t, pi, sj, z]
         # write on disk
         target_dir = self.seqs_info[seq_id]['activefeatures_dir']
         ReaderWriter.dump_data(O_featurepattern_count, os.path.join(target_dir, "O_featurepattern_count"))
@@ -627,42 +629,121 @@ class HOCRF(object):
         T = self.seqs_info[seq_id]["T"]
         O_potential_features = self.seqs_info[seq_id]["O_potential_features"]
         Ox = {}
+        cached_comp = {}
         for t in range(1, T+1):
             for z in z_zk_pisj:
                 for pi, sj in z_zk_pisj[z]:
-                    potential = 0       
-                    for zk, _ in z_zk_pisj[z][pi, sj]:
-                        if((t, z, pi, sj, zk) in O_potential_features):
-                            w_indx = O_potential_features[t, z, pi, sj, zk]['w_indx']
-                            f_val = O_potential_features[t, z, pi, sj, zk]['f_val']
-                            potential += numpy.dot(w[w_indx], f_val)
+                    potential = 0 
+                    if((t, pi, sj, z) in O_potential_features):
+                        for t_kp, zk in O_potential_features[t, pi, sj, z]:
+                            if((t_kp, zk) in cached_comp):
+                                potential += cached_comp[t_kp, zk]
+                            else:
+                                w_indx = O_potential_features[t, pi, sj, z][t_kp, zk]['w_indx']
+                                f_val = O_potential_features[t, pi, sj, z][t_kp, zk]['f_val']
+                                cached_comp[t_kp, zk] = numpy.dot(w[w_indx], f_val)
+                                potential += cached_comp[t_kp, zk]
 
                     Ox[t, pi, sj, z] = potential
-        print("z_zk_pisj {}".format(z_zk_pisj))
         return(Ox)
     
     def _detect_doublecount_features(self, A, B, C):
         featpatt_doublecount = []
-        for tup in C:
-            if(tup in A or tup in B):
-                featpatt_doublecount.append(tup)
-        for tup in A:
-            if(tup in B and tup not in featpatt_doublecount):
-                featpatt_doublecount.append(tup)
+        
+        if(C and A and B):
+            for tup in C:
+                if(tup in A or tup in B):
+                    featpatt_doublecount.append(tup)
+        elif(C and A):
+            for tup in C:
+                if(tup in A):
+                    featpatt_doublecount.append(tup)
+        elif(C and B):
+            for tup in C:
+                if(tup in B):
+                    featpatt_doublecount.append(tup)
+        if(A and B):
+            for tup in A:
+                if(tup in B and tup not in featpatt_doublecount):
+                    featpatt_doublecount.append(tup)
         return(featpatt_doublecount)
     
     def prepare_Wx_features(self, seq_id):
         z_zk_pisj = self.model.z_zk_pisj
+        P_codebook = self.model.P_codebook
+        S_codebook = self.model.S_codebook
+        Z_codebook = self.model.Z_codebook
         f_featurepattern_count = self.seqs_info[seq_id]["f_featurepattern_count"]
         b_featurepattern_count = self.seqs_info[seq_id]["b_featurepattern_count"]
         O_featurepattern_count = self.seqs_info[seq_id]["O_featurepattern_count"]
 
-        print("f_featurepattern_count {}".format(f_featurepattern_count))
-        print("b_featurepattern_count {}".format(b_featurepattern_count))
-        print("O_featurepattern_count {}".format(O_featurepattern_count))
+#         print("f_featurepattern_count {}".format(f_featurepattern_count))
+#         print("b_featurepattern_count {}".format(b_featurepattern_count))
+#         print("O_featurepattern_count {}".format(O_featurepattern_count))
         Wx_potential_features = {}
         
         T = self.seqs_info[seq_id]["T"]
+        
+        factive = {}
+        for t in range(1, T+1):
+            t_a = t - 1
+            for pi in P_codebook:
+                if((t_a > 0 and pi == "") or (t_a == 0 and pi != "")):
+                    continue
+                else:
+                    if((t_a, pi) in f_featurepattern_count):
+                        A = f_featurepattern_count[t_a, pi]
+                        pattA = {zA:1 for tA, zA in A}
+    #                         print("A {}".format(A))
+    #                         print("pattA {}".format(pattA))
+                        addendum = []
+                        for patt in pattA:
+                            if(pi.endswith(patt)):
+                                addendum.append(pi[:(len(pi) - len(patt) - 1)])
+    #                         print("pi {} at t = {}, t_a = {} and addendum is {}".format(pi, t, t_a, addendum))
+                        lenpi = len(pi.split("|"))
+                        for elem in addendum:
+                            if(elem):
+                                offpos = t_a - (lenpi - len(elem.split("|")))
+    #                                 print("offpos {}".format(offpos))
+                                if((offpos, elem) in f_featurepattern_count):
+                                    A.update(f_featurepattern_count[offpos, elem])
+    #                                     print("A {}".format(A))
+                        factive[t_a, pi] = A
+                    
+        bactive = {}
+        for t in range(1, T+1):
+            for z in Z_codebook:
+                len_z = len(z.split("|"))
+                t_b = t - len_z + 2
+                for sj in S_codebook:
+                    if((t_b > T and sj != "") or (t_b <= T and sj == "")):
+                        continue
+                    else:
+                        if((t_b, sj) in b_featurepattern_count):
+                            if((t_b, sj) not in bactive):
+                                B = b_featurepattern_count[t_b, sj]
+        #                         print("B {}".format(B))
+                                pattB = {zB:1 for tB, zB in B}
+        #                         print("pattB {}".format(pattB))
+        #                             addendum = [sj[sj.find(patt)+len(patt)+1:] for patt in pattB]
+                                addendum = []
+                                for patt in pattB:
+                                    if(sj.startswith(patt)):
+                                        addendum.append(sj[len(patt)+1:])
+        #                         print("sj {} at t = {}, t_b = {} and addendum is {}".format(sj, t, t_b, addendum))
+        
+                                lensj = len(sj.split("|"))
+                                for elem in addendum:
+                                    if(elem):
+                                        offpos = t_b + lensj - len(elem.split("|"))
+        #                                 print("offpos {}".format(offpos))
+                                        if((offpos, elem) in b_featurepattern_count):
+                                            B.update(b_featurepattern_count[offpos, elem])
+        #                                     print("B {}".format(B))
+
+                                bactive[t_b, sj] = B
+                    
         for t in range(1, T+1):
             t_a = t - 1
             for z in z_zk_pisj:
@@ -670,57 +751,20 @@ class HOCRF(object):
                 t_b = t - len_z + 2
                 for pi, sj in z_zk_pisj[z]:
                     Wx_potential_features[t, pi, sj, z] = []
-                    if((t_a, pi) in f_featurepattern_count):
-                        A = deepcopy(f_featurepattern_count[t_a, pi])
-                        pattA = {zA:1 for tA, zA in A}
-                        print("A {}".format(A))
-                        print("pattA {}".format(pattA))
-                        addendum = []
-                        for patt in pattA:
-                            if(pi.endswith(patt)):
-                                addendum.append(pi[:(len(pi) - len(patt) - 1)])
-                        print("pi {} at t = {}, t_a = {} and addendum is {}".format(pi, t, t_a, addendum))
-                        lenpi = len(pi.split("|"))
-                        for elem in addendum:
-                            if(elem):
-                                offpos = t_a - (lenpi - len(elem.split("|")))
-                                print("offpos {}".format(offpos))
-                                if((offpos, elem) in f_featurepattern_count):
-                                    A.update(f_featurepattern_count[offpos, elem])
-                                    print("A {}".format(A))
-                    else:
-                        A = {}
-                    if((t_b, sj) in b_featurepattern_count):
-                        B = deepcopy(b_featurepattern_count[t_b, sj])
-                        print("B {}".format(B))
-                        pattB = {zB:1 for tB, zB in B}
-                        print("pattB {}".format(pattB))
-#                             addendum = [sj[sj.find(patt)+len(patt)+1:] for patt in pattB]
-                        addendum = []
-                        for patt in pattB:
-                            if(sj.startswith(patt)):
-                                addendum.append(sj[len(patt)+1:])
-                        print("sj {} at t = {}, t_b = {} and addendum is {}".format(sj, t, t_b, addendum))
 
-                        lensj = len(sj.split("|"))
-                        for elem in addendum:
-                            if(elem):
-                                offpos = t_b + lensj - len(elem.split("|"))
-                                print("offpos {}".format(offpos))
-                                if((offpos, elem) in b_featurepattern_count):
-                                    B.update(b_featurepattern_count[offpos, elem])
-                                    print("B {}".format(B))
-                    else:
-                        B = {}
-                    if((t, pi, sj, z) in O_featurepattern_count):
-                        C = O_featurepattern_count[t, pi, sj, z]
-                    else:
-                        C = {}
-                    print("C {}".format(C))
-                    print("t = {}, pi = {}, sj = {}".format(t, pi, sj))
+#                     print("C {}".format(C))
+#                     print("t = {}, pi = {}, sj = {}".format(t, pi, sj))
+
+   
+                    A = factive.get((t_a, pi))
+                    B = bactive.get((t_b, sj))
+                    C = O_featurepattern_count.get((t, pi, sj, z))
+#                     print("C {}".format(C))
+#                     print("t = {}, pi = {}, sj = {}".format(t, pi, sj))
                     doublecount = self._detect_doublecount_features(A, B, C)
-                    Wx_potential_features[t, pi, sj, z] += doublecount
-                    print("Wx_potential_features")
+                    if(doublecount):
+                        Wx_potential_features[t, pi, sj, z] += doublecount
+#                     print("Wx_potential_features")
         # write on disk
         target_dir = self.seqs_info[seq_id]['activefeatures_dir']
         ReaderWriter.dump_data(Wx_potential_features, os.path.join(target_dir, "Wx_potential_features"))
@@ -735,23 +779,27 @@ class HOCRF(object):
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
         Wx_potential_features = self.seqs_info[seq_id]["Wx_potential_features"]
         Wx = {}
-        
+        cached_comp = {}
         T = self.seqs_info[seq_id]["T"]
         for t in range(1, T+1):
             for z in z_zk_pisj:
                 for pi, sj in z_zk_pisj[z]:
+                    potential = 0
                     if((t, pi, sj, z) in Wx_potential_features):
-                        potential = 0
                         for pos, patt in set(Wx_potential_features[t, pi, sj, z]):
                             boundary = (pos, pos)
                             if(boundary in activefeatures):
                                 if(patt in activefeatures[boundary]):
-                                    f_val = list(activefeatures[boundary][patt].values())
-                                    w_indx = list(activefeatures[boundary][patt].keys())
-                                    potential += numpy.dot(w[w_indx], f_val)
+                                    if((pos, patt) in cached_comp):
+                                        potential += cached_comp[pos, patt]
+                                    else:
+                                        f_val = list(activefeatures[boundary][patt].values())
+                                        w_indx = list(activefeatures[boundary][patt].keys())
+                                        cached_comp[pos, patt] = numpy.dot(w[w_indx], f_val)
+                                        potential += cached_comp[pos, patt]
                     Wx[t, pi, sj, z] = potential
-                print("Wx[{},{}] = {}".format(t, z, potential))
-        print("Wx {}".format(Wx))
+#                 print("Wx[{},{}] = {}".format(t, z, potential))
+#         print("Wx {}".format(Wx))
         return(Wx)
     
 
@@ -773,7 +821,6 @@ class HOCRF(object):
          
         for t in range(1, T+1):
             for z in z_pisj:
-                print("z {}".format(z))
                 len_z = len(z.split("|"))
                 t_a = t - 1
                 t_b = t - len_z + 2
@@ -781,33 +828,32 @@ class HOCRF(object):
                     P_marginals[t, Z_codebook[z]] = 0
                     continue
                 accumulator = -numpy.inf
-                print("accumulator = {}".format(accumulator))
                 for pi in z_pisj[z]["pi"]:
                     for sj in z_pisj[z]["sj"]:
 
                         numerator = alpha[t_a, P_codebook[pi]] + beta[t_b, S_codebook[sj]] + Ox[t, pi, sj, z] - Wx[t, pi, sj, z]
-                        print("alpha[{}, {}] + beta[{}, {}] + Ox[{}, {}, {}, {}] - Wx[{}, {}, {}, {}]= {} + {} + {} - {}= {}".format(t_a, pi,
-                                                                                                        t_b, sj,
-                                                                                                        t, pi, sj, z,
-                                                                                                        t, pi, sj, z,
-                                                                                                        alpha[t_a, P_codebook[pi]],
-                                                                                                        beta[t_b, S_codebook[sj]],
-                                                                                                        Ox[t, pi, sj, z],
-                                                                                                        Wx[t, pi, sj, z],
-                                                                                                        numerator))
+#                         print("alpha[{}, {}] + beta[{}, {}] + Ox[{}, {}, {}, {}] - Wx[{}, {}, {}, {}]= {} + {} + {} - {}= {}".format(t_a, pi,
+#                                                                                                         t_b, sj,
+#                                                                                                         t, pi, sj, z,
+#                                                                                                         t, pi, sj, z,
+#                                                                                                         alpha[t_a, P_codebook[pi]],
+#                                                                                                         beta[t_b, S_codebook[sj]],
+#                                                                                                         Ox[t, pi, sj, z],
+#                                                                                                         Wx[t, pi, sj, z],
+#                                                                                                         numerator))
                         accumulator = numpy.logaddexp(accumulator, numerator)
-                        print("accumulator = {}".format(accumulator))
+#                         print("accumulator = {}".format(accumulator))
                 denominator = Z 
-                print("denominator = Z = {}".format(denominator))
+#                 print("denominator = Z = {}".format(denominator))
 
                 P_marginals[t, Z_codebook[z]] = numpy.exp(accumulator - denominator)
-                print("P({}, {}) = {}".format(t, z, P_marginals[t, Z_codebook[z]]))
-                print("="*40)
-        print("active features {}".format(self.seqs_info[seq_id]["activefeatures_by_position"]))
-        print("P_marginals {}".format(P_marginals))
-        print("Ox {}".format(Ox))
-        print("z_pisj {}".format(z_pisj))
-        print("z_cc_zk {}".format(self.model.z_cc_zk))
+#                 print("P({}, {}) = {}".format(t, z, P_marginals[t, Z_codebook[z]]))
+#                 print("="*40)
+#         print("active features {}".format(self.seqs_info[seq_id]["activefeatures_by_position"]))
+#         print("P_marginals {}".format(P_marginals))
+#         print("Ox {}".format(Ox))
+#         print("z_pisj {}".format(z_pisj))
+#         print("z_cc_zk {}".format(self.model.z_cc_zk))
         return(P_marginals)
     
     def compute_feature_expectation(self, seq_id):
@@ -869,9 +915,9 @@ class HOCRF(object):
         self.seqs_info[seq_id]["P_marginal"] = P_marginals
         f_expectation = self.compute_feature_expectation(seq_id)
         globalfeatures = self.seqs_info[seq_id]["globalfeatures"]
-        print("seq id {}".format(seq_id))
-        print("len(f_expectation) {}".format(len(f_expectation)))
-        print("len(globalfeatures) {}".format(len(globalfeatures)))
+#         print("seq id {}".format(seq_id))
+#         print("len(f_expectation) {}".format(len(f_expectation)))
+#         print("len(globalfeatures) {}".format(len(globalfeatures)))
         
         if(len(f_expectation) < len(globalfeatures)):
             missing_features = globalfeatures.keys() - f_expectation.keys()
@@ -884,9 +930,9 @@ class HOCRF(object):
             globalfeatures.update(addendum)
             print("missing features len(f_expectation) > len(globalfeatures)")
 
-        print("P_marginals {}".format(P_marginals))
-        print("f_expectation {}".format(f_expectation))
-        print("globalfeatures {}".format(globalfeatures))
+#         print("P_marginals {}".format(P_marginals))
+#         print("f_expectation {}".format(f_expectation))
+#         print("globalfeatures {}".format(globalfeatures))
         
         grad = {}
         for w_indx in f_expectation:
@@ -929,8 +975,11 @@ class HOCRF(object):
             target_dir = seq_info["activefeatures_dir"]
             f_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "f_potential_features"))
             seq_info["f_potential_features"] = f_potential_features
+            print("loading f_potential_features from disk")
         elif(seq_info.get("f_potential_features") == None):
             self.prepare_f_potentialfeatures(seq_id)
+            print("preparing f_potential_features")
+
         seq_info["f_potential"] = self.compute_f_potential(w, seq_id)
 #                     print("... Computing f_potential ...")
 
@@ -941,8 +990,12 @@ class HOCRF(object):
             target_dir = seq_info["activefeatures_dir"]
             b_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "b_potential_features"))
             seq_info["b_potential_features"] = b_potential_features
+            print("loading b_potential_features from disk")
+
         elif(seq_info.get("b_potential_features") == None):
             self.prepare_b_potentialfeatures(seq_id)
+            print("preparing b_potential_features")
+
         seq_info["b_potential"] = self.compute_b_potential(w, seq_id)
 #                     print("... Computing b_potential ...")
 
@@ -952,8 +1005,12 @@ class HOCRF(object):
             target_dir = seq_info["activefeatures_dir"]
             O_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "O_potential_features"))
             seq_info["O_potential_features"] = O_potential_features
+            print("loading O_potential_features from disk")
+
         elif(seq_info.get("O_potential_features") == None):
             self.prepare_Ox_features(seq_id)
+            print("preparing O_potential_features")
+
         seq_info["Ox"] = self.compute_Ox(w, seq_id)
 #                     print("... Computing Ox ...")
         
@@ -963,8 +1020,12 @@ class HOCRF(object):
             target_dir = seq_info["activefeatures_dir"]
             Wx_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "Wx_potential_features"))
             seq_info["Wx_potential_features"] = Wx_potential_features
+            print("loading Wx_potential_features from disk")
+
         elif(seq_info.get("Wx_potential_features") == None):
             self.prepare_Wx_features(seq_id)
+            print("preparing Wx_potential_features")
+        
         seq_info["Wx"] = self.compute_Wx(w, seq_id)
 #                     print("... Computing Wx ...")
 
