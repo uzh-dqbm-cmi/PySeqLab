@@ -1,6 +1,4 @@
 '''
-Created on Jul 14, 2016
-
 @author: ahmed allam <ahmed.allam@yale.edu>
 '''
 from collections import defaultdict
