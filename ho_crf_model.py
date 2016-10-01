@@ -4,7 +4,6 @@
 '''
 import os
 from copy import deepcopy
-from collections import Counter 
 import numpy
 from utilities import ReaderWriter, create_directory, vectorized_logsumexp
  
