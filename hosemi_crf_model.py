@@ -445,9 +445,9 @@ class HOSemiCRF(object):
         self.seqs_info[seq_id]["P_marginal"] = P_marginals
         f_expectation = self.compute_feature_expectation(seq_id)
         globalfeatures = self.seqs_info[seq_id]["globalfeatures"]
-        print("seq id {}".format(seq_id))
-        print("len(f_expectation) {}".format(len(f_expectation)))
-        print("len(globalfeatures) {}".format(len(globalfeatures)))
+#         print("seq id {}".format(seq_id))
+#         print("len(f_expectation) {}".format(len(f_expectation)))
+#         print("len(globalfeatures) {}".format(len(globalfeatures)))
         
         if(len(f_expectation) < len(globalfeatures)):
             missing_features = globalfeatures.keys() - f_expectation.keys()
@@ -460,9 +460,9 @@ class HOSemiCRF(object):
             globalfeatures.update(addendum)
             print("missing features len(f_expectation) > len(globalfeatures)")
 
-        print("P_marginals {}".format(P_marginals))
-        print("f_expectation {}".format(f_expectation))
-        print("globalfeatures {}".format(globalfeatures))
+#         print("P_marginals {}".format(P_marginals))
+#         print("f_expectation {}".format(f_expectation))
+#         print("globalfeatures {}".format(globalfeatures))
         
         grad = {}
         for w_indx in f_expectation:

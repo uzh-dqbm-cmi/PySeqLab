@@ -347,7 +347,7 @@ class HOFeatureExtractor(object):
         
         model_patt = deepcopy(model.patt_order)
         del model_patt[1]
-        print("modified model patt_order {} with id {}".format(model_patt, id(model_patt)))
+#         print("modified model patt_order {} with id {}".format(model_patt, id(model_patt)))
         
         model_states = list(model.Y_codebook.keys())
         L = model.L
@@ -363,28 +363,28 @@ class HOFeatureExtractor(object):
                 boundary = (j-d, j)
 
                 seg_features = self.lookup_features_X(seq, boundary)
-                print("seg_features {}".format(seg_features))
+#                 print("seg_features {}".format(seg_features))
 
                 # active features that  uses only the current states
                 active_features[boundary] = model.represent_activefeatures(model_states, seg_features)
-                print("initial active_features[{}] {}".format(boundary, active_features[boundary]))
+#                 print("initial active_features[{}] {}".format(boundary, active_features[boundary]))
 
                 if(active_features[boundary]):
                     # z pattern of length 1 (i.e. detected labels from set Y}
                     detected_y_patt = {y_patt:1 for y_patt in active_features[boundary]}
                     self._update_accum_pattern(accum_pattern, {1:detected_y_patt}, j)
-                    print("accum_pattern {}".format(accum_pattern))
+#                     print("accum_pattern {}".format(accum_pattern))
                     tracked_z_patt = self._build_z_patt(boundary, detected_y_patt, accum_pattern, model_patt)
                     if(tracked_z_patt):
                         self._update_accum_pattern(accum_pattern, tracked_z_patt, j)
-                        print("updated accum_pattern {}".format(accum_pattern))
+#                         print("updated accum_pattern {}".format(accum_pattern))
                         new_patts = {z_patt:1 for order in tracked_z_patt for z_patt in tracked_z_patt[order]}
                         new_activefeatures = model.represent_activefeatures(new_patts, seg_features)
-                        print("new_activefeatures {}".format(new_activefeatures))
+#                         print("new_activefeatures {}".format(new_activefeatures))
                         self._update_accum_activefeatures(active_features, new_activefeatures, boundary)
-                        print("updated active_features[{}] {}".format(boundary, active_features[boundary]))
+#                         print("updated active_features[{}] {}".format(boundary, active_features[boundary]))
 
-        print("accum_pattern {}".format(accum_pattern))
+#         print("accum_pattern {}".format(accum_pattern))
         return(active_features)
     
     def _update_accum_pattern(self, accum_pattern, detected_patt, j):
@@ -428,7 +428,7 @@ class HOFeatureExtractor(object):
                                             else:
                                                 tracked_z_patt[i+1] = {mix_patt:1}
          
-        print("tracked_z_patt {}".format(tracked_z_patt))
+#         print("tracked_z_patt {}".format(tracked_z_patt))
 #         print("accum_pattern {}".format(accum_pattern))
         return(tracked_z_patt)    
     
@@ -796,7 +796,7 @@ class FOFeatureExtractor(object):
         
         model_patt = deepcopy(model.patt_order)
         del model_patt[1]
-        print("modified model patt_order {} with id {}".format(model_patt, id(model_patt)))
+#         print("modified model patt_order {} with id {}".format(model_patt, id(model_patt)))
         
         model_states = list(model.Y_codebook.keys())
         L = model.L
@@ -812,28 +812,28 @@ class FOFeatureExtractor(object):
                 boundary = (j-d, j)
 
                 seg_features = self.lookup_features_X(seq, boundary)
-                print("seg_features {}".format(seg_features))
+#                 print("seg_features {}".format(seg_features))
 
                 # active features that  uses only the current states
                 active_features[boundary] = model.represent_activefeatures(model_states, seg_features)
-                print("initial active_features[{}] {}".format(boundary, active_features[boundary]))
+#                 print("initial active_features[{}] {}".format(boundary, active_features[boundary]))
 
                 if(active_features[boundary]):
                     # z pattern of length 1 (i.e. detected labels from set Y}
                     detected_y_patt = {y_patt:1 for y_patt in active_features[boundary]}
                     self._update_accum_pattern(accum_pattern, {1:detected_y_patt}, j)
-                    print("accum_pattern {}".format(accum_pattern))
+#                     print("accum_pattern {}".format(accum_pattern))
                     tracked_z_patt = self._build_z_patt(boundary, detected_y_patt, accum_pattern, model_patt)
                     if(tracked_z_patt):
                         self._update_accum_pattern(accum_pattern, tracked_z_patt, j)
-                        print("updated accum_pattern {}".format(accum_pattern))
+#                         print("updated accum_pattern {}".format(accum_pattern))
                         new_patts = {z_patt:1 for order in tracked_z_patt for z_patt in tracked_z_patt[order]}
                         new_activefeatures = model.represent_activefeatures(new_patts, seg_features)
-                        print("new_activefeatures {}".format(new_activefeatures))
+#                         print("new_activefeatures {}".format(new_activefeatures))
                         self._update_accum_activefeatures(active_features, new_activefeatures, boundary)
-                        print("updated active_features[{}] {}".format(boundary, active_features[boundary]))
+#                         print("updated active_features[{}] {}".format(boundary, active_features[boundary]))
 
-        print("accum_pattern {}".format(accum_pattern))
+#         print("accum_pattern {}".format(accum_pattern))
         return(active_features)
     
     def _update_accum_pattern(self, accum_pattern, detected_patt, j):
@@ -893,7 +893,7 @@ class FOFeatureExtractor(object):
                                                     tracked_z_patt[i+1] = {mix_patt:1}
                                             
          
-        print("tracked_z_patt {}".format(tracked_z_patt))
+#         print("tracked_z_patt {}".format(tracked_z_patt))
 #         print("accum_pattern {}".format(accum_pattern))
         return(tracked_z_patt) 
     

@@ -8,7 +8,9 @@ from utilities import filter_templates, generate_templates, create_directory, Re
 from attributes_extraction import NERSegmentAttributeExtractor
 from features_extraction import FOFeatureExtractor, HOFeatureExtractor, SeqsRepresentation
 from crf_learning import Learner
-from crf_models import HOSemiCRF, HOSemiCRFModelRepresentation, FirstOrderCRF, FirstOrderCRFModelRepresentation, HOCRF, HOCRFModelRepresentation
+from fo_crf_model import FirstOrderCRF, FirstOrderCRFModelRepresentation
+from ho_crf_model import HOCRF, HOCRFModelRepresentation
+from hosemi_crf_model import HOSemiCRF, HOSemiCRFModelRepresentation
 
 root_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -258,7 +260,7 @@ def test_crfs(model_type, scaling_method, optimization_options):
 #     seqs = load_predined_seq()
     y, xy = generate_templates(attr_names, window, n_y, n_x)
     # filter templates to keep at least one unigram feature (it is a MUST)
-    f_y = filter_templates(y, '3-gram', "=")
+#     f_y = filter_templates(y, '3-gram', "=")
     f_y = filter_templates(y, '1-gram_2-gram', "=")
 #     f_xy = filter_templates(xy, '1-gram_2-gram_3-gram:1-gram_2-gram', "=")
     f_xy = filter_templates(xy, '1-gram:1-gram', "=")
@@ -282,13 +284,13 @@ def test_crfs(model_type, scaling_method, optimization_options):
 #     filter_obj = FeatureFilter(filter_info)
     filter_obj = None
     crf_tester = TestCRFModel(f_y, f_xy, crf_model, model_repr, fextractor, scaling_method, optimization_options, filter_obj)
-    wrong_temp = crf_tester.find_wrong_templates(seqs[0:1])
+    wrong_temp = crf_tester.find_wrong_templates(seqs[0:2])
     if(wrong_temp):
         raise("ill-formed template..")
     else:
-        mv = crf_tester.test_crf_learning(seqs[0:1])
+        mv = crf_tester.test_crf_learning(seqs[0:2])
 #         fb = crf_tester.test_crf_forwardbackward(seqs)
-#         gc = crf_tester.test_crf_grad(seqs)
+#         gc = crf_tester.test_crf_grad(seqs[0:1])
 #         print("fb {}".format(fb))
 #         print("gc {}".format(gc))
     return(crf_tester._crf_model)

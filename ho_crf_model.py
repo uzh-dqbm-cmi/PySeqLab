@@ -27,6 +27,10 @@ class HOCRFModelRepresentation(object):
         self.pi_pky_z = self.map_pky_z()
         self.si_ysk_z = self.map_sky_z()
         
+        # useful dictionary regarding length of elems
+        self.z_lendict = self.get_len_z()
+        self.pi_lendict = self.get_len_pi()
+        self.si_lendict = self.get_len_zi()
         # these subsequence relations are needed for the marginal computation
         self.z_pisj = self.map_z_pisj()
         self.z_cc_zk = self.map_z_subseq_zk()
@@ -237,9 +241,33 @@ class HOCRFModelRepresentation(object):
             si_ysk_z[si] = ysk_z_map
         print("b_transition {}".format(b_transition))
         print("si_ysk_z {}".format(si_ysk_z))
-        return(si_ysk_z)   
-       
-        
+        return(si_ysk_z)  
+    def get_len_pi(self): 
+        P_codebook = self.P_codebook
+        pi_lendict = {}
+        for pi in P_codebook:
+            if(pi == ""):
+                pi_lendict[pi] = 0
+            else:
+                pi_lendict[pi] = len(pi.split("|"))
+        return(pi_lendict)
+    def get_len_zi(self): 
+        S_codebook = self.S_codebook
+        si_lendict = {}
+        for si in S_codebook:
+            if(si == ""):
+                si_lendict[si] = 0
+            else:
+                si_lendict[si] = len(si.split("|"))
+        return(si_lendict)
+    
+    def get_len_z(self):
+        Z_codebook = self.Z_codebook
+        z_lendict = {}
+        for z in Z_codebook:
+            z_lendict[z] = len(z.split("|"))
+        return(z_lendict)
+    
     def map_z_pisj(self):
         Z_codebok = self.Z_codebook
         P_codebook = self.P_codebook
@@ -447,22 +475,25 @@ class HOCRF(object):
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
         f_potential_features = {}
         f_featurpattern_count = {}
-
+        cached_comp = {}
+        
         for j in range(1, T+1):
             boundary = (j, j)
             for pi in pi_pky_z:
                 f_featurpattern_count[j, pi] = {}
                 for pky in pi_pky_z[pi]:
+                    f_potential_features[j, pi, pky] = {}
                     for z_patt in pi_pky_z[pi][pky]:
-                        flag = 0
                         if(z_patt in activefeatures[boundary]):
-                            f_val = list(activefeatures[boundary][z_patt].values())
-                            w_indx = list(activefeatures[boundary][z_patt].keys())
-                            f_potential_features[j, pi, pky, z_patt] = {'f_val':f_val,
-                                                                        'w_indx':w_indx}
                             flag = 1
-                        
-                        f_featurpattern_count[j, pi][j, z_patt] = flag
+                            if((j, z_patt) not in cached_comp):
+                                f_val = list(activefeatures[boundary][z_patt].values())
+                                w_indx = list(activefeatures[boundary][z_patt].keys())
+                                cached_comp[j, z_patt] = {'f_val':f_val,'w_indx':w_indx}
+                            f_potential_features[j, pi, pky][j, z_patt] = cached_comp[j, z_patt]
+                            f_featurpattern_count[j, pi][j, z_patt] = flag
+#                     if(not f_potential_features[j, pi, pky]):  
+#                         del f_potential_features[j, pi, pky]
 
         # write on disk
         target_dir = self.seqs_info[seq_id]['activefeatures_dir']
@@ -473,22 +504,18 @@ class HOCRF(object):
 
 
     def compute_f_potential(self, w, seq_id):
-        pi_pky_z = self.model.pi_pky_z
-        T = self.seqs_info[seq_id]["T"]
         f_potential_features = self.seqs_info[seq_id]['f_potential_features']
         f_potential= {}
-
-        for j in range(1, T+1):
-            f_potential[j] = {}
-            for pi in pi_pky_z:
-                for pky in pi_pky_z[pi]:
-                    potential = 0
-                    for z_patt in pi_pky_z[pi][pky]:
-                        if((j, pi, pky, z_patt) in f_potential_features):
-                            w_indx = f_potential_features[j, pi, pky, z_patt]['w_indx']
-                            f_val = f_potential_features[j, pi, pky, z_patt]['f_val']
-                            potential += numpy.dot(w[w_indx], f_val)
-                    f_potential[j][pky] = potential
+        cached_comp = {}
+        for j, pi, pky in f_potential_features:
+            potential = 0
+            for j, z_patt in f_potential_features[j, pi, pky]:
+                if((j, z_patt) not in cached_comp):
+                    w_indx = f_potential_features[j, pi, pky][j, z_patt]['w_indx']
+                    f_val = f_potential_features[j, pi, pky][j, z_patt]['f_val']
+                    cached_comp[j, z_patt] = numpy.dot(w[w_indx], f_val)
+                potential += cached_comp[j, z_patt]
+            f_potential[j, pky] = potential
 
         return(f_potential)
     
@@ -505,7 +532,7 @@ class HOCRF(object):
                 accumulator = -numpy.inf
                 for pky, pk in f_transition[pi].items():
                     pk_code = P_codebook[pk]
-                    potential = f_potential[j][pky]
+                    potential = f_potential[j, pky]
                     accumulator = numpy.logaddexp(accumulator, potential + alpha[j-1, pk_code])
                 alpha[j, P_codebook[pi]] = accumulator 
                  
@@ -513,28 +540,34 @@ class HOCRF(object):
 
     def prepare_b_potentialfeatures(self, seq_id):
         si_ysk_z = self.model.si_ysk_z
+        z_lendict = self.model.z_lendict
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
         b_featurepattern_count = {}
         b_potential_features = {}
+        cached_comp = {}
         
         for j in range(1, T+1):
             for si in si_ysk_z:
                 b_featurepattern_count[j, si] = {}
                 for ysk in si_ysk_z[si]:
+                    b_potential_features[j, si, ysk] = {}
                     for z_patt in si_ysk_z[si][ysk]:
-                        b = j + len(z_patt.split("|")) - 1
+                        b = j + z_lendict[z_patt] - 1
                         upd_boundary = (b, b)
                         flag = 0
                         if(upd_boundary in activefeatures):
                             if(z_patt in activefeatures[upd_boundary]):
-                                f_val = list(activefeatures[upd_boundary][z_patt].values())
-                                w_indx = list(activefeatures[upd_boundary][z_patt].keys())
-                                b_potential_features[j, si, ysk, z_patt] = {'f_val':f_val,
-                                                                            'w_indx':w_indx}
                                 flag = 1
-                                    
-                        b_featurepattern_count[j, si][b, z_patt] =  flag   
+                                if((b, z_patt) not in cached_comp):
+                                    f_val = list(activefeatures[upd_boundary][z_patt].values())
+                                    w_indx = list(activefeatures[upd_boundary][z_patt].keys())
+                                    cached_comp[b, z_patt] = {'f_val':f_val, 'w_indx':w_indx}
+                                b_potential_features[j, si, ysk][b, z_patt] = cached_comp[b, z_patt]                                    
+                             
+                                b_featurepattern_count[j, si][b, z_patt] =  flag
+#                     if(not b_potential_features[j, si, ysk]):
+#                         del b_potential_features[j, si, ysk] 
         # write on disk  
         target_dir = self.seqs_info[seq_id]['activefeatures_dir']
         ReaderWriter.dump_data(b_featurepattern_count, os.path.join(target_dir, "b_featurepattern_count"))
@@ -543,22 +576,19 @@ class HOCRF(object):
         self.seqs_info[seq_id]['b_featurepattern_count'] = b_featurepattern_count      
     
     def compute_b_potential(self, w, seq_id):
-        si_ysk_z = self.model.si_ysk_z
-        T = self.seqs_info[seq_id]["T"]
         b_potential_features = self.seqs_info[seq_id]['b_potential_features']
         b_potential= {}
+        cached_comp = {}
+        for j, si, ysk in b_potential_features:
+            potential = 0
+            for b, z_patt in b_potential_features[j, si, ysk]:
+                if((b, z_patt) not in cached_comp):
+                    w_indx = b_potential_features[j, si, ysk][b, z_patt]['w_indx']
+                    f_val = b_potential_features[j, si, ysk][b, z_patt]['f_val']
+                    cached_comp[b, z_patt] = numpy.dot(w[w_indx], f_val)
+                potential += cached_comp[b, z_patt]
 
-        for j in range(1, T+1):
-            b_potential[j] = {}
-            for si in si_ysk_z:
-                for ysk in si_ysk_z[si]:
-                    potential = 0
-                    for z_patt in si_ysk_z[si][ysk]:
-                        if((j, si, ysk, z_patt) in b_potential_features):
-                            w_indx = b_potential_features[j, si, ysk, z_patt]['w_indx']
-                            f_val = b_potential_features[j, si, ysk, z_patt]['f_val']
-                            potential += numpy.dot(w[w_indx], f_val)
-                    b_potential[j][ysk] = potential
+            b_potential[j, ysk] = potential       
             
         return(b_potential)
     
@@ -576,7 +606,7 @@ class HOCRF(object):
                 accumulator = -numpy.inf
                 for ysk, sk in b_transition[si].items():
                     sk_code = S_codebook[sk]
-                    potential = b_potential[j][ysk]
+                    potential = b_potential[j, ysk]
                     accumulator = numpy.logaddexp(accumulator, potential + beta[j+1, sk_code])
                 beta[j, S_codebook[si]] = accumulator 
                     
@@ -584,37 +614,39 @@ class HOCRF(object):
     
     def prepare_Ox_features(self, seq_id):
         z_zk_pisj = self.model.z_zk_pisj
+        pi_lendict = self.model.pi_lendict
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
         T = self.seqs_info[seq_id]["T"]
         O_featurepattern_count = {}
         O_potential_features = {}
-        
+        cached_comp = {}
+
+#         if((t_kp > 0 and pi == "") or (t_kp == 0 and pi != "") or (t_kp > T and sj != "") or (t_kp <= T and sj == "")):
         for t in range(1, T+1):
             for z in z_zk_pisj:
                 for pi, sj in z_zk_pisj[z]:
                     O_featurepattern_count[t, pi, sj, z] = {}
                     O_potential_features[t, pi, sj, z] = {}
-                    len_elempi = len(pi.split("|"))       
-                    if(pi == ""):
-                        len_pi = 0
-                    else:
-                        len_pi = len_elempi 
+                    len_pi = pi_lendict[pi]      
                     for zk, positions in z_zk_pisj[z][pi, sj]:
                         for pos_kp in positions:
                             t_kp = t - len_pi + pos_kp - 1
                             boundary = (t_kp, t_kp)
+                            flag = 0
                             if(boundary in activefeatures):
                                 if(zk in activefeatures[boundary]):
-                                    f_val = list(activefeatures[boundary][zk].values())
-                                    w_indx = list(activefeatures[boundary][zk].keys())
-                                    O_potential_features[t, pi, sj, z][t_kp, zk] = {'w_indx': w_indx,
-                                                                                    'f_val': f_val}
                                     flag  = 1
+                                    if((t_kp, zk) not in cached_comp):
+                                        f_val = list(activefeatures[boundary][zk].values())
+                                        w_indx = list(activefeatures[boundary][zk].keys())
+                                        cached_comp[t_kp, zk] = {'w_indx': w_indx, 'f_val': f_val}
+                                    O_potential_features[t, pi, sj, z][t_kp, zk] = cached_comp[t_kp, zk]
                                     
-                                    O_featurepattern_count[t, pi, sj, z][t_kp, zk] = flag
-                    if(not O_featurepattern_count[t, pi, sj, z]):
-                        del O_featurepattern_count[t, pi, sj, z]
-                        del O_potential_features[t, pi, sj, z]
+                            O_featurepattern_count[t, pi, sj, z][t_kp, zk] = flag
+#                     if(not O_potential_features[t, pi, sj, z]):
+#                         del O_potential_features[t, pi, sj, z]
+#                     if(not O_featurepattern_count[t, pi, sj, z]):
+#                         del O_featurepattern_count[t, pi, sj, z]
         # write on disk
         target_dir = self.seqs_info[seq_id]['activefeatures_dir']
         ReaderWriter.dump_data(O_featurepattern_count, os.path.join(target_dir, "O_featurepattern_count"))
@@ -623,26 +655,19 @@ class HOCRF(object):
         self.seqs_info[seq_id]['O_featurepattern_count'] = O_featurepattern_count
     
     def compute_Ox(self, w, seq_id):
-        z_zk_pisj = self.model.z_zk_pisj
-        T = self.seqs_info[seq_id]["T"]
         O_potential_features = self.seqs_info[seq_id]["O_potential_features"]
         Ox = {}
         cached_comp = {}
-        for t in range(1, T+1):
-            for z in z_zk_pisj:
-                for pi, sj in z_zk_pisj[z]:
-                    potential = 0 
-                    if((t, pi, sj, z) in O_potential_features):
-                        for t_kp, zk in O_potential_features[t, pi, sj, z]:
-                            if((t_kp, zk) in cached_comp):
-                                potential += cached_comp[t_kp, zk]
-                            else:
-                                w_indx = O_potential_features[t, pi, sj, z][t_kp, zk]['w_indx']
-                                f_val = O_potential_features[t, pi, sj, z][t_kp, zk]['f_val']
-                                cached_comp[t_kp, zk] = numpy.dot(w[w_indx], f_val)
-                                potential += cached_comp[t_kp, zk]
+        for t, pi, sj, z in O_potential_features:
+            potential = 0
+            for t_kp, zk in O_potential_features[t, pi, sj, z]:
+                if((t_kp, zk) not in cached_comp):
+                    w_indx = O_potential_features[t, pi, sj, z][t_kp, zk]['w_indx']
+                    f_val = O_potential_features[t, pi, sj, z][t_kp, zk]['f_val']
+                    cached_comp[t_kp, zk] = numpy.dot(w[w_indx], f_val)
+                potential += cached_comp[t_kp, zk]
 
-                    Ox[t, pi, sj, z] = potential
+            Ox[t, pi, sj, z] = potential
         return(Ox)
     
     def _detect_doublecount_features(self, A, B, C):
@@ -674,6 +699,9 @@ class HOCRF(object):
         f_featurepattern_count = self.seqs_info[seq_id]["f_featurepattern_count"]
         b_featurepattern_count = self.seqs_info[seq_id]["b_featurepattern_count"]
         O_featurepattern_count = self.seqs_info[seq_id]["O_featurepattern_count"]
+        pi_lendict = self.model.pi_lendict
+        si_lendict = self.model.si_lendict
+        z_lendict = self.model.z_lendict
 
 #         print("f_featurepattern_count {}".format(f_featurepattern_count))
 #         print("b_featurepattern_count {}".format(b_featurepattern_count))
@@ -697,9 +725,9 @@ class HOCRF(object):
                         addendum = []
                         for patt in pattA:
                             if(pi.endswith(patt)):
-                                addendum.append(pi[:(len(pi) - len(patt) - 1)])
+                                addendum.append(pi[:(pi_lendict[pi] - z_lendict[patt] - 1)])
     #                         print("pi {} at t = {}, t_a = {} and addendum is {}".format(pi, t, t_a, addendum))
-                        lenpi = len(pi.split("|"))
+                        lenpi = pi_lendict[pi]
                         for elem in addendum:
                             if(elem):
                                 offpos = t_a - (lenpi - len(elem.split("|")))
@@ -712,7 +740,7 @@ class HOCRF(object):
         bactive = {}
         for t in range(1, T+1):
             for z in Z_codebook:
-                len_z = len(z.split("|"))
+                len_z = z_lendict[z]
                 t_b = t - len_z + 2
                 for sj in S_codebook:
                     if((t_b > T and sj != "") or (t_b <= T and sj == "")):
@@ -728,10 +756,10 @@ class HOCRF(object):
                                 addendum = []
                                 for patt in pattB:
                                     if(sj.startswith(patt)):
-                                        addendum.append(sj[len(patt)+1:])
+                                        addendum.append(sj[z_lendict[patt]+1:])
         #                         print("sj {} at t = {}, t_b = {} and addendum is {}".format(sj, t, t_b, addendum))
         
-                                lensj = len(sj.split("|"))
+                                lensj = si_lendict[sj]
                                 for elem in addendum:
                                     if(elem):
                                         offpos = t_b + lensj - len(elem.split("|"))
@@ -745,7 +773,7 @@ class HOCRF(object):
         for t in range(1, T+1):
             t_a = t - 1
             for z in z_zk_pisj:
-                len_z = len(z.split("|"))
+                len_z = z_lendict[z]
                 t_b = t - len_z + 2
                 for pi, sj in z_zk_pisj[z]:
                     Wx_potential_features[t, pi, sj, z] = []
@@ -773,29 +801,22 @@ class HOCRF(object):
         
         
     def compute_Wx(self, w, seq_id):
-        z_zk_pisj = self.model.z_zk_pisj
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
         Wx_potential_features = self.seqs_info[seq_id]["Wx_potential_features"]
         Wx = {}
         cached_comp = {}
-        T = self.seqs_info[seq_id]["T"]
-        for t in range(1, T+1):
-            for z in z_zk_pisj:
-                for pi, sj in z_zk_pisj[z]:
-                    potential = 0
-                    if((t, pi, sj, z) in Wx_potential_features):
-                        for pos, patt in set(Wx_potential_features[t, pi, sj, z]):
-                            boundary = (pos, pos)
-                            if(boundary in activefeatures):
-                                if(patt in activefeatures[boundary]):
-                                    if((pos, patt) in cached_comp):
-                                        potential += cached_comp[pos, patt]
-                                    else:
-                                        f_val = list(activefeatures[boundary][patt].values())
-                                        w_indx = list(activefeatures[boundary][patt].keys())
-                                        cached_comp[pos, patt] = numpy.dot(w[w_indx], f_val)
-                                        potential += cached_comp[pos, patt]
-                    Wx[t, pi, sj, z] = potential
+        for t, pi, sj, z in Wx_potential_features:
+            potential = 0
+            for pos, patt in Wx_potential_features[t, pi, sj, z]:
+                boundary = (pos, pos)
+                if(boundary in activefeatures):
+                    if(patt in activefeatures[boundary]):
+                        if((pos, patt) not in cached_comp):
+                            f_val = list(activefeatures[boundary][patt].values())
+                            w_indx = list(activefeatures[boundary][patt].keys())
+                            cached_comp[pos, patt] = numpy.dot(w[w_indx], f_val)
+                        potential += cached_comp[pos, patt]
+            Wx[t, pi, sj, z] = potential
 #                 print("Wx[{},{}] = {}".format(t, z, potential))
 #         print("Wx {}".format(Wx))
         return(Wx)
@@ -815,11 +836,12 @@ class HOCRF(object):
         Ox = self.seqs_info[seq_id]["Ox"]
         Wx = self.seqs_info[seq_id]["Wx"]
         
+        z_lendict = self.model.z_lendict
         P_marginals = numpy.zeros((T+1, len(self.model.Z_codebook)), dtype='longdouble')
          
         for t in range(1, T+1):
             for z in z_pisj:
-                len_z = len(z.split("|"))
+                len_z = z_lendict[z]
                 t_a = t - 1
                 t_b = t - len_z + 2
                 if(t_b < 1):
@@ -829,16 +851,26 @@ class HOCRF(object):
                 for pi in z_pisj[z]["pi"]:
                     for sj in z_pisj[z]["sj"]:
 
-                        numerator = alpha[t_a, P_codebook[pi]] + beta[t_b, S_codebook[sj]] + Ox[t, pi, sj, z] - Wx[t, pi, sj, z]
-#                         print("alpha[{}, {}] + beta[{}, {}] + Ox[{}, {}, {}, {}] - Wx[{}, {}, {}, {}]= {} + {} + {} - {}= {}".format(t_a, pi,
-#                                                                                                         t_b, sj,
-#                                                                                                         t, pi, sj, z,
-#                                                                                                         t, pi, sj, z,
-#                                                                                                         alpha[t_a, P_codebook[pi]],
-#                                                                                                         beta[t_b, S_codebook[sj]],
-#                                                                                                         Ox[t, pi, sj, z],
-#                                                                                                         Wx[t, pi, sj, z],
-#                                                                                                         numerator))
+                        numerator = alpha[t_a, P_codebook[pi]] + beta[t_b, S_codebook[sj]]
+#                         msg = "alpha[{}, {}] + beta[{}, {}]".format(t_a, pi, t_b, sj)
+                        tempo =0
+                        tempwx = 0
+                        if((t, pi, sj, z) in Ox):
+                            numerator += Ox[t, pi, sj, z]
+                            tempo = Ox[t, pi, sj, z]
+#                             msg += "+Ox[{},{},{},{}]".format(t, pi, sj, z)
+
+                        if((t, pi, sj, z) in Wx):
+                            numerator -= Wx[t, pi, sj, z]
+                            tempwx = Wx[t, pi, sj, z]
+#                             msg += "+Wx[{},{},{},{}]".format(t, pi, sj, z)
+#                         msg += "= {} + {} + {} + {} = {}".format(alpha[t_a, P_codebook[pi]], 
+#                                                             beta[t_b, S_codebook[sj]],
+#                                                             tempo,
+#                                                             tempwx,
+#                                                             numerator)
+#                         print(msg)
+
                         accumulator = numpy.logaddexp(accumulator, numerator)
 #                         print("accumulator = {}".format(accumulator))
                 denominator = Z 

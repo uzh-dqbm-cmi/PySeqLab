@@ -374,9 +374,9 @@ class FirstOrderCRF(object):
             print("missing features len(f_expectation) > len(globalfeatures)")
 
 
-        print("P_marginals {}".format(P_marginals))
-        print("f_expectation {}".format(f_expectation))
-        print("globalfeatures {}".format(globalfeatures))
+#         print("P_marginals {}".format(P_marginals))
+#         print("f_expectation {}".format(f_expectation))
+#         print("globalfeatures {}".format(globalfeatures))
         
         grad = {}
         for w_indx in f_expectation:
@@ -392,17 +392,17 @@ class FirstOrderCRF(object):
         alpha = self.seqs_info[seq_id]["alpha"]
         beta = self.seqs_info[seq_id]["beta"] 
         Z = self.seqs_info[seq_id]["Z"]   
-        print("alpha {}".format(alpha))
-        print("beta {}".format(beta))
-        print("Z {}".format(Z))
+#         print("alpha {}".format(alpha))
+#         print("beta {}".format(beta))
+#         print("Z {}".format(Z))
         
         potential_matrix = self.seqs_info[seq_id]["potential_matrix"]
         P_marginals = numpy.zeros((T+1, len(Z_codebook)), dtype='longdouble') 
          
-        print("Z_codebook {}".format(Z_codebook))
+#         print("Z_codebook {}".format(Z_codebook))
         for j in range(1, T+1):
             for y_patt in Z_codebook:
-                print("y_patt {}".format(y_patt))
+#                 print("y_patt {}".format(y_patt))
                 parts = y_patt.split("|")
                 if(len(parts) == 1):
                     y_c = Y_codebook[parts[0]]
