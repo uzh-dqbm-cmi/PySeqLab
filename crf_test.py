@@ -11,6 +11,8 @@ from crf_learning import Learner
 from fo_crf_model import FirstOrderCRF, FirstOrderCRFModelRepresentation
 from ho_crf_model import HOCRF, HOCRFModelRepresentation
 from hosemi_crf_model import HOSemiCRF, HOSemiCRFModelRepresentation
+from features_extraction import FeatureFilter
+
 
 root_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -145,13 +147,14 @@ class TestCRFModel(object):
 #                                 }
         learner = Learner(crf_model)
         learner.train_model(numpy.zeros(len(crf_model.weights)), seqs_id, optimization_options, working_dir)
-        crf_model.seqs_info = seqs_info
-        avg_fexp_diff = crf_model.validate_expected_featuresum(crf_model.weights, seqs_id)
-        res[(option_y, option_x)] = avg_fexp_diff
-        lines += "avg_fexp_diff {}\n".format(avg_fexp_diff)
-        lines += "#"*40 + "\n"
-        ReaderWriter.log_progress(lines, os.path.join(working_dir, "test_expected_featuresum_computation.txt"))
-        lines = ""
+        if(optimization_options["method"] != "COLLINS-PERCEPTRON"):
+            crf_model.seqs_info = seqs_info
+            avg_fexp_diff = crf_model.validate_expected_featuresum(crf_model.weights, seqs_id)
+            res[(option_y, option_x)] = avg_fexp_diff
+            lines += "avg_fexp_diff {}\n".format(avg_fexp_diff)
+            lines += "#"*40 + "\n"
+            ReaderWriter.log_progress(lines, os.path.join(working_dir, "test_expected_featuresum_computation.txt"))
+            lines = ""
 
     def test_feature_extraction(self):
 
@@ -245,26 +248,44 @@ def load_predined_seq():
     seq = SequenceStruct(X, Y)
     return([seq])
 
-def test_crfs(model_type, scaling_method, optimization_options):
-#     attr_names = ('w', 'seg_numchars')
+def run_suppl_example():
     attr_names = ('w', )
-
-    window = list(range(-2,2))
-#     window = list(range(-1,1))
-
+    window = list(range(0,1))
     n_y = 3
     n_x = 3
-# 
-    data_file_path = os.path.join(root_dir, "dataset/conll00/train_short_main.txt")
-    seqs = read_data(data_file_path, header = "main")
-#     seqs = load_predined_seq()
+    seqs = load_predined_seq()
     y, xy = generate_templates(attr_names, window, n_y, n_x)
     # filter templates to keep at least one unigram feature (it is a MUST)
-#     f_y = filter_templates(y, '3-gram', "=")
-    f_y = filter_templates(y, '1-gram_2-gram', "=")
-#     f_xy = filter_templates(xy, '1-gram_2-gram_3-gram:1-gram_2-gram', "=")
+    f_y = filter_templates(y, '1-gram_2-gram_3-gram', "=")
+#     f_y = filter_templates(y, '1-gram_3-gram', "=")
     f_xy = filter_templates(xy, '1-gram:1-gram', "=")
+#     options = ("1-gram:1-gram", "1-gram:1-gram_2-gram", "1-gram:","1-gram:1-gram_2-gram_3-gram")
+#     f_xy = {}
+#     for option in options:
+#         f_xy.update(filter_templates(xy, option, "="))
+#     filter_info = {"filter_type":"pattern", "filter_val": ['P','O', 'L', 'L|O|L'], "filter_relation": "not in"}
+#     filter_obj = FeatureFilter(filter_info)
+    filter_obj = None
+    return(seqs, f_y, f_xy, filter_obj)
 
+def run_loaded_conll00_seqs():
+    attr_names = ('w', )
+    window = list(range(-2,2))
+    n_y = 3
+    n_x = 3
+    data_file_path = os.path.join(root_dir, "dataset/conll00/train_short_main_2.txt")
+    seqs = read_data(data_file_path, header = "main")
+    y, xy = generate_templates(attr_names, window, n_y, n_x)
+    # filter templates to keep at least one unigram feature (it is a MUST)
+    f_y = filter_templates(y, '1-gram_2-gram_3-gram', "=")
+    f_xy = filter_templates(xy, '1-gram:1-gram', "=")
+#     filter_info = {"filter_type":"pattern", "filter_val": ['B-NP|B-PP|B-NP','B-PP|B-NP|I-NP','B-VP|I-VP|I-VP', 'I-NP|B-VP|I-VP', 'I-VP|I-VP|I-VP'], "filter_relation": "in"}
+#     filter_obj = FeatureFilter(filter_info)
+    filter_obj = None
+
+    return(seqs[0:1], f_y, f_xy, filter_obj)
+    
+def test_crfs(model_type, scaling_method, optimization_options, run_config):
     if(model_type == "HOSemi"):
         crf_model = HOSemiCRF 
         model_repr = HOSemiCRFModelRepresentation
@@ -277,21 +298,17 @@ def test_crfs(model_type, scaling_method, optimization_options):
         crf_model = FirstOrderCRF 
         model_repr = FirstOrderCRFModelRepresentation
         fextractor = FOFeatureExtractor
-    from features_extraction import FeatureFilter
     
-    # O|O|L was causing a problem ...
-#     filter_info = {"filter_type":"pattern", "filter_val": ['P','O', 'L', 'L|O|L'], "filter_relation": "!="}
-#     filter_obj = FeatureFilter(filter_info)
-    filter_obj = None
+    seqs, f_y, f_xy, filter_obj = run_config()
     crf_tester = TestCRFModel(f_y, f_xy, crf_model, model_repr, fextractor, scaling_method, optimization_options, filter_obj)
-    wrong_temp = crf_tester.find_wrong_templates(seqs[0:2])
+    wrong_temp = crf_tester.find_wrong_templates(seqs)
     if(wrong_temp):
         raise("ill-formed template..")
     else:
-        mv = crf_tester.test_crf_learning(seqs[0:2])
+        mv = crf_tester.test_crf_learning(seqs)
 #         fb = crf_tester.test_crf_forwardbackward(seqs)
-#         gc = crf_tester.test_crf_grad(seqs[0:1])
 #         print("fb {}".format(fb))
+#         gc = crf_tester.test_crf_grad(seqs[0:1])
 #         print("gc {}".format(gc))
     return(crf_tester._crf_model)
 

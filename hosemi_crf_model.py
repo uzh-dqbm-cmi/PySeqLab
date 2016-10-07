@@ -382,6 +382,7 @@ class HOSemiCRF(object):
                         numerator = alpha[u-1, P_codebook[pi]] + f_potential[boundary][piy] + beta[v+1, S_codebook[piy]]
                         accumulator = numpy.logaddexp(accumulator, numerator)
                     P_marginals[d, j, Z_codebook[z_patt]] = numpy.exp(accumulator - Z)
+        print("P_marginals {}".format(P_marginals))
         return(P_marginals)
     
     def compute_feature_expectation(self, seq_id):
@@ -629,7 +630,8 @@ class HOSemiCRF(object):
             
 
     def viterbi(self, w, seq_id):
-        self.check_cached_info(w, seq_id, "globalfeatures", "activefeatures_by_position", "f_potential")
+        l = ("globalfeatures", "activefeatures_by_position", "f_potential")
+        self.check_cached_info(w, seq_id, l)
         f_potential = self.seqs_info[seq_id]["f_potential"]
         print("f_potential \n {}".format(f_potential))
         f_transition = self.model.f_transition

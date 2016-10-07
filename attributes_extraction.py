@@ -227,6 +227,7 @@ class NERSegmentAttributeExtractor(object):
 #             print('saved attribute {}'.format(seq.seg_attr))
             # clear the instance variable seg_attr
             self.seg_attr = {}
+        return(new_boundaries)
         
     def _create_segment(self, X, boundary, attr_names, sep = " "):
         self.seg_attr[boundary] = {}

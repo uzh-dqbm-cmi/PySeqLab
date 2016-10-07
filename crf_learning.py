@@ -437,14 +437,22 @@ class Learner(object):
                     if(survival_len):
                         w_avg += survival_len * w
                         total_survival += survival_len
+                        w_avg /= total_survival
                         survival_len = 0
                     break
                 self._elapsed_time = datetime.now()
-                
+            if(not self._exitloop):
+                if(survival_len):
+                    w_avg += survival_len * w
+                    total_survival += survival_len
+                    w_avg /= total_survival
+                    survival_len = 0
+                else:
+                    w_avg = w   
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
                  
-        return(w_avg/total_survival)      
+        return(w_avg)      
 
     def _track_perceptron_optimizer(self, w, k, avg_error_list):
         delta_time = datetime.now() - self._elapsed_time 

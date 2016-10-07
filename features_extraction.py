@@ -211,8 +211,9 @@ class HOFeatureExtractor(object):
             template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
         """
         
-        templateX = self.template_X
         seg_feat_templates = self.extract_features_X(seq, boundary)
+        templateX = self.template_X
+
 #         print("seg_feat_templates {}".format(seg_feat_templates))
         xy_features = {}
         for attr_name, seg_feat_template in seg_feat_templates.items():
@@ -983,8 +984,9 @@ class SeqsRepresentation(object):
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb")
             y_boundaries = seq.get_y_boundaries()
             # this will update the value of the seg_attr of the sequence 
-            attr_extractor.generate_attributes(seq, y_boundaries)
-            ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
+            new_boundaries = attr_extractor.generate_attributes(seq, y_boundaries)
+            if(new_boundaries):
+                ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
             
             for attr_name in active_continuous_attr:
                 for y_boundary in y_boundaries:
@@ -1223,7 +1225,7 @@ class SeqsRepresentation(object):
         print("original y boundaries {}".format(seq.get_y_boundaries()))
         print("len {}".format(len(seq.Y)))
         
-        y_original = deepcopy(seq.flat_y)
+        y_original = list(seq.flat_y)
         seq.Y = (y_imposter, seg_other_symbol)
         y_boundaries = seq.get_y_boundaries()
         print("imposter seq.Y {}".format(seq.Y))
@@ -1232,19 +1234,17 @@ class SeqsRepresentation(object):
         
         print("seq.seg_attr {}".format(seq.seg_attr))
         print("len(seq")
-        # this will update the value of the seg_attr of the sequence
-        pre_attrlen = len(seq.seg_attr) 
-        attr_extractor.generate_attributes(seq, y_boundaries)
-        post_attrlen = len(seq.seg_attr)
-        if(pre_attrlen != post_attrlen):
-            attr_scaler.scale_real_attributes(seq, y_boundaries)
+        # this will update the value of the seg_attr of the sequence 
+        new_y_boundaries = attr_extractor.generate_attributes(seq, y_boundaries)
+        if(new_y_boundaries):
+            attr_scaler.scale_real_attributes(seq, new_y_boundaries)
+            ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "rb")
+            
         seq_imposter_featuresum = feature_extractor.extract_seq_features(seq)  
-        
         windx_fval = model.represent_globalfeatures(seq_imposter_featuresum)
         
         seq.Y = (y_original, seg_other_symbol)
-        if(pre_attrlen != post_attrlen):
-            ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "rb")
+
         return(windx_fval)
     
     @staticmethod
@@ -1267,52 +1267,89 @@ class FeatureFilter(object):
                  pattern filter => filter_info = {'filter_type': 'pattern', 'filter_val': ["O|L", "L|L"], 'filter_relation':'='}
         """
         self.filter_info = filter_info
-            
+        self.rel_func = {"=":self._equal_rel,
+                         "<=":self._lequal_rel,
+                         "<":self._less_rel,
+                         ">=":self._gequal_rel,
+                         ">":self._greater_rel,
+                         "in":self._in_rel,
+                         "not in":self._notin_rel}
+        
     def apply_filter(self, featuresum_dict):
         filtered_dict = deepcopy(featuresum_dict)
         filter_info = self.filter_info
+        rel_func = self.rel_func
         if(filter_info['filter_type'] == "count"):
             threshold = filter_info['filter_val']
             relation = filter_info['filter_realtion']
             # filter binary features that have counts less than specified threshold
             for z in featuresum_dict:
                 for fname, fsum in featuresum_dict[z].items():
+                    # determine if the feature is binary
                     if(type(fsum) == int):
-                        if(relation == "="):
-                            if(fsum == threshold):
-                                del filtered_dict[z][fname] 
-                        elif(relation == "<="):
-                            if(fsum <= threshold):
-                                del filtered_dict[z][fname] 
-                        elif(relation == "<"):
-                            if(fsum < threshold):
-                                del filtered_dict[z][fname] 
-                        elif(relation == ">="):
-                            if(fsum >= threshold):
-                                del filtered_dict[z][fname] 
-                        elif(relation == ">"):
-                            if(fsum > threshold):
-                                del filtered_dict[z][fname] 
+                        rel_func[relation](fsum, threshold, filtered_dict[z][fname])
+#                         if(relation == "="):
+#                             if(fsum == threshold):
+#                                 del filtered_dict[z][fname] 
+#                         elif(relation == "<="):
+#                             if(fsum <= threshold):
+#                                 del filtered_dict[z][fname] 
+#                         elif(relation == "<"):
+#                             if(fsum < threshold):
+#                                 del filtered_dict[z][fname] 
+#                         elif(relation == ">="):
+#                             if(fsum >= threshold):
+#                                 del filtered_dict[z][fname] 
+#                         elif(relation == ">"):
+#                             if(fsum > threshold):
+#                                 del filtered_dict[z][fname] 
                         
 
                             
         elif(filter_info['filter_type'] == "pattern"):
             filter_pattern = filter_info['filter_val']
             relation = filter_info['filter_relation']
-            # filter binary features that have counts less than specified threshold
+            # filter based on specific patterns
             for z in featuresum_dict:
-                if(relation == "="):
-                    # delete any z that matches any of the provided filter patterns
-                    if(z in filter_pattern):
-                        del filtered_dict[z]
-                elif(relation == "!="):
-
-                    # delete any z that does not match any of the provided filter patterns
-                    if(z not in filter_pattern):
-                        print("deleting z {}".format(z))
-
-                        del filtered_dict[z]
+                rel_func[relation](z, filter_pattern, filtered_dict[z])
+#                 if(relation == "="):
+#                     # delete any z that matches any of the provided filter patterns
+#                     if(z in filter_pattern):
+#                         del filtered_dict[z]
+#                 elif(relation == "!="):
+# 
+#                     # delete any z that does not match any of the provided filter patterns
+#                     if(z not in filter_pattern):
+#                         print("deleting z {}".format(z))
+# 
+#                         del filtered_dict[z]
         return(filtered_dict)
+    
+    @staticmethod
+    def _equal_rel(x, y, z):
+        if(x==y): del z
 
+    @staticmethod
+    def _lequal_rel(x, y, z):
+        if(x<=y): del z
+        
+    @staticmethod
+    def _less_rel(x, y, z):
+        if(x<y): del z
+        
+    @staticmethod
+    def _gequal_rel(x, y, z):
+        if(x>=y): del z
+        
+    @staticmethod
+    def _greater_rel(x, y, z):
+        if(x>y): del z
+
+    @staticmethod
+    def _in_rel(x, y, z):
+        if(x in y): del z
+    @staticmethod
+    def _notin_rel(x, y, z):
+        if(x not in y): del z
 
     
