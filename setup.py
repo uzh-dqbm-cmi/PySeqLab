@@ -7,7 +7,7 @@ import sys
 
 # setup requirements
 if sys.version_info < (3,4,0):
-    sys.exit('At least Python 3.4.0 is required.\n')
+    sys.exit('Python 3.4.0 or above is required.\n')
 
 try:
     from setuptools import setup
@@ -34,7 +34,7 @@ setup(name='pyseqlab',
       long_description=long_description,
       author="Ahmed Allam",
       author_email='ahmed.allam@yale.edu',
-      license=__license__,
+      license="",
       url='',
       download_url='https://bitbucket.org/A_2/pyseqlab/downloads',
       keywords='conditional random field, structured prediction, bioinformatics',
