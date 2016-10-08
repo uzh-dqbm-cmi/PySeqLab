@@ -474,19 +474,19 @@ class HOCRF(object):
             seqs_loglikelihood += self.compute_seq_loglikelihood(w, seq_id)
         return(seqs_loglikelihood)
     
-    def _loadalpha(self, w, seq_id):
+    def _load_alpha(self, w, seq_id):
         # assumes the f_potential has been loaded into seq_info
         seq_info = self.seqs_info[seq_id]
         seq_info["alpha"] = self.compute_forward_vec(seq_id)
         seq_info["Z"] = vectorized_logsumexp(seq_info["alpha"][-1,:])
 #                     print("... Computing alpha probability ...")
-    def _loadbeta(self, w, seq_id):
+    def _load_beta(self, w, seq_id):
         # assumes the b_potential has been loaded into seq_info
         seq_info = self.seqs_info[seq_id]
         seq_info["beta"] = self.compute_backward_vec(seq_id)
 #                     print("... Computing beta probability ...")
 
-    def _loadfpotential(self, w, seq_id):
+    def _load_fpotential(self, w, seq_id):
         # assumes the activefeatures_by_position matrix has been loaded into seq_info
         # load f_potential_features
         seq_info = self.seqs_info[seq_id]
@@ -506,7 +506,7 @@ class HOCRF(object):
         seq_info["f_potential"] = self.compute_f_potential(w, seq_id)
 #                     print("... Computing f_potential ...")
 
-    def _loadbpotential(self, w, seq_id):
+    def _load_bpotential(self, w, seq_id):
         # assumes the activefeatures_by_position matrix has been loaded into seq_info
         seq_info = self.seqs_info[seq_id]
         if(seq_info.get("b_potential_features") == "on_disk"):
@@ -522,7 +522,7 @@ class HOCRF(object):
         seq_info["b_potential"] = self.compute_b_potential(w, seq_id)
 #                     print("... Computing b_potential ...")
 
-    def _loadflaty(self, w, seq_id):
+    def _load_flaty(self, w, seq_id):
         seq = self._load_seq(seq_id, target="seq")
         self.seqs_info[seq_id]['flat_y'] = seq.flat_y
 
