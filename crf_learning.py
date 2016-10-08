@@ -386,6 +386,8 @@ class Learner(object):
             survival_len = 0
             total_survival = 0
             avg_error_list = [0]
+            track_seqs = []
+
             for k in range(num_epochs):
                 seq_left = N
                 error_count = 0
@@ -393,18 +395,20 @@ class Learner(object):
                 for seq_id in train_seqs_id:
                     print("sequences left {}".format(seq_left))
                     y_imposter = crf_model.viterbi(w, seq_id)
-                    crf_model.clear_cached_info([seq_id])
 
                     if(k == 0):
                         crf_model.check_cached_info(w, seq_id, ("flat_y",))
                     
                     y_original = seqs_info[seq_id]['flat_y']
                     T = seqs_info[seq_id]['T']
-                    print("y original {}".format(y_original))
-                    print("y imposter {}".format(y_imposter))
+#                     print("y original {}".format(y_original))
+#                     print("y imposter {}".format(y_imposter))
                     missmatch = [i for i in range(T) if y_original[i] != y_imposter[i]]
                     len_diff = len(missmatch)
                     if(len_diff):
+                        print("miss match with seq_id {}".format(seq_id))
+                        if(seq_id not in track_seqs):
+                            track_seqs.append(seq_id)
                         if(survival_len):
                             w_avg += survival_len * w
                             total_survival += survival_len
@@ -422,11 +426,13 @@ class Learner(object):
                         
                         # the contribution of global features when using the imposter label sequence
                         w[list(y_imposter_gfeatures.keys())] -= list(y_imposter_gfeatures.values())
-
-
+                        crf_model.clear_cached_info(track_seqs)
+                        track_seqs = []
                     else:
+                        print("no miss match with seq_id {}".format(seq_id))
                         survival_len += 1
-
+                        if(seq_id not in track_seqs):
+                            track_seqs.append(seq_id)
                     seq_left -= 1
                 print("error count {}".format(error_count))
                 avg_error_list.append(float(error_count/N))

@@ -1,3 +1,4 @@
+w part_of_speech chunk
 Confidence NN B-NP
 in IN B-PP
 the DT B-NP

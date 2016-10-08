@@ -129,11 +129,11 @@ class HOCRFModelRepresentation(object):
         S = {}
         for z_patt in Z_codebook:
             elems = z_patt.split("|")
-            print("z_patt")
+            #print("z_patt")
             for i in range(1, len(elems)):
                 S["|".join(elems[i:])] = 1
-                print("i = {}".format(i))
-                print("suffix {}".format("|".join(elems[i:])))
+                #print("i = {}".format(i))
+                #print("suffix {}".format("|".join(elems[i:])))
         for y in Y_codebook:
             S[y] = 1
         # empty element         
@@ -239,8 +239,8 @@ class HOCRFModelRepresentation(object):
                         l.append(z)
                 ysk_z_map[ysk] = l
             si_ysk_z[si] = ysk_z_map
-        print("b_transition {}".format(b_transition))
-        print("si_ysk_z {}".format(si_ysk_z))
+        #print("b_transition {}".format(b_transition))
+        #print("si_ysk_z {}".format(si_ysk_z))
         return(si_ysk_z)  
     
     def get_len_pi(self): 
@@ -289,19 +289,19 @@ class HOCRFModelRepresentation(object):
         return(len(self.Y_codebook)) 
                
 class HOCRF(object):
-    def __init__(self, model, seqs_representer, seqs_info):
+    def __init__(self, model, seqs_representer, seqs_info, loadinfo_fromdisk = True):
         self.model = model
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
         self.seqs_info = seqs_info
-        self.load_fromdisk = True
-        self.func_dict = {"alpha": self._loadalpha,
-                         "beta": self._loadbeta,
-                         "f_potential": self._loadfpotential,
-                         "b_potential": self._loadbpotential,
+        self.load_fromdisk = loadinfo_fromdisk
+        self.func_dict = {"alpha": self._load_alpha,
+                         "beta": self._load_beta,
+                         "f_potential": self._load_fpotential,
+                         "b_potential": self._load_bpotential,
                          "activefeatures_by_position": self.load_activefeatures,
                          "globalfeatures": self.load_globalfeatures,
-                         "flat_y":self._loadflaty}
+                         "flat_y":self._load_flaty}
 
     @property
     def seqs_info(self):
@@ -315,22 +315,26 @@ class HOCRF(object):
         pi_pky_z = self.model.pi_pky_z
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
-        f_potential_features = {}
         cached_pf = self.seqs_info[seq_id]["cached_pf"]
-        
+        f_potential_features = {}
+         
         for j in range(1, T+1):
             boundary = (j, j)
             for pi in pi_pky_z:
                 for pky in pi_pky_z[pi]:
-                    f_potential_features[j, pi, pky] = {}
+                    f_potential_features[j, pi, pky] = []
                     for z_patt in pi_pky_z[pi][pky]:
                         if(z_patt in activefeatures[boundary]):
                             if((j, z_patt) not in cached_pf):
                                 f_val = list(activefeatures[boundary][z_patt].values())
                                 w_indx = list(activefeatures[boundary][z_patt].keys())
                                 cached_pf[j, z_patt] = {'f_val':f_val,'w_indx':w_indx}
-                            f_potential_features[j, pi, pky][j, z_patt] = cached_pf[j, z_patt]
-
+                            if((j, z_patt) not in f_potential_features[j, pi, pky]):
+                                f_potential_features[j, pi, pky].append((j, z_patt)) 
+                    
+#                     if(not f_potential_features[j, pi, pky]):
+#                         f_potential_features[j, pi, pky] = None
+         
         # write on disk
         target_dir = self.seqs_info[seq_id]['activefeatures_dir']
         ReaderWriter.dump_data(f_potential_features, os.path.join(target_dir, "f_potential_features"))
@@ -338,16 +342,18 @@ class HOCRF(object):
 
     def compute_f_potential(self, w, seq_id):
         f_potential_features = self.seqs_info[seq_id]['f_potential_features']
-        f_potential= {}
+        cached_pf = self.seqs_info[seq_id]["cached_pf"]
         cached_comp = self.seqs_info[seq_id]["cached_comp"]
+        f_potential = {}
+
         
         for j, pi, pky in f_potential_features:
             potential = 0
             for j, z_patt in f_potential_features[j, pi, pky]:
                 if((j, z_patt) not in cached_comp):
-                    w_indx = f_potential_features[j, pi, pky][j, z_patt]['w_indx']
-                    f_val = f_potential_features[j, pi, pky][j, z_patt]['f_val']
-                    cached_comp[j, z_patt] = numpy.dot(w[w_indx], f_val)
+                    w_indx = cached_pf[j, z_patt]['w_indx']
+                    f_val = cached_pf[j, z_patt]['f_val']
+                    cached_comp[j, z_patt] = numpy.inner(w[w_indx], f_val)
                 potential += cached_comp[j, z_patt]
             f_potential[j, pky] = potential
 
@@ -364,7 +370,7 @@ class HOCRF(object):
         for j in range(1, T+1):
             for pi in f_transition:
                 accumulator = -numpy.inf
-                for pky, (pk, y) in f_transition[pi].items():
+                for pky, (pk, _) in f_transition[pi].items():
                     pk_code = P_codebook[pk]
                     potential = f_potential[j, pky]
                     accumulator = numpy.logaddexp(accumulator, potential + alpha[j-1, pk_code])
@@ -377,15 +383,13 @@ class HOCRF(object):
         z_lendict = self.model.z_lendict
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
-        b_featurepattern_count = {}
         b_potential_features = {}
-        cached_pf = self.seq_info[seq_id]["cached_pf"]
+        cached_pf = self.cached_pf
         
         for j in range(1, T+1):
             for si in si_ysk_z:
-                b_featurepattern_count[j, si] = {}
                 for ysk in si_ysk_z[si]:
-                    b_potential_features[j, si, ysk] = {}
+                    b_potential_features[j, si, ysk] = []
                     for z_patt in si_ysk_z[si][ysk]:
                         b = j + z_lendict[z_patt] - 1
                         upd_boundary = (b, b)
@@ -395,30 +399,26 @@ class HOCRF(object):
                                     f_val = list(activefeatures[upd_boundary][z_patt].values())
                                     w_indx = list(activefeatures[upd_boundary][z_patt].keys())
                                     cached_pf[b, z_patt] = {'f_val':f_val, 'w_indx':w_indx}
-                                b_potential_features[j, si, ysk][b, z_patt] = cached_pf[b, z_patt] 
-                                b_featurepattern_count[j, si][b, z_patt] = 1                                   
-#                                 if((b, z_patt) not in b_featurepattern_count):
-#                                     b_featurepattern_count[j, si].append((b, z_patt))
-                if(not b_featurepattern_count[j, si]):
-                    del b_featurepattern_count[j, si] 
+                                if((b, z_patt) not in b_potential_features[j, si, ysk]):
+                                    b_potential_features[j, si, ysk].append((b, z_patt)) 
+
         # write on disk  
         target_dir = self.seqs_info[seq_id]['activefeatures_dir']
-        ReaderWriter.dump_data(b_featurepattern_count, os.path.join(target_dir, "b_featurepattern_count"))
         ReaderWriter.dump_data(b_potential_features, os.path.join(target_dir, "b_potential_features"))
         self.seqs_info[seq_id]['b_potential_features'] = b_potential_features
-        self.seqs_info[seq_id]['b_featurepattern_count'] = b_featurepattern_count      
     
     def compute_b_potential(self, w, seq_id):
         b_potential_features = self.seqs_info[seq_id]['b_potential_features']
         b_potential= {}
         cached_comp = self.seq_info[seq_id]["cached_comp"]
+        cached_pf = self.cached_pf
         
         for j, si, ysk in b_potential_features:
             potential = 0
             for b, z_patt in b_potential_features[j, si, ysk]:
                 if((b, z_patt) not in cached_comp):
-                    w_indx = b_potential_features[j, si, ysk][b, z_patt]['w_indx']
-                    f_val = b_potential_features[j, si, ysk][b, z_patt]['f_val']
+                    w_indx = cached_pf[b, z_patt]['w_indx']
+                    f_val = cached_pf[b, z_patt]['f_val']
                     cached_comp[b, z_patt] = numpy.dot(w[w_indx], f_val)
                 potential += cached_comp[b, z_patt]
 
@@ -491,13 +491,15 @@ class HOCRF(object):
         # load f_potential_features
         seq_info = self.seqs_info[seq_id]
         seq_info["cached_comp"] = {}
-        seq_info["cached_pf"] = {}
         if(seq_info.get("f_potential_features") == "on_disk"):
             target_dir = seq_info["activefeatures_dir"]
             f_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "f_potential_features"))
+#             f_potential = ReaderWriter.read_data(os.path.join(target_dir, "f_potential"))
             seq_info["f_potential_features"] = f_potential_features
+#             seq_info["f_potential"] = f_potential
             print("loading f_potential_features from disk")
         elif(seq_info.get("f_potential_features") == None):
+            seq_info["cached_pf"] = {}
             self.prepare_f_potentialfeatures(seq_id)
             print("preparing f_potential_features")
 
@@ -566,7 +568,7 @@ class HOCRF(object):
                 func_dict[varname](w, seq_id)
 
     def clear_cached_info(self, seqs_id, cached_entities = []):
-        default_entitites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp", "cached_pf"]
+        default_entitites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp"]
         args = default_entitites  + cached_entities
         for seq_id in seqs_id:
             seq_info = self.seqs_info[seq_id]
@@ -641,11 +643,9 @@ class HOCRF(object):
         l = ("globalfeatures", "activefeatures_by_position", "f_potential")
         self.check_cached_info(w, seq_id, l)
         f_potential = self.seqs_info[seq_id]["f_potential"]
-        print("f_potential \n {}".format(f_potential))
         f_transition = self.model.f_transition
         P_codebook = self.model.P_codebook
         T = self.seqs_info[seq_id]["T"]
-        L = self.model.L
         # records max score at every time step
         delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         # the score for the empty sequence at time 0 is 1
@@ -655,8 +655,6 @@ class HOCRF(object):
             for pi in f_transition:
                 max_val = -numpy.inf
                 for pky, (pk,y) in f_transition[pi].items():
-                    print("pky {}".format(pky))
-                    print("pk {}".format(pk))
                     pk_code = P_codebook[pk]
                     potential = f_potential[j, pky]
                     score = potential + delta[j-1, pk_code]
@@ -665,8 +663,6 @@ class HOCRF(object):
                         back_track[(j,P_codebook[pi])] = (pk, y)
                             
                 delta[j, P_codebook[pi]] = max_val
-        print("delta {}".format(delta))
-        print("backtrack {}".format(back_track)) 
         # decoding the sequence
         p_T_code = numpy.argmax(delta[T,:])
         p_T, y_T = back_track[(T, p_T_code)]
@@ -675,20 +671,15 @@ class HOCRF(object):
         Y_decoded.append((p_T,y_T))
         t = T - 1
         while t>0:
-            print("t {}".format(t))
             p_tplus1 = Y_decoded[-1][0]
-            print("p_tplus1 {}".format(p_tplus1))
-            print("p_tplus1 coded {}".format(P_codebook[p_tplus1]))
             p_t, y_t = back_track[(t, P_codebook[p_tplus1])]
             Y_decoded.append((p_t, y_t))
             t -= 1
         Y_decoded.reverse()
 
-        print("decoding sequence with id {} \n".format(seq_id))
-        print("Y_decoded {}".format(Y_decoded))
         self.clear_cached_info([seq_id])
         Y_decoded = [yt for (pt,yt) in Y_decoded]
-        print("Y_decoded {}".format(Y_decoded))
+        #print("Y_decoded {}".format(Y_decoded))
         return(Y_decoded)
         
  
@@ -719,11 +710,3 @@ class HOCRF(object):
         print("seqs_info {}".format(self.seqs_info))
         return((raw_diff, rel_diff))   
     
-    def validate_expected_featuresum(self, w, seqs_id):
-        self.clear_cached_info(seqs_id)
-        grad = self.compute_seqs_gradient(w, seqs_id)
-        avg_diff = numpy.mean(grad)
-        print("difference between empirical feature sum and model's expected feature sum: \n {}".format(grad))
-        print("average difference is {}".format(avg_diff))
-        self.clear_cached_info(seqs_id)
-        return(avg_diff)

@@ -16,7 +16,7 @@ class HOFeatureExtractor(object):
         self.template_X = templateX
         self.template_Y = templateY
         self.attr_desc = attr_desc
-              
+
     @property
     def template_X(self):
         return self._template_X
@@ -112,7 +112,7 @@ class HOFeatureExtractor(object):
                 else:
                     seq_features[y_patt] = xy_features[y_patt]
 #                 print("seq_features {}".format(seq_features))
-        print("features sum {}".format(seq_features))
+        #print("features sum {}".format(seq_features))
         return(seq_features)
 
     def extract_features_Y(self, seq, boundary, templateY):
@@ -404,7 +404,14 @@ class HOFeatureExtractor(object):
                 accum_activefeatures[boundary][z_patt].update(detected_activefeatures[z_patt])
             else:
                 accum_activefeatures[boundary].update({z_patt: detected_activefeatures[z_patt]})
-                
+            
+    def _check_pattern_len(self, detected_patt):
+        cached_patt_len = self.cached_patt_len
+        if(detected_patt not in cached_patt_len):
+            # get the length of the detected_patt
+            cached_patt_len[detected_patt] = len(detected_patt)
+       
+    
     def _build_z_patt(self, boundary, detected_y_patt, accum_pattern, model_patt):
         u = boundary[0]
         tracked_z_patt = {}
@@ -418,12 +425,12 @@ class HOFeatureExtractor(object):
 #                             print("current order i {}".format(i))
                             for prev_patt in accum_pattern[u-1][i]:
 #                                 print("prev_patt {}".format(prev_patt))
-                                if(z_patt.startswith(prev_patt)):
+                                if(z_patt[0:len(prev_patt)] == prev_patt):
                                     for curr_detected_patt in detected_y_patt:
 #                                         print('detected_patt {}'.format(curr_detected_patt))
                                         mix_patt = prev_patt + "|" + curr_detected_patt
 #                                         print("mix_patt {}".format(mix_patt))
-                                        if(z_patt.startswith(mix_patt)):
+                                        if(z_patt[0:len(mix_patt)] == mix_patt):
                                             if(i+1 in tracked_z_patt):
                                                 tracked_z_patt[i+1][mix_patt] = 1
                                             else:
@@ -432,6 +439,7 @@ class HOFeatureExtractor(object):
 #         print("tracked_z_patt {}".format(tracked_z_patt))
 #         print("accum_pattern {}".format(accum_pattern))
         return(tracked_z_patt)    
+    
     
     
     ########################################################
@@ -604,7 +612,7 @@ class FOFeatureExtractor(object):
                 else:
                     seq_features[y_patt] = xy_features[y_patt]
 #                 print("seq_features {}".format(seq_features))
-        print("features sum {}".format(seq_features))
+        #print("features sum {}".format(seq_features))
         return(seq_features)
 
     def extract_features_Y(self, seq, boundary, templateY):
@@ -1217,23 +1225,23 @@ class SeqsRepresentation(object):
         feature_extractor = self.feature_extractor
         attr_extractor = self.attr_extractor
         attr_scaler = self.attr_scaler
-        print("seqs_info {}".format(seqs_info))
+        #print("seqs_info {}".format(seqs_info))
         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-        print("seq_dir {}".format(seq_dir))
+        #print("seq_dir {}".format(seq_dir))
         seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb")
-        print("original seq.Y {}".format(seq.Y))
-        print("original y boundaries {}".format(seq.get_y_boundaries()))
-        print("len {}".format(len(seq.Y)))
+        #print("original seq.Y {}".format(seq.Y))
+        #print("original y boundaries {}".format(seq.get_y_boundaries()))
+        #print("len {}".format(len(seq.Y)))
         
         y_original = list(seq.flat_y)
         seq.Y = (y_imposter, seg_other_symbol)
         y_boundaries = seq.get_y_boundaries()
-        print("imposter seq.Y {}".format(seq.Y))
-        print("imposter y boundaries {}".format(seq.get_y_boundaries()))
-        print("len {}".format(len(seq.Y)))
+        #print("imposter seq.Y {}".format(seq.Y))
+        #print("imposter y boundaries {}".format(seq.get_y_boundaries()))
+        #print("len {}".format(len(seq.Y)))
         
-        print("seq.seg_attr {}".format(seq.seg_attr))
-        print("len(seq")
+        #print("seq.seg_attr {}".format(seq.seg_attr))
+        #print("len(seq")
         # this will update the value of the seg_attr of the sequence 
         new_y_boundaries = attr_extractor.generate_attributes(seq, y_boundaries)
         if(new_y_boundaries):

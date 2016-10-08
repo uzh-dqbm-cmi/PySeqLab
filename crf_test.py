@@ -48,7 +48,6 @@ class TestCRFModel(object):
         model_class = self.model_class
         fextractor_class = self.fextractor_class
         scaling_method = self.scaling_method
-        
         for option_y, templateY in ngram_y.items():
             for option_x, templateX in ngram_xy.items():
                 lines += "option for template Y : {} \n".format(option_y)
@@ -121,30 +120,7 @@ class TestCRFModel(object):
         option_y = self._option_y
         res = self._res
         seqs_info = self._seqs_info
-#         optimization_options = {"method" : "L-BFGS-B",
-#                                 "regularization_type": "l2",
-#                                 "regularization_value":0
-#                                 }
-#         optimization_options = {"method" : "COLLINS-PERCEPTRON",
-#                                 "regularization_type": "l2",
-#                                 "regularization_value":0,
-#                                 "num_epochs":30
-#                                 }
-#         optimization_options = {"method" : "SGA-ADADELTA",
-#                                 "regularization_type": "l2",
-#                                 "regularization_value":0,
-#                                 "num_epochs":100,
-#                                 "tolerance":1e-6,
-#                                 "p_rho":0.9
-#                                 }
-#         optimization_options = {"method" : "SVRG",
-#                                 "regularization_type": "l2",
-#                                 "regularization_value":0,
-#                                 "num_epochs":20,
-#                                 "tolerance":1e-6,
-#                                 "learning_rate_schedule":"t_inverse",
-#                                 "a":0.9
-#                                 }
+
         learner = Learner(crf_model)
         learner.train_model(numpy.zeros(len(crf_model.weights)), seqs_id, optimization_options, working_dir)
         if(optimization_options["method"] != "COLLINS-PERCEPTRON"):
@@ -269,21 +245,21 @@ def run_suppl_example():
     return(seqs, f_y, f_xy, filter_obj)
 
 def run_loaded_conll00_seqs():
-    attr_names = ('w', )
+    attr_names = ('w',)
     window = list(range(-2,2))
-    n_y = 3
+    n_y = 4
     n_x = 3
-    data_file_path = os.path.join(root_dir, "dataset/conll00/train_short_main_2.txt")
+    data_file_path = os.path.join(root_dir, "dataset/conll00/train.txt")
     seqs = read_data(data_file_path, header = "main")
     y, xy = generate_templates(attr_names, window, n_y, n_x)
     # filter templates to keep at least one unigram feature (it is a MUST)
     f_y = filter_templates(y, '1-gram_2-gram_3-gram', "=")
-    f_xy = filter_templates(xy, '1-gram:1-gram', "=")
+    f_xy = filter_templates(xy, '1-gram:1-gram_2-gram_3-gram', "=")
 #     filter_info = {"filter_type":"pattern", "filter_val": ['B-NP|B-PP|B-NP','B-PP|B-NP|I-NP','B-VP|I-VP|I-VP', 'I-NP|B-VP|I-VP', 'I-VP|I-VP|I-VP'], "filter_relation": "in"}
 #     filter_obj = FeatureFilter(filter_info)
     filter_obj = None
-
-    return(seqs[0:1], f_y, f_xy, filter_obj)
+    print("f_xy {}".format(f_xy))
+    return(seqs[0:100], {'empty_y':{'Y':()}}, f_xy, filter_obj)
     
 def test_crfs(model_type, scaling_method, optimization_options, run_config):
     if(model_type == "HOSemi"):
@@ -305,7 +281,8 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config):
     if(wrong_temp):
         raise("ill-formed template..")
     else:
-        mv = crf_tester.test_crf_learning(seqs)
+#         mv = crf_tester.test_crf_learning(seqs)
+        crf_tester.test_model_validity()
 #         fb = crf_tester.test_crf_forwardbackward(seqs)
 #         print("fb {}".format(fb))
 #         gc = crf_tester.test_crf_grad(seqs[0:1])

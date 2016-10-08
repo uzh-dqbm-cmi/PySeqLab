@@ -105,7 +105,7 @@ class ReaderWriter(object):
     @staticmethod
     def dump_data(data, file_name, mode = "wb"):
         with open(file_name, mode) as f:
-            pickle.dump(data, f) 
+            pickle.dump(data, f, protocol = 4) 
     @staticmethod  
     def read_data(file_name, mode = "rb"):
         with open(file_name, mode) as f:

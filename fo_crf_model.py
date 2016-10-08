@@ -125,7 +125,12 @@ class FirstOrderCRF(object):
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
         self.seqs_info = seqs_info
-
+        self.func_dict = {"alpha": self._load_alpha,
+                         "beta": self._load_beta,
+                         "potential_matrix": self._load_potentialmatrix,
+                         "activefeatures_by_position": self.load_activefeatures,
+                         "globalfeatures": self.load_globalfeatures,
+                         "flat_y":self._load_flaty}
     @property
     def seqs_info(self):
         return self._seqs_info
@@ -205,67 +210,35 @@ class FirstOrderCRF(object):
         self.seqs_info.clear() 
         ReaderWriter.dump_data(self, file_name)
         
-    # to re-fix
-    def write_weights(self, w_hat, file):
-        pass
-        
-    def check_cached_info(self, w, seq_id, entity_names):
+    def _load_alpha(self, w, seq_id):
         seq_info = self.seqs_info[seq_id]
-        none_type = type(None) 
-        for varname in entity_names:
-            if(type(seq_info.get(varname)) == none_type):
-                if(varname == "alpha"):
-                    # assumes the potential matrix has been loaded into seq_info
-                    seq_info[varname] = self.compute_forward_vec(w, seq_id)
-                    seq_info["Z"] = vectorized_logsumexp(seq_info[varname][-1,:])
-#                     print("... Computing alpha probability ...")
-                             
-                elif(varname == "beta"):
-                    # assumes the potential matrix has been loaded into seq_info
-                    seq_info[varname] = self.compute_backward_vec(w, seq_id)
-#                     print("... Computing beta probability ...")
-                         
-                elif(varname == "potential_matrix"):
-                    # assumes the activefeatures_by_position matrix has been loaded into seq_info
-                    # compute potential matrix
-                    seq_info["potential_matrix"] = self.compute_psi_potential(w, seq_id)
-#                     print("... Computing potential matrix ...")
-                         
-                elif(varname == "activefeatures_by_position"):
-                    # load the sequence model active features by position and save in seq_info
-                    self.load_activefeatures(seq_id)
-#                     print("... Loading active features ...")
-                         
-                elif(varname == "globalfeatures"):
-                    # load the sequence global features and save it in seq_info
-                    self.load_globalfeatures(seq_id)
-#                     print("... Loading global features ...")
+        # assumes the potential matrix has been loaded into seq_info
+        seq_info["alpha"] = self.compute_forward_vec(w, seq_id)
+        seq_info["Z"] = vectorized_logsumexp(seq_info["alpha"][-1,:])
+#         print("... Computing alpha probability ...")
 
-#                 elif(varname == "seq"):
-#                     seq = self._load_seq(seq_id, target="seq")
-#                     seq_info["seq"] = seq
-                        
-                elif(varname == "flat_y"):
-                    seq = self._load_seq(seq_id, target="seq")
-                    seq_info['flat_y'] = seq.flat_y
-                    
-    def clear_cached_info(self, seqs_id, cached_entities = []):
-        default_entitites = ["potential_matrix", "alpha", "Z", "beta", "P_marginal"]
-        args = cached_entities + default_entitites
-        for seq_id in seqs_id:
-            seq_info = self.seqs_info[seq_id]
-            for varname in args:
-                if(varname in seq_info):
-                    seq_info[varname] = None
+    def _load_beta(self, w, seq_id):
+        # assumes the potential matrix has been loaded into seq_info
+        self.seqs_info[seq_id]["beta"] = self.compute_backward_vec(w, seq_id)
+#         print("... Computing beta probability ...")
 
-            
-    def load_activefeatures(self, seq_id):
+    def _load_flaty(self, w, seq_id):
+        seq = self._load_seq(seq_id, target="seq")
+        self.seqs_info[seq_id]['flat_y'] = seq.flat_y
+        
+    def _load_potentialmatrix(self, w, seq_id):
+        # assumes the activefeatures_by_position has been loaded into seq_info
+        # compute potential matrix
+        self.seqs_info[seq_id]["potential_matrix"] = self.compute_psi_potential(w, seq_id)
+#         print("... Computing potential matrix ...")
+
+    def load_activefeatures(self, w, seq_id):
         # get the sequence model active features
         seqs_representer = self.seqs_representer
         seqs_activefeatures = seqs_representer.get_seqs_modelactivefeatures([seq_id], self.seqs_info)
         self.seqs_info[seq_id]["activefeatures_by_position"] = seqs_activefeatures[seq_id]
         
-    def load_globalfeatures(self, seq_id):
+    def load_globalfeatures(self, w, seq_id):
         # get sequence global features
         seqs_representer = self.seqs_representer
         seqs_globalfeatures = seqs_representer.get_seqs_globalfeatures([seq_id], self.seqs_info, self.model)
@@ -287,6 +260,24 @@ class FirstOrderCRF(object):
             return(seq.Y)
         elif(target == "X"):
             return(seq.X)
+
+    def check_cached_info(self, w, seq_id, entity_names):
+        seq_info = self.seqs_info[seq_id]
+        func_dict = self.func_dict
+        none_type = type(None) 
+        for varname in entity_names:
+            if(type(seq_info.get(varname)) == none_type):
+                func_dict[varname](w, seq_id)
+                    
+    def clear_cached_info(self, seqs_id, cached_entities = []):
+        default_entitites = ["potential_matrix", "alpha", "Z", "beta", "P_marginal"]
+        args = cached_entities + default_entitites
+        for seq_id in seqs_id:
+            seq_info = self.seqs_info[seq_id]
+            for varname in args:
+                if(varname in seq_info):
+                    seq_info[varname] = None
+
         
     def reset_seqs_info(self, seqs_id):
         for seq_id in seqs_id:
