@@ -888,7 +888,8 @@ class Learner(object):
 
 class Evaluator(object):
     def __init__(self, model_repr):
-        """model_repr : the crf model representation (i.e. instance of HOSemiCRFModelRepresentation)"""
+        """model_repr : the crf model representation 
+        (i.e. any instance of model class ending with ModelRepresentation such as HOSemiCRFModelRepresentation)"""
         self.model_repr = model_repr
         
     def compute_model_performance(self, Y_seqs_dict, metric, output_file):
