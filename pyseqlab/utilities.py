@@ -314,7 +314,7 @@ def split_data(seqs_id, method, **kwargs):
             trainset_size = 80
         for i in range(num_splits):
             data_split[i] = {}
-            current_train_seqs = numpy.random.choice(seqs_id, N*trainset_size/100, replace = False)
+            current_train_seqs = numpy.random.choice(seqs_id, int(N*trainset_size/100), replace = False)
             data_split[i]["train"] = list(current_train_seqs)
             data_split[i]["test"] = list(set(seqs_id)-set(current_train_seqs))
             
@@ -328,8 +328,15 @@ def group_seqs_by_length(seqs_info):
             grouped_seqs[T].append(seq_id)
         else:
             grouped_seqs[T] = [seq_id]
-    return(grouped_seqs)
+    # loop to regroup single sequences
+    singelton = [T for T, seqs_id in grouped_seqs.items() if len(seqs_id) == 1]
+    singelton_seqs = []
+    for T in singelton:
+        singelton_seqs += grouped_seqs[T]
+        del grouped_seqs[T]
 
+    grouped_seqs["singleton"] = singelton_seqs
+    return(grouped_seqs)
     
 def weighted_sample(grouped_seqs, trainset_size):
 #     count_seqs = {}
@@ -342,7 +349,7 @@ def weighted_sample(grouped_seqs, trainset_size):
     for group_var, seqs_id in grouped_seqs.items():
 #         quota = trainset_size*count_seqs[group_var]/total
         data_split = split_data(seqs_id, method = "random", num_splits = 1, trainset_size = trainset_size)
-        wsample[group_var] = data_split
+        wsample[group_var] = data_split[0]
     return(wsample)
 
 def nested_cv(seqs_id, outer_kfold, inner_kfold):
