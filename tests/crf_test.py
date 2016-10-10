@@ -4,14 +4,16 @@
 import os
 from copy import deepcopy
 import numpy
-from utilities import filter_templates, generate_templates, create_directory, ReaderWriter, DataFileParser
-from attributes_extraction import SequenceStruct, NERSegmentAttributeExtractor
-from features_extraction import FOFeatureExtractor, HOFeatureExtractor, SeqsRepresentation
-from crf_learning import Learner
-from fo_crf_model import FirstOrderCRF, FirstOrderCRFModelRepresentation
-from ho_crf_model import HOCRF, HOCRFModelRepresentation
-from hosemi_crf_model import HOSemiCRF, HOSemiCRFModelRepresentation
-from features_extraction import FeatureFilter
+
+from pyseqlab.utilities import filter_templates, generate_templates, create_directory, ReaderWriter, DataFileParser
+from pyseqlab.attributes_extraction import SequenceStruct, NERSegmentAttributeExtractor
+from pyseqlab.features_extraction import FOFeatureExtractor, HOFeatureExtractor, SeqsRepresentation
+from pyseqlab.features_extraction import FeatureFilter
+from pyseqlab.fo_crf_model import FirstOrderCRF, FirstOrderCRFModelRepresentation
+from pyseqlab.ho_crf_model import HOCRF, HOCRFModelRepresentation
+from pyseqlab.hosemi_crf_model import HOSemiCRF, HOSemiCRFModelRepresentation
+from pyseqlab.crf_learning import Learner
+
 
 root_dir = os.path.dirname(os.path.realpath(__file__))
 
