@@ -6,7 +6,7 @@
 import os
 from datetime import datetime
 import numpy
-from utilities import ReaderWriter, create_directory, generate_datetime_str
+from .utilities import ReaderWriter, create_directory, generate_datetime_str
 
 class Learner(object):
     def __init__(self, crf_model):
@@ -26,10 +26,10 @@ class Learner(object):
                               }
                             1- {'method': SGA
                               'regularization_type': {'l1', 'l2'}
-                               regularization_value: float
+                               'regularization_value': float
                                num_epochs: int
                               'tolerance': float
-                              'learning_rate_schedule: one of ("bottu", "exponential_decay", "t_inverse", "constant")
+                              'learning_rate_schedule': one of ("bottu", "exponential_decay", "t_inverse", "constant")
                               't0': float
                               'alpha': float
                               'eta0': float
@@ -969,4 +969,6 @@ class Evaluator(object):
             tagslevel_performance[statecode] = numpy.array([[tag_tp, tag_fp], [tag_fn, tag_tn]])
             
         return(tagslevel_performance)
+if __name__ == "__main__":
+    pass
     

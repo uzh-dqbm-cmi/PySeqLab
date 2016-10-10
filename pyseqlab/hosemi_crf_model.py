@@ -6,8 +6,8 @@
 import os
 from copy import deepcopy
 import numpy
-from utilities import ReaderWriter, create_directory, vectorized_logsumexp
- 
+from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
+
 class HOSemiCRFModelRepresentation(object):
     def __init__(self, modelfeatures, states, L):
         """ modelfeatures: set of features defining the model
@@ -758,3 +758,5 @@ class HOSemiCRF(object):
         print("average difference is {}".format(avg_diff))
         self.clear_cached_info(seqs_id)
         return(avg_diff)
+if __name__ == "__main__":
+    pass

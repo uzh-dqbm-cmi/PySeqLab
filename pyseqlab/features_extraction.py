@@ -8,8 +8,9 @@ from copy import deepcopy
 from datetime import datetime
 from collections import Counter
 import numpy
-from utilities import ReaderWriter, create_directory, generate_datetime_str
-from attributes_extraction import AttributeScaler
+from .utilities import ReaderWriter, create_directory, generate_datetime_str
+from .attributes_extraction import AttributeScaler
+
 
 class HOFeatureExtractor(object):
     """ Generic feature extractor class that contains feature functions/templates """
@@ -1360,5 +1361,6 @@ class FeatureFilter(object):
     @staticmethod
     def _notin_rel(x, y, z):
         if(x not in y): del z
-
+if __name__ == "__main__":
+    pass
     

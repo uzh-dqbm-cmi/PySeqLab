@@ -6,7 +6,7 @@
 import os
 from copy import deepcopy
 import numpy
-from utilities import ReaderWriter, create_directory, vectorized_logsumexp
+from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
 
 class FirstOrderCRFModelRepresentation(object):
     def __init__(self, modelfeatures, states, L = 1):
@@ -591,4 +591,6 @@ class FirstOrderCRF(object):
         print("average difference is {}".format(avg_diff))
         self.clear_cached_info(seqs_id)
         return(avg_diff)
+if __name__ == "__main__":
+    pass
     

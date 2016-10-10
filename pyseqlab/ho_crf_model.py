@@ -6,7 +6,7 @@
 import os
 from copy import deepcopy
 import numpy
-from utilities import ReaderWriter, create_directory, vectorized_logsumexp
+from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
  
 class HOCRFModelRepresentation(object):
     def __init__(self, modelfeatures, states, L):
@@ -711,3 +711,5 @@ class HOCRF(object):
         print("seqs_info {}".format(self.seqs_info))
         return((raw_diff, rel_diff))   
     
+if __name__ == "__main__":
+    pass

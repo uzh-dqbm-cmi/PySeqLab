@@ -8,7 +8,7 @@ from datetime import datetime
 from copy import deepcopy
 from itertools import combinations
 import numpy
-from attributes_extraction import SequenceStruct
+from .attributes_extraction import SequenceStruct
 
 
 class DataFileParser():
@@ -364,4 +364,6 @@ def get_conll00():
     parser.print_seqs()
     
 if __name__ == "__main__":
-    get_conll00()
+    pass
+#     get_conll00()
+
