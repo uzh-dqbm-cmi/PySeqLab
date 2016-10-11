@@ -403,7 +403,7 @@ class Learner(object):
                 error_count = 0
                 numpy.random.shuffle(train_seqs_id)
                 for seq_id in train_seqs_id:
-                    print("sequences left {}".format(seq_left))
+#                     print("sequences left {}".format(seq_left))
                     y_imposter = crf_model.viterbi(w, seq_id)
 
                     if(k == 0):
@@ -416,7 +416,7 @@ class Learner(object):
                     missmatch = [i for i in range(T) if y_original[i] != y_imposter[i]]
                     len_diff = len(missmatch)
                     if(len_diff):
-                        print("miss match with seq_id {}".format(seq_id))
+#                         print("miss match with seq_id {}".format(seq_id))
                         if(seq_id not in track_seqs):
                             track_seqs.append(seq_id)
                         if(survival_len):
@@ -439,12 +439,12 @@ class Learner(object):
                         crf_model.clear_cached_info(track_seqs)
                         track_seqs = []
                     else:
-                        print("nomiss match with seq_id {}".format(seq_id))
+#                         print("nomiss match with seq_id {}".format(seq_id))
                         survival_len += 1
                         if(seq_id not in track_seqs):
                             track_seqs.append(seq_id)
                     seq_left -= 1
-                print("error count {}".format(error_count))
+#                 print("error count {}".format(error_count))
                 avg_error_list.append(float(error_count/N))
                 self._track_perceptron_optimizer(w, k, avg_error_list)
                 print("average error : {}".format(avg_error_list))
@@ -474,7 +474,7 @@ class Learner(object):
                 error_count = 0
                 numpy.random.shuffle(train_seqs_id)
                 for seq_id in train_seqs_id:
-                    print("sequences left {}".format(seq_left))
+#                     print("sequences left {}".format(seq_left))
                     y_imposter = crf_model.viterbi(w, seq_id)
 
                     if(k == 0):
@@ -487,7 +487,7 @@ class Learner(object):
                     missmatch = [i for i in range(T) if y_original[i] != y_imposter[i]]
                     len_diff = len(missmatch)
                     if(len_diff):
-                        print("miss match with seq_id {}".format(seq_id))
+#                         print("miss match with seq_id {}".format(seq_id))
                         if(seq_id not in track_seqs):
                             track_seqs.append(seq_id)
                             
@@ -517,11 +517,11 @@ class Learner(object):
                         track_seqs = []
                         num_upd += 1
                     else:
-                        print("nomiss match with seq_id {}".format(seq_id))
+#                         print("nomiss match with seq_id {}".format(seq_id))
                         if(seq_id not in track_seqs):
                             track_seqs.append(seq_id)
                     seq_left -= 1
-                print("error count {}".format(error_count))
+#                 print("error count {}".format(error_count))
                 avg_error_list.append(float(error_count/N))
                 self._track_perceptron_optimizer(w, k, avg_error_list)
                 print("average error : {}".format(avg_error_list))
@@ -984,13 +984,13 @@ class Evaluator(object):
                                                                      self.map_states_to_num(Y_pred, Y_codebook, M),
                                                                      Y_codebook_rev,
                                                                      M)
-            print("taglevel_performance {}".format(taglevel_performance))
+#             print("taglevel_performance {}".format(taglevel_performance))
 #             print("tagging performance \n {}".format(taglevel_performance))
             model_taglevel_performance += taglevel_performance
 
         # perform sum across all layers to get micro-average
         collapsed_performance = model_taglevel_performance.sum(axis = 0)
-        print("collapsed performance \n {}".format(collapsed_performance))
+#         print("collapsed performance \n {}".format(collapsed_performance))
         tp = collapsed_performance[0,0]
         fp = collapsed_performance[0,1]
         fn = collapsed_performance[1,0]
@@ -1016,19 +1016,19 @@ class Evaluator(object):
         
     def map_states_to_num(self, Y, Y_codebook, M):
         Y_coded = [Y_codebook[state] if state in Y_codebook else M for state in Y]
-        print("Y_coded {}".format(Y_coded))
+#         print("Y_coded {}".format(Y_coded))
         return(Y_coded)
         
     def compute_tags_confusionmatrix(self, Y_ref, Y_pred, Y_codebook_rev, M):
         # compute confusion matrix on the level of the tag/state
-        print("Y_codebook {}".format(Y_codebook_rev))
+#         print("Y_codebook {}".format(Y_codebook_rev))
         detected_statescode = set(Y_ref).union(set(Y_pred))
-        print("detected_statescode {}".format(detected_statescode))
+#         print("detected_statescode {}".format(detected_statescode))
         valid_statescode = [statecode for statecode in detected_statescode if statecode in Y_codebook_rev]
-        print("valid_statescode {}".format(valid_statescode))
+#         print("valid_statescode {}".format(valid_statescode))
         Y_ref = numpy.asarray(Y_ref)
         Y_pred = numpy.asarray(Y_pred)
-        print("Y_ref as numpy array {}".format(Y_ref))
+#         print("Y_ref as numpy array {}".format(Y_ref))
 #         print("detected states code \n {}".format(detected_statescode))
         tagslevel_performance = numpy.zeros((M, 2,2))
         

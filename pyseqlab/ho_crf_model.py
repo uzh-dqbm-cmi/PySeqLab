@@ -565,14 +565,14 @@ class HOCRF(object):
         func_dict = self.func_dict
         none_type = type(None) 
         for varname in entity_names:
-            if(varname == "f_potential"):
-                if(varname in seq_info):
-                    print("f_potential exists")
-                else:
-                    print("f_potential does not exist in dict")
+#             if(varname == "f_potential"):
+#                 if(varname in seq_info):
+#                     print("f_potential exists")
+#                 else:
+#                     print("f_potential does not exist in dict")
             if(type(seq_info.get(varname)) == none_type):
-                if(varname == "f_potential"):
-                    print("i just considered it as None")
+#                 if(varname == "f_potential"):
+#                     print("i just considered it as None")
                 func_dict[varname](w, seq_id)
 
     def clear_cached_info(self, seqs_id, cached_entities = []):
