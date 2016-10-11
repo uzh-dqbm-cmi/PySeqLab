@@ -86,21 +86,21 @@ class Learner(object):
         pop_keys.add("regularization_value")
         
         if(lambda_val == None):
-            # assign small lambda value
-            lambda_val = 0.001
+            # assign default lambda value
+            lambda_val = 0.0
         elif(lambda_val < 0):
             # regularization should be positive
-            lambda_val = 0.001
+            lambda_val = 0.0
 
         # initialization of weight vector w node
 #         w0 = numpy.zeros(len(self.weights))
         method = optimization_options.get("method")
         pop_keys.add("method")
-        if(method not in ("L-BFGS-B", "BFGS", "Newton-CG", "CG","SGA","SGA-ADADELTA","SVRG","COLLINS-PERCEPTRON")):
+        if(method not in ("L-BFGS-B", "BFGS", "SGA","SGA-ADADELTA","SVRG","COLLINS-PERCEPTRON")):
             # default weight learning/optimization method
             method = "SGA-ADADELTA"
             
-        if(method in ("L-BFGS-B", "BFGS", "Newton-CG", "CG")):
+        if(method in ("L-BFGS-B", "BFGS")):
             # initialize the new optimization options
             option_keys = set(optimization_options.keys()) - pop_keys
             options = {elmkey:optimization_options[elmkey] for elmkey in option_keys}
@@ -140,6 +140,10 @@ class Learner(object):
                 # if segmentation problem the non-entity symbol is specified using this option else it is None
                 seg_other_symbol = optimization_options.get("seg_other_symbol")
                 optimization_config['seg_other_symbol'] = seg_other_symbol
+                avg_scheme = optimization_options.get("avg_scheme")
+                if(avg_scheme not in ("avg_uniform", "avg_error", "survival")):
+                    avg_scheme = "avg_error"
+                optimization_config["avg_scheme"] = avg_scheme
 
             elif(method in ("SGA", "SVRG")):
             
@@ -162,7 +166,7 @@ class Learner(object):
                     # get the alpha parameter
                     a = optimization_options.get("a")
                     if(a == None):
-                        # use one of the default values as mentioned in tsuruoka09
+                        # use a default value
                         a = 0.9
                     elif(a <= 0 or a >= 1):
                         a = 0.9
@@ -246,17 +250,23 @@ class Learner(object):
             epsilon = self.training_description["epsilon"]
             line += "p_rho: {} \n".format(rho)
             line += "epsilon: {} \n".format(epsilon)
+        elif(method == "COLLINS-PERCEPTRON"):
+            avg_scheme = self.training_description["avg_scheme"]
+            line += "averaging scheme: {} \n".format(avg_scheme)
         # write to file    
         ReaderWriter.log_progress(line, log_file)
         
     def _check_reldiff(self, x, y):
         tolerance = self.training_description["tolerance"]
-        reldiff = numpy.abs(x - y) / (numpy.abs(x) + numpy.abs(y))
-        print("reldiff = {}".format(reldiff))
-        if(reldiff <= tolerance):
-            self._exitloop = True
+        if(x != y):            
+            reldiff = numpy.abs(x - y) / (numpy.abs(x) + numpy.abs(y))
+            print("reldiff = {}".format(reldiff))
+            if(reldiff <= tolerance):
+                self._exitloop = True
+            else:
+                self._exitloop = False 
         else:
-            self._exitloop = False 
+            self._exitloop = True
             
         #############################
         # optimize using scipy optimize function
@@ -355,7 +365,6 @@ class Learner(object):
         line += "Number of seconds spent: {} \n".format(delta_time.total_seconds())
         ReaderWriter.log_progress(line, log_file)
         self._elapsed_time = datetime.now()
-#     
 
 
     # needs still some work and fixing....
@@ -365,10 +374,12 @@ class Learner(object):
         """
         self._report_training()
         num_epochs = self.training_description["num_epochs"]
-        regularization_type = self.training_description["regularization_type"]
-        # regularization parameter lambda
-        C = self.training_description['regularization_value']
+        # TODO add support for regularization while using structured perceptron as training algorithm
+#         regularization_type = self.training_description["regularization_type"]
+#         # regularization parameter lambda
+#         C = self.training_description['regularization_value']
         seg_other_symbol = self.training_description['seg_other_symbol']
+        avg_scheme = self.training_description["avg_scheme"]
         model_dir = self.training_description["model_dir"]
         log_file = os.path.join(model_dir, "crf_training_log.txt")
 
@@ -379,13 +390,13 @@ class Learner(object):
         self._elapsed_time = datetime.now()
         self._exitloop = False
         
-        if(regularization_type == "l2"):
+        if(avg_scheme == "survival"):
             # accumulated sum of estimated weights
             w_avg = numpy.zeros(len(w), dtype = "longdouble")
-            survival_len = 0
-            total_survival = 0
             avg_error_list = [0]
             track_seqs = []
+            survival_len = 0
+            total_survival = 0
 
             for k in range(num_epochs):
                 seq_left = N
@@ -412,7 +423,7 @@ class Learner(object):
                             w_avg += survival_len * w
                             total_survival += survival_len
                         survival_len = 0
-                        error_count += len_diff/seqs_info[seq_id]["T"]
+                        error_count += len_diff/T
                         crf_model.check_cached_info(w, seq_id, ("globalfeatures",))
                         y_original_gfeatures = seqs_info[seq_id]['globalfeatures']
                         # generate global features for the current imposter 
@@ -428,7 +439,7 @@ class Learner(object):
                         crf_model.clear_cached_info(track_seqs)
                         track_seqs = []
                     else:
-                        print("no miss match with seq_id {}".format(seq_id))
+                        print("nomiss match with seq_id {}".format(seq_id))
                         survival_len += 1
                         if(seq_id not in track_seqs):
                             track_seqs.append(seq_id)
@@ -438,22 +449,89 @@ class Learner(object):
                 self._track_perceptron_optimizer(w, k, avg_error_list)
                 print("average error : {}".format(avg_error_list))
                 print("self._exitloop {}".format(self._exitloop))
+                print("track_seqs {}".format(track_seqs))
                 if(self._exitloop):
-                    if(survival_len):
-                        w_avg += survival_len * w
-                        total_survival += survival_len
-                        w_avg /= total_survival
-                        survival_len = 0
                     break
                 self._elapsed_time = datetime.now()
-            if(not self._exitloop):
-                if(survival_len):
-                    w_avg += survival_len * w
-                    total_survival += survival_len
-                    w_avg /= total_survival
-                    survival_len = 0
-                else:
-                    w_avg = w   
+            if(survival_len):
+                w_avg += survival_len * w
+                total_survival += survival_len
+                w_avg /= total_survival
+                survival_len = 0
+            elif(survival_len == 0 and total_survival == 0):
+                # in case the previous weights were not surviving (i.e. not capable of decoding at leaset one sequence correctly)
+                # return the last weight version
+                w_avg = w   
+                    
+        elif(avg_scheme in ("avg_error", "avg_uniform")):
+            # accumulated sum of estimated weights
+            w_avg = numpy.zeros(len(w), dtype = "longdouble")
+            avg_error_list = [0]
+            track_seqs = []
+            num_upd = 0
+            for k in range(num_epochs):
+                seq_left = N
+                error_count = 0
+                numpy.random.shuffle(train_seqs_id)
+                for seq_id in train_seqs_id:
+                    print("sequences left {}".format(seq_left))
+                    y_imposter = crf_model.viterbi(w, seq_id)
+
+                    if(k == 0):
+                        crf_model.check_cached_info(w, seq_id, ("flat_y",))
+                    
+                    y_original = seqs_info[seq_id]['flat_y']
+                    T = seqs_info[seq_id]['T']
+#                     print("y original {}".format(y_original))
+#                     print("y imposter {}".format(y_imposter))
+                    missmatch = [i for i in range(T) if y_original[i] != y_imposter[i]]
+                    len_diff = len(missmatch)
+                    if(len_diff):
+                        print("miss match with seq_id {}".format(seq_id))
+                        if(seq_id not in track_seqs):
+                            track_seqs.append(seq_id)
+                            
+                        # range of error is [0-1]
+                        seq_err_count = len_diff/T
+                        error_count += seq_err_count
+
+                        crf_model.check_cached_info(w, seq_id, ("globalfeatures",))
+                        y_original_gfeatures = seqs_info[seq_id]['globalfeatures']
+                        # generate global features for the current imposter 
+                        y_imposter_gfeatures = crf_model.load_imposter_globalfeatures(seq_id, y_imposter, seg_other_symbol)                     
+#                         print("y_imposter gfeatures {}".format(y_imposter_gfeatures))
+#                         print("y_original_gfeatures {}".format(y_original_gfeatures))
+
+                        # the contribution of global features when using the correct label sequence
+                        w[list(y_original_gfeatures.keys())] += list(y_original_gfeatures.values())
+                        
+                        # the contribution of global features when using the imposter label sequence
+                        w[list(y_imposter_gfeatures.keys())] -= list(y_imposter_gfeatures.values())
+                        
+                        if(avg_scheme == "avg_error"):
+                            # consider/weigh more previous weights that have small average error per sequence
+                            w_avg += (1-seq_err_count) * w
+                        else:
+                            w_avg += w
+                        crf_model.clear_cached_info(track_seqs)
+                        track_seqs = []
+                        num_upd += 1
+                    else:
+                        print("nomiss match with seq_id {}".format(seq_id))
+                        if(seq_id not in track_seqs):
+                            track_seqs.append(seq_id)
+                    seq_left -= 1
+                print("error count {}".format(error_count))
+                avg_error_list.append(float(error_count/N))
+                self._track_perceptron_optimizer(w, k, avg_error_list)
+                print("average error : {}".format(avg_error_list))
+                print("self._exitloop {}".format(self._exitloop))
+                print("track_seqs {}".format(track_seqs)) 
+                if(self._exitloop):
+                    break
+                self._elapsed_time = datetime.now()
+            w_avg /= num_upd
+            
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
                  
@@ -461,11 +539,11 @@ class Learner(object):
 
     def _track_perceptron_optimizer(self, w, k, avg_error_list):
         delta_time = datetime.now() - self._elapsed_time 
-#         self._check_reldiff(avg_error_list[-2], avg_error_list[-1])
+        self._check_reldiff(avg_error_list[-2], avg_error_list[-1])
         model_dir = self.training_description["model_dir"]
         log_file = os.path.join(model_dir, "crf_training_log.txt")
         line = "--- Iteration {} --- \n".format(k+1)
-        line += "Average percentage of decoding error: {} \n".format(avg_error_list[-1])
+        line += "Average percentage of decoding error: {} \n".format(avg_error_list[-1]*100)
         line += "Number of seconds spent: {} \n".format(delta_time.total_seconds())
         ReaderWriter.log_progress(line, log_file)
         # dump the learned weights for every pass
@@ -493,9 +571,8 @@ class Learner(object):
         step_size = round(N * 0.1)
         if step_size == 0:
             step_size = 1
-        mean_cost_vec = []
+        mean_cost_vec = [0]
         
-
         p_rho = self.training_description["p_rho"]
         epsilon = self.training_description["epsilon"]
         E_g2 = numpy.zeros(len(w), dtype="longdouble")
@@ -602,7 +679,7 @@ class Learner(object):
         step_size = round(N * 0.1)
         if step_size == 0:
             step_size = 1
-        mean_cost_vec = []
+        mean_cost_vec = [0]
         
         # instance variable to keep track of elapsed time between optimization iterations
         self._elapsed_time = datetime.now()
@@ -715,7 +792,7 @@ class Learner(object):
         step_size = round(N * 0.1)
         if step_size == 0:
             step_size = 1
-        mean_cost_vec = []
+        mean_cost_vec = [0]
         
         if(regularization_type == "l1"):
             u = 0
@@ -827,9 +904,7 @@ class Learner(object):
     def _track_sga_optimizer(self, w, seqs_loglikelihood, mean_loglikelihood, k):
         
         delta_time = datetime.now() - self._elapsed_time 
-        
-        if(len(mean_loglikelihood) > 1):
-            self._check_reldiff(mean_loglikelihood[-2], mean_loglikelihood[-1])
+        self._check_reldiff(mean_loglikelihood[-2], mean_loglikelihood[-1])
 #         
         epoch_num = k
         # log file 
