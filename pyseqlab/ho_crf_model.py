@@ -384,8 +384,8 @@ class HOCRF(object):
         z_lendict = self.model.z_lendict
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
+        cached_pf = self.seqs_info[seq_id]["cached_pf"]
         b_potential_features = {}
-        cached_pf = self.cached_pf
         
         for j in range(1, T+1):
             for si in si_ysk_z:
@@ -410,9 +410,9 @@ class HOCRF(object):
     
     def compute_b_potential(self, w, seq_id):
         b_potential_features = self.seqs_info[seq_id]['b_potential_features']
+        cached_pf = self.seqs_info[seq_id]["cached_pf"]
+        cached_comp = self.seqs_info[seq_id]["cached_comp"]
         b_potential= {}
-        cached_comp = self.seq_info[seq_id]["cached_comp"]
-        cached_pf = self.cached_pf
         
         for j, si, ysk in b_potential_features:
             potential = 0
@@ -565,7 +565,14 @@ class HOCRF(object):
         func_dict = self.func_dict
         none_type = type(None) 
         for varname in entity_names:
+            if(varname == "f_potential"):
+                if(varname in seq_info):
+                    print("f_potential exists")
+                else:
+                    print("f_potential does not exist in dict")
             if(type(seq_info.get(varname)) == none_type):
+                if(varname == "f_potential"):
+                    print("i just considered it as None")
                 func_dict[varname](w, seq_id)
 
     def clear_cached_info(self, seqs_id, cached_entities = []):
@@ -641,7 +648,7 @@ class HOCRF(object):
             
 
     def viterbi(self, w, seq_id):
-        l = ("globalfeatures", "activefeatures_by_position", "f_potential")
+        l = ("activefeatures_by_position", "f_potential")
         self.check_cached_info(w, seq_id, l)
         f_potential = self.seqs_info[seq_id]["f_potential"]
         f_transition = self.model.f_transition
@@ -678,7 +685,6 @@ class HOCRF(object):
             t -= 1
         Y_decoded.reverse()
 
-        self.clear_cached_info([seq_id])
         Y_decoded = [yt for (pt,yt) in Y_decoded]
         #print("Y_decoded {}".format(Y_decoded))
         return(Y_decoded)
