@@ -12,7 +12,7 @@ long_description = '\n'.join([open(f, 'r').read() for f in expl_files])
 
 if __name__ == "__main__":
     setup(name='PySeqLab',
-          version="1.0.0",
+          version="1.1.0",
           description='A package for performing structured prediction (i.e.sequence labelling and segmentation learning.',
           long_description=long_description,
           author="Ahmed Allam",
