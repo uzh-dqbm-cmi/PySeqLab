@@ -264,20 +264,38 @@ def filter_templates(ngram_template, condition, operator):
             if(condition not in option):
                 del(f_ngram_template[option])
     return(f_ngram_template)
-                    
-def generate_templates(attr_names, window, n_y, n_x):
-    ngram_templateY = ngram_options_y(n_y)
-    ngram_templateX = ngram_options_x(attr_names, window, n_x)
+
+def filter_templates_by_attrname(f_ngram_template, attr_name):
+    filtered_template = {attr_name:{}}
+    for option, template in f_ngram_template.items():
+        if(attr_name in template):
+            filtered_template[attr_name].update(template[attr_name])
+    if(not filtered_template[attr_name]):
+        del filtered_template[attr_name]
+    return(filtered_template)
+
+def generate_templates(attr_names, window, y_options, x_options):
+
+    ngram_templateY = ngram_options_y(y_options)
+    ngram_templateX = ngram_options_x(attr_names, window, x_options)
     ngram_templateXY = ngram_options_xy(ngram_templateX, ngram_templateY)
     return((ngram_templateY, ngram_templateXY))
 
-def ngram_combinations(n):
+def ngram_combinations(n,accumulative = True, comb = True):
     option_names = []
-    for i in range(1, n+1):
+    if(accumulative):
+        start = 1
+    else:
+        start = n
+    for i in range(start, n+1):
         option_names.append("{}-gram".format(i))
         
     config = {}
-    for i in range(1, n+1):
+    if(comb):
+        start = 1
+    else:
+        start = n
+    for i in range(start, n+1):
         config[i] = list(combinations(option_names, i))
         
     config_combinations = {}
@@ -291,8 +309,12 @@ def ngram_combinations(n):
             
     return(config_combinations)
 
-def ngram_options_y(n):
-    config_combinations = ngram_combinations(n)
+def ngram_options_y(options):
+    # get the y options 
+    n = options['n']
+    cummulative = options['cummulative']
+    comb = options['comb']
+    config_combinations = ngram_combinations(n, cummulative, comb)
     ngram_templateY = {}
     for comb, options in config_combinations.items():
         templateY = {'Y':[]}
@@ -302,11 +324,15 @@ def ngram_options_y(n):
         ngram_templateY[comb] = templateY
     return(ngram_templateY)
         
-def ngram_options_x(attr_names, l, n):
+def ngram_options_x(attr_names, l, options):
+    # get the x options 
+    n = options['n']
+    cummulative = options['cummulative']
+    comb = options['comb']
     if(len(l) < n):
         # setting up the maximum order based on the provided window
         n = len(l)
-    config_combinations = ngram_combinations(n)
+    config_combinations = ngram_combinations(n, cummulative, comb)
     ngram_templateX = {}
     for comb, options in config_combinations.items():
         print("comb {}".format(comb))
