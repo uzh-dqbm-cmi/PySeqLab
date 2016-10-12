@@ -8,9 +8,139 @@ from datetime import datetime
 from copy import deepcopy
 from itertools import combinations
 import numpy
-from .attributes_extraction import SequenceStruct
 
+class SequenceStruct():
+    def __init__(self, X, Y, seg_other_symbol = None):
+        """class for representing each sequence in the data
+           Y: list containing the sequence of states (i.e. ['P','O','O','L','L'])
+           X: list containing dictionary elements of observation sequences and/or features of the input
+              (i.e. [{'w':Michael', 'shape':'Xx+'}, 
+                     {'w':'is', 'shape':'x+'}, 
+                     {'w':':'in', 'shape':'x+'}, 
+                     {'w':'New', 'shape':'Xx+'},
+                     {'w':'Haven', 'shape':'Xx+'}]
+               where w is the word as input and shape is the collapsed shape of the word (Upper or lower case))
+           seg_other_symbol: If it is specified, then the task is a segmentation problem 
+                              (in this case we need to specify the non-entity/other element)
+                              else if it is None (default), then it is considered as sequence labeling problem
+ 
+        """
+        self.seg_attr = {}
+        self.X = X
+        self.Y = (Y, seg_other_symbol)
 
+    @property
+    def X(self):
+        return(self._X)
+    @X.setter
+    def X(self, l):
+        """input is a list of elements (i.e. X =  [{'w':'Michael'}, {'w':'is'}, {'w':'in'}, {'w':'New'}, {'w':'Haven'}])
+           output is a dict  {1:{'w':'Michael'},
+                             2:{'w':'is'}, 
+                             3:{'w':'in'}, 
+                             4:{'w':'New'},
+                             5:{'w':'Haven'}
+                            }
+        """
+        self._X = {}
+        for i in range(len(l)):
+            self._X[i+1] = l[i]
+
+        # new assignment clear seg_attr
+        if(self.seg_attr):
+            self.seg_attr.clear()
+        self.T = len(self._X)
+        
+    @property
+    def Y(self):
+        return(self._Y)
+    @Y.setter
+    def Y(self, elmtup):
+        """input is a tuple consisting of :
+                Y: a list of elements (i.e. Y = ['P','O','O','L','L']) that represents the labels of the elements in X
+                non_entity_symbol: is the label which represents the Other category (i.e. non entity element which is 'O' in above example)
+           output is {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
+        """
+        try:
+            Y_ref, non_entity_symb = elmtup
+        except ValueError:
+            raise ValueError("tuple containing Y and non-entity symbol must be passed")
+        else:
+            self._Y = {}
+            # length of longest entity in a segment
+            L = 1
+            if(non_entity_symb):
+                label_indices = {}
+                for i in range(len(Y_ref)):
+                    label = Y_ref[i]
+                    if(label in label_indices):
+                        label_indices[label].append(i+1)
+                    else:
+                        label_indices[label] = [i+1]
+ 
+                for label, indices_list in label_indices.items():
+                    if(label == non_entity_symb or len(indices_list) == 1):
+                        for indx in indices_list:
+                            boundary = (indx, indx)
+                            self._Y[boundary] = label
+                    else:
+                        indx_stack = []
+                        for indx in indices_list:
+                            if(not indx_stack):
+                                indx_stack.append(indx)
+                            else:
+                                diff = indx - indx_stack[-1]
+                                if(diff > 1):
+                                    boundary = (indx_stack[0], indx_stack[-1])
+                                    self._Y[boundary] = label
+                                    l = indx_stack[-1] - indx_stack[0]
+                                    if(l > L):
+                                        L = l
+                                    indx_stack = [indx]
+                                else:
+                                    indx_stack.append(indx)
+                        if(indx_stack):
+                            boundary = (indx_stack[0], indx_stack[-1])
+                            self._Y[boundary] = label
+                            l = indx_stack[-1] - indx_stack[0]
+                            if(l > L):
+                                L = l
+                            indx_stack = [indx]
+    
+            else:
+                for i in range(len(Y_ref)):
+                    label = Y_ref[i]
+                    boundary = (i+1, i+1)
+                    self._Y[boundary] = label
+            # store the length of longest entity
+            self.L = L
+            # keep a copy of Y in as flat list (i.e. ['P','O','O','L','L'])
+            self.flat_y = Y_ref
+            
+    def update_boundaries(self):
+        self.y_boundaries = self.get_y_boundaries()
+        self.x_boundaries = self.get_x_boundaries()
+
+    def flatten_y(self, Y):
+        """ input Y is {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
+            output is  ['P','O','O','L','L']
+        """
+        s_boundaries = sorted(Y)
+        flat_y = []
+        for b in s_boundaries:
+            for _ in range(b[0], b[-1]+1):
+                flat_y.append(Y[b])
+        return(flat_y)
+  
+    def get_y_boundaries(self):
+        return(sorted(self.Y.keys()))
+    
+    def get_x_boundaries(self):
+        boundaries = []
+        for elmkey in self.X:
+            boundaries.append((elmkey, elmkey))
+        return(boundaries)
+    
 class DataFileParser():
     """ class to parse a data file that includes the training data consisting of:
         label sequences Y
