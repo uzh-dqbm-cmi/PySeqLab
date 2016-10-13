@@ -1038,12 +1038,13 @@ class SeqsRepresentation(object):
         
     def scale_attributes(self, seqs_id, seqs_info):
         attr_scaler = self.attr_scaler
-        for seq_id in seqs_id:
-            seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-            seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb") 
-            boundaries = list(seq.seg_attr.keys())
-            attr_scaler.scale_real_attributes(seq, boundaries)
-            ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
+        if(attr_scaler):
+            for seq_id in seqs_id:
+                seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
+                seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb") 
+                boundaries = list(seq.seg_attr.keys())
+                attr_scaler.scale_real_attributes(seq, boundaries)
+                ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
 #             print("sclaed seq {}".format(seq.seg_attr))
 
     def extract_seqs_globalfeatures(self, seqs_id, seqs_info):

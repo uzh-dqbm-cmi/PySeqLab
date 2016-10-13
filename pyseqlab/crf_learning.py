@@ -213,7 +213,7 @@ class Learner(object):
         
         if(save_model):
             # pickle the model
-            self.crf_model.save_model(file_name = os.path.join(model_dir, model_name), seqs_id)
+            self.crf_model.save_model(file_name = os.path.join(model_dir, model_name))
             
         # cleanup the instance variables
         self.cleanup()
