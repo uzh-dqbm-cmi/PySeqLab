@@ -492,6 +492,7 @@ class HOCRF(object):
         # load f_potential_features
         seq_info = self.seqs_info[seq_id]
         seq_info["cached_comp"] = {}
+        
         if(seq_info.get("f_potential_features") == "on_disk"):
             target_dir = seq_info["activefeatures_dir"]
             f_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "f_potential_features"))
@@ -499,6 +500,10 @@ class HOCRF(object):
             seq_info["f_potential_features"] = f_potential_features
 #             seq_info["f_potential"] = f_potential
             print("loading f_potential_features from disk")
+            if(seq_info.get("cached_pf") == None):
+                # load from disk
+                seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
+                print("loading cached_pf from disk")
         elif(seq_info.get("f_potential_features") == None):
             seq_info["cached_pf"] = {}
             self.prepare_f_potentialfeatures(seq_id)
@@ -585,18 +590,26 @@ class HOCRF(object):
                     seq_info[varname] = None
         
         if(self.load_fromdisk):
-            args = ("f_potential_features", "b_potential_features")
-            for seq_id in seqs_id:
-                seq_info = self.seqs_info[seq_id]
-                for varname in args:
-                    if(varname in seq_info):
-                        seq_info[varname] = "on_disk"
-        
-    def save_model(self, file_name):
-        # to clean things before pickling the model
+            self._update_loadfromdisk_info(seqs_id)
+            
+    def _update_loadfromdisk_info(self, seqs_id):
+        args = ("f_potential_features", "b_potential_features")
+        for seq_id in seqs_id:
+            seq_info = self.seqs_info[seq_id]
+            for varname in args:
+                if(varname in seq_info):
+                    seq_info[varname] = "on_disk"
+                    
+    def save_model(self, file_name, seqs_id):
+        # to clean and save things before pickling the model
+        seqs_info = self.seqs_info
+        for seq_id in seqs_id:
+#             print("seqs_info[{}] = {}".format(seq_id, seqs_info[seq_id]))
+            target_dir = seqs_info[seq_id]['activefeatures_dir']
+            ReaderWriter.dump_data(seqs_info[seq_id]['cached_pf'], os.path.join(target_dir, "cached_pf"))
         self.seqs_info.clear() 
         ReaderWriter.dump_data(self, file_name)
-    
+
     def decode_seqs(self, decoding_method, out_dir, **kwargs):
         """ seqs: a list comprising of sequences that are instances of SequenceStrcut() class
             method: a string referring to type of decoding {'viterbi', 'per_state_decoding'}
@@ -606,10 +619,15 @@ class HOCRF(object):
         out_file = os.path.join(create_directory(corpus_name, out_dir), "decoded.txt")
         w = self.weights
         
+        # supporting only viterbi for now
         if(decoding_method == "viterbi"):
             decoder = self.viterbi
+        else:
+            decoder = self.viterbi
+            
         if(kwargs.get("seqs_info")):
             self.seqs_info = kwargs["seqs_info"]
+            
         elif(kwargs.get("seqs")): 
             seqs = kwargs["seqs"]           
             seqs_dict = {i+1:seqs[i] for i in range(len(seqs))}

@@ -433,12 +433,14 @@ def vectorized_logsumexp(vec):
 ##################
 # utility functions for splitting, grouping dataset
 #################
-def split_data(seqs_id, method, **kwargs):
+def split_data(seqs_id, options):
     N = len(seqs_id)
     data_split = {}
-
+    method = options.get('method')
+    if(method == None):
+        method = 'cross_validation'
     if(method == "cross_validation"):
-        k_fold = kwargs.get("k_fold")
+        k_fold = options.get("k_fold")
         if(type(k_fold) != int):
             # use 10 fold cross validation
             k_fold = 10
@@ -459,10 +461,10 @@ def split_data(seqs_id, method, **kwargs):
             data_split[i]["train"] = list(set(seqs_id)-set(current_test_seqs))
 #             print("t = {} -- evaluating y_t = {}\n".format(t, y_tminus1))
     elif(method == "random"):
-        num_splits = kwargs.get("num_splits")
+        num_splits = options.get("num_splits")
         if(type(num_splits) != int):
             num_splits = 5
-        trainset_size = kwargs.get("trainset_size")
+        trainset_size = options.get("trainset_size")
         if(type(trainset_size) != int):
             # 80% of the data set is training and 20% for testing
             trainset_size = 80
@@ -476,6 +478,11 @@ def split_data(seqs_id, method, **kwargs):
             
     return(data_split)
 
+#########################################
+## split data based on seqs length -
+## we need to executed the three functions in order:
+## (1) group_seqs_by_length, (2) weighted_sample, (3) aggregate_weightedsample
+#########################################
 def group_seqs_by_length(seqs_info):
     grouped_seqs = {}
     for seq_id, seq_info in seqs_info.items():
@@ -504,9 +511,19 @@ def weighted_sample(grouped_seqs, trainset_size):
     wsample = {}
     for group_var, seqs_id in grouped_seqs.items():
 #         quota = trainset_size*count_seqs[group_var]/total
-        data_split = split_data(seqs_id, method = "random", num_splits = 1, trainset_size = trainset_size)
+        options = {'method':'random', 'num_splits':1, 'trainset_size':trainset_size}
+        data_split = split_data(seqs_id, options)
         wsample[group_var] = data_split[0]
     return(wsample)
+
+def aggregate_weightedsample(w_sample):
+    wdata_split= {"train":[],
+                  "test": []}
+    for grouping_var in w_sample:
+        for data_cat in w_sample[grouping_var]:
+            wdata_split[data_cat] += w_sample[grouping_var][data_cat]
+    return({0:wdata_split})
+##################################
 
 def nested_cv(seqs_id, outer_kfold, inner_kfold):
     outer_split = split_data(seqs_id, "cross_validation", k_fold = outer_kfold)
