@@ -213,7 +213,7 @@ class Learner(object):
         
         if(save_model):
             # pickle the model
-            self.crf_model.save_model(file_name = os.path.join(model_dir, model_name))
+            self.crf_model.save_model(file_name = os.path.join(model_dir, model_name), seqs_id)
             
         # cleanup the instance variables
         self.cleanup()
@@ -253,6 +253,8 @@ class Learner(object):
         elif(method == "COLLINS-PERCEPTRON"):
             avg_scheme = self.training_description["avg_scheme"]
             line += "averaging scheme: {} \n".format(avg_scheme)
+        if(method not in ("L-BFGS-B", "BFGS")):
+            line += "number of epochs: {} \n".format(self.training_description['num_epochs'])
         # write to file    
         ReaderWriter.log_progress(line, log_file)
         
