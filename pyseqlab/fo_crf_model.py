@@ -280,13 +280,13 @@ class FirstOrderCRF(object):
                     seq_info[varname] = None
 
         
-    def reset_seqs_info(self, seqs_id):
-        for seq_id in seqs_id:
-            self.seqs_info[seq_id] = {"T": self.seqs_info[seq_id]["T"],
-                                      "globalfeatures_dir": self.seqs_info[seq_id]["globalfeatures_dir"],
-                                      "activefeatures_dir": self.seqs_info[seq_id]["activefeatures_dir"]
-                                      }
-            
+#     def reset_seqs_info(self, seqs_id):
+#         for seq_id in seqs_id:
+#             self.seqs_info[seq_id] = {"T": self.seqs_info[seq_id]["T"],
+#                                       "globalfeatures_dir": self.seqs_info[seq_id]["globalfeatures_dir"],
+#                                       "activefeatures_dir": self.seqs_info[seq_id]["activefeatures_dir"]
+#                                       }
+#             
 
     
     def compute_seqs_loglikelihood(self, w, seqs_id):
@@ -436,9 +436,12 @@ class FirstOrderCRF(object):
         if(kwargs.get("seqs_info")):
             self.seqs_info = kwargs["seqs_info"]
         elif(kwargs.get("seqs")): 
-            seqs = kwargs["seqs"]           
+            seqs = kwargs["seqs"]
             seqs_dict = {i+1:seqs[i] for i in range(len(seqs))}
-            seqs_info = self.seqs_representer.prepare_seqs(seqs_dict, corpus_name, out_dir, unique_id = True)
+            seqs_id = list(seqs_dict.keys())
+            seqs_info = self.seqs_representer.prepare_seqs(seqs_dict, "processed_seqs", out_dir, unique_id = True)
+            self.seqs_representer.scale_attributes(seqs_id, seqs_info)
+            self.seqs_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, self.model, "processed_seqs")
             self.seqs_info = seqs_info
 
         seqs_pred = {}
@@ -448,6 +451,9 @@ class FirstOrderCRF(object):
             seq = ReaderWriter.read_data(os.path.join(seqs_info[seq_id]["globalfeatures_dir"], "sequence"))
             self.write_decoded_seqs([seq], [Y_pred], out_file)
             seqs_pred[seq_id] = {'seq': seq,'Y_pred': Y_pred}
+            # clear added info per sequence
+            self.clear_cached_info([seq_id])
+            
         # clear seqs_info
         self.seqs_info.clear()
         return(seqs_pred)
@@ -468,6 +474,7 @@ class FirstOrderCRF(object):
                     line += sep + ref_seq.flat_y[t-1] + "\n"
                 else:
                     line += "\n" 
+            line += "\n"
 
             ReaderWriter.log_progress(line, out_file) 
             
