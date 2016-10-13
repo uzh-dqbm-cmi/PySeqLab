@@ -5,8 +5,7 @@ from collections import defaultdict
 
 
 class AttributeScaler(object):
-    def __init__(self, attr_extractor, scaling_info, method):
-        self.attr_extractor = attr_extractor
+    def __init__(self, scaling_info, method):
         self.scaling_info = scaling_info
         self.method = method
         
@@ -27,8 +26,8 @@ class AttributeScaler(object):
                 for boundary in boundaries:
                     seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_max)/attr_max + 1
         
-# class implements observation functions that generates attributes from tokens/observations
 class NERSegmentAttributeExtractor(object):
+    """class implements observation functions that generates attributes from tokens/observations"""
     def __init__(self):
         self.attr_desc = self.generate_attributes_desc()
         self.seg_attr = {}
@@ -69,13 +68,14 @@ class NERSegmentAttributeExtractor(object):
  
     def generate_attributes(self, seq, boundaries):
         X = seq.X
+        observed_attrnames = list(X[1].keys())
         # segment attributes dictionary
         self.seg_attr = {}
         new_boundaries = []
         # create segments from observations using the provided boundaries
         for boundary in boundaries:
             if(boundary not in seq.seg_attr):
-                self._create_segment(X, boundary, ['w'])
+                self._create_segment(X, boundary, observed_attrnames)
                 new_boundaries.append(boundary)
 #         print("seg_attr {}".format(self.seg_attr))
 #         print("new_boundaries {}".format(new_boundaries))
@@ -101,7 +101,7 @@ class NERSegmentAttributeExtractor(object):
         self.seg_attr[boundary] = {}
         for attr_name in attr_names:
             segment_value = self._get_segment_value(X, boundary, attr_name)
-            self.seg_attr[boundary] = {attr_name: "{}".format(sep).join(segment_value)}
+            self.seg_attr[boundary][attr_name] = "{}".format(sep).join(segment_value)
             
     def _get_segment_value(self, X, boundary, target_attr):
         u = boundary[0]
@@ -114,35 +114,26 @@ class NERSegmentAttributeExtractor(object):
     def get_shape(self, boundary):
         """ boundary is tuple (u,v) that marks beginning and end of a segment"""
         segment = self.seg_attr[boundary]['w']
-        r = ''
-        for c in segment:
-            if c.isupper():
-                r += 'U'
-            elif c.islower():
-                r += 'L'
-            elif c.isdigit():
-                r += 'D'
-            elif c in ('.', ','):
-                r += '.'
-            elif c in (';', ':', '?', '!'):
-                r += ';'
-            elif c in ('+', '-', '*', '/', '=', '|', '_'):
-                r += '-'
-            elif c in ('(', '{', '[', '<'):
-                r += '('
-            elif c in (')', '}', ']', '>'):
-                r += ')'
+        res = ''
+        for char in segment:
+            if char.isupper():
+                res += 'A'
+            elif char.islower():
+                res += 'a'
+            elif char.isdigit():
+                res += 'D'
             else:
-                r += c
-        self.seg_attr[boundary]['shape'] = r
+                res += '_'
+
+        self.seg_attr[boundary]['shape'] = res
             
     def get_degenerateshape(self, boundary):
         segment = self.seg_attr[boundary]['shape']
-        dst = ''
-        for c in segment:
-            if not dst or dst[-1] != c:
-                dst += c
-        self.seg_attr[boundary]['shaped'] = dst
+        track = ''
+        for char in segment:
+            if not track or track[-1] != char:
+                track += char
+        self.seg_attr[boundary]['shaped'] = track
         
     def get_seg_length(self, boundary):
         # begin and end of a boundary
@@ -163,6 +154,7 @@ class NERSegmentAttributeExtractor(object):
         # implements the bag-of-attributes concept within a segment 
         # it can be used with attributes that have binary_encoding type set equal True
         prefix = 'bag_of_attr'
+        attr_desc = self.attr_desc
         segment = self.seg_attr[boundary][attr_name]
         split_segment = segment.split(sep)
         count_dict = defaultdict(int)
@@ -172,6 +164,11 @@ class NERSegmentAttributeExtractor(object):
         for attr_value, count in count_dict.items():
             fkey = prefix + '_' + attr_name + '_' + attr_value
             self.seg_attr[boundary][fkey] = count
+            # adding dynamically the description and the encoding of the new bag of attributes property
+            if(fkey not in attr_desc):
+                attr_desc[fkey] = {'description':'{} -- bag of attributes property'.format("fkey"),
+                                   'encoding':'real'
+                                  }
     
 if __name__ == "__main__":
     pass

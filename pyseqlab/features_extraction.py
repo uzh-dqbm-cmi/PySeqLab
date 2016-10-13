@@ -1021,7 +1021,7 @@ class SeqsRepresentation(object):
 
 #         print("scaling_info {}".format(scaling_info))
 
-            attr_scaler = AttributeScaler(attr_extractor, scaling_info, method)
+            attr_scaler = AttributeScaler(scaling_info, method)
             self.attr_scaler = attr_scaler
             self.scale_attributes(seqs_id, seqs_info)
         end_time = datetime.now()
