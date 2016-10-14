@@ -8,8 +8,9 @@ from copy import deepcopy
 from datetime import datetime
 from collections import Counter
 import numpy
-from .utilities import ReaderWriter, create_directory, generate_datetime_str
-from .attributes_extraction import AttributeScaler
+from joblib import Parallel, delayed
+from pyseqlab.utilities import ReaderWriter, create_directory, generate_datetime_str
+from pyseqlab.attributes_extraction import AttributeScaler
 
 
 class HOFeatureExtractor(object):
@@ -86,28 +87,13 @@ class HOFeatureExtractor(object):
     def extract_seq_features(self, seq):
         # this method is used to extract features from sequences in the training dataset 
         # (i.e. we know the labels and boundaries)
-        Y = seq.Y
-        features = {}
-        for boundary in Y:
-            y_feat = self.extract_features_Y(seq, boundary, self.template_Y)
-            xy_feat = self.extract_features_XY(seq, boundary)
-#             print("boundary {}".format(boundary))
-#             print("boundary {}".format(boundary))
-#             print("y_feat {}".format(y_feat))
-#             print("xy_feat {}".format(xy_feat))
-            for offset_tup_y in y_feat['Y']:
-                for y_patt in y_feat['Y'][offset_tup_y]:
-                    if(y_patt in xy_feat):
-                        xy_feat[y_patt].update(Counter(y_feat['Y'][offset_tup_y]))
-                    else:
-                        xy_feat[y_patt] = Counter(y_feat['Y'][offset_tup_y])
-            features[boundary] = xy_feat
-#             print("features {}".format(features[boundary]))
-#             print("*"*40)
+        Y = seq.Y        
+        features = Parallel(n_jobs=-1)(delayed(self.extract_seq_features_perboundary)(seq, boundary) for boundary in Y)
                 
         # summing up all detected features across all boundaries
         seq_features = {}
-        for boundary, xy_features in features.items():
+        for elem_tup in features:
+            boundary, xy_features = elem_tup
             for y_patt in xy_features:
                 if(y_patt in seq_features):
                     seq_features[y_patt].update(xy_features[y_patt])
@@ -116,7 +102,24 @@ class HOFeatureExtractor(object):
 #                 print("seq_features {}".format(seq_features))
         #print("features sum {}".format(seq_features))
         return(seq_features)
-
+    
+    def extract_seq_features_perboundary(self, seq, boundary):
+        y_feat = self.extract_features_Y(seq, boundary, self.template_Y)
+        xy_feat = self.extract_features_XY(seq, boundary)
+#             print("boundary {}".format(boundary))
+#             print("boundary {}".format(boundary))
+#             print("y_feat {}".format(y_feat))
+#             print("xy_feat {}".format(xy_feat))
+        for offset_tup_y in y_feat['Y']:
+            for y_patt in y_feat['Y'][offset_tup_y]:
+                if(y_patt in xy_feat):
+                    xy_feat[y_patt].update(Counter(y_feat['Y'][offset_tup_y]))
+                else:
+                    xy_feat[y_patt] = Counter(y_feat['Y'][offset_tup_y])
+        return((boundary, xy_feat))
+#             print("features {}".format(features[boundary]))
+#             print("*"*40)
+                  
     def extract_features_Y(self, seq, boundary, templateY):
         """ template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
                        = {Y: tuple(y_offsets)}        
@@ -1037,8 +1040,8 @@ class SeqsRepresentation(object):
         ReaderWriter.log_progress(line, log_file)
         
     def scale_attributes(self, seqs_id, seqs_info):
-        attr_scaler = self.attr_scaler
-        if(attr_scaler):
+        if(self.attr_scaler):
+            attr_scaler = self.attr_scaler
             for seq_id in seqs_id:
                 seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
                 seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb") 
@@ -1047,6 +1050,7 @@ class SeqsRepresentation(object):
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
 #             print("sclaed seq {}".format(seq.seg_attr))
 
+    # to drop in Parallel computation
     def extract_seqs_globalfeatures(self, seqs_id, seqs_info):
         """ - Function that parses each sequence and generates global feature  F_j(X,Y). 
             - For each sequence we obtain a set of generated global feature functions where each
@@ -1137,11 +1141,14 @@ class SeqsRepresentation(object):
         return(model)
 
     
-    def _parallel_activefeatures_extraction(self, seq_id, model, output_dir):
+    def _parallel_activefeatures_extraction(self, seq_id):
         # lookup active features for the current sequence and store them on disk
         print("looking for model active features for seq {}".format(seq_id))
         seqs_info = self.seqs_info
-        L=model.L
+        model = self.model
+        L = model.L
+        output_dir = self.out_dir
+        
         f_extractor = self.feature_extractor
         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
         seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
@@ -1155,7 +1162,8 @@ class SeqsRepresentation(object):
         ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
         print("seq_id ", seq_id)
         print("seqs_info[{}] = {}".format(seq_id, seqs_info[seq_id]))
-        return({seq_id:{'activefeatures_dir':activefeatures_dir}})
+        return((seq_id, activefeatures_dir))
+#         return({seq_id:{'activefeatures_dir':activefeatures_dir}})
         
     def extract_seqs_modelactivefeatures(self, seqs_id, seqs_info, model, output_foldername):
         # get the root_dir
@@ -1166,29 +1174,22 @@ class SeqsRepresentation(object):
 #         L = model.L
 #         f_extractor = self.feature_extractor
         self.seqs_info = seqs_info
+        self.model = model
+        self.out_dir = output_dir
+        
         start_time = datetime.now()
-        from joblib import Parallel, delayed
-        activefeatures_dir = Parallel(n_jobs=10)(delayed(self._parallel_activefeatures_extraction)(seq_id, model, output_dir) for seq_id in seqs_id)
-        for seq_info in activefeatures_dir:
-            for seq_id in seq_info:
-                seqs_info[seq_id].update(seq_info[seq_id]) 
-#         for seq_id in seqs_id:
-#             # lookup active features for the current sequence and store them on disk
-#             print("looking for model active features for seq {}".format(seq_id))
-#             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-#             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
-#             if(L > 1):
-#                 self._lookup_seq_attributes(seq, L)
-#                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-#             active_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
-#             activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
-#             seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
-#             # dump model active features data
-#             ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
-                
+        activefeatures_dirs = Parallel(n_jobs=10)(delayed(self._parallel_activefeatures_extraction)(seq_id) for seq_id in seqs_id)
+        for elem_tup in activefeatures_dirs:
+            seq_id, activefeatures_dir = elem_tup
+            seqs_info[seq_id]['activefeatures_dir'] = activefeatures_dir
+
+
         end_time = datetime.now()
        
-        
+        # clear vars
+        for var in (self.seqs_info, self.model, self.out_dir):
+            var = None
+            del var
         log_file = os.path.join(output_dir, "log.txt")
         line = "---Finding sequences' model active-features--- starting time: {} \n".format(start_time)
         line += "Total number of parsed sequences: {} \n".format(len(seqs_id))
@@ -1387,6 +1388,51 @@ class FeatureFilter(object):
     @staticmethod
     def _notin_rel(x, y, z):
         if(x not in y): del z
+        
+def main():
+    
+    from pyseqlab.utilities import SequenceStruct, generate_templates, filter_templates, filter_templates_by_attrname
+    from pyseqlab.attributes_extraction import NERSegmentAttributeExtractor
+    attr_names = ('w',)
+    # a window of size 2x2
+    window = list(range(-2,3))
+    
+    # maximum number of states (current and previous could be used by the model)
+    # this defines the order of the model (i.e. 4 means we can use current state and three states before. Hence it is of order 3)
+    y_options = {'n':3, 'cummulative':True, 'comb':True}
+    # this defines the maximum number of observations we can use depending on the ngram option we will define later.
+    x_options =  {'n':3, 'cummulative':True, 'comb':True}
+
+    _, xy = generate_templates(attr_names, window, y_options, x_options)
+
+    combined_template = {}
+    template_option = ('2-gram:1-gram_2-gram_3-gram',)
+    f_templates = []
+    for option in template_option:
+        f_templates.append(filter_templates(xy, option, "="))
+    
+    mapper = {0:('w',)}
+    for option, attrnames in mapper.items():     
+        for attr_name in attrnames:
+            if(attr_name not in combined_template):
+                combined_template[attr_name] = {}
+            ft = filter_templates_by_attrname(f_templates[option], attr_name)[attr_name]
+            combined_template[attr_name].update(ft)
+    print("combined_template {}".format(combined_template))
+    template_y = {'Y':()}
+    template_xy = combined_template
+    # define sequence
+    X = [{'w':'Peter'}, {'w':'goes'}, {'w':'to'}, {'w':'Britain'}, {'w':'and'}, {'w':'France'}, {'w':'annually'},{'w':'.'}]
+    Y = ['P', 'O', 'O', 'L', 'O', 'L', 'O', 'O']
+    seq = SequenceStruct(X, Y)
+    attr_extractor = NERSegmentAttributeExtractor()
+    print("attr_desc {}".format(attr_extractor.attr_desc))
+    attr_extractor.generate_attributes(seq, seq.get_y_boundaries())
+    fextractor = HOFeatureExtractor(template_xy, template_y, attr_extractor.attr_desc)
+    features = fextractor.extract_seq_features(seq)
+    print("features ", features)
+    print("seq.seg_attr ", seq.seg_attr)
+
 if __name__ == "__main__":
-    pass
+    main()
     

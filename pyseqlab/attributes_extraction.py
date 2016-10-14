@@ -3,6 +3,7 @@
 '''
 from collections import defaultdict
 from pyseqlab.utilities import SequenceStruct
+from joblib import Parallel, delayed
 
 class AttributeScaler(object):
     def __init__(self, scaling_info, method):
@@ -79,29 +80,30 @@ class NERSegmentAttributeExtractor(object):
 
         if(self.seg_attr):
             attr_names_boa = ('w', 'shaped')
-            from joblib import Parallel, delayed
-            seg_attr = Parallel(n_jobs=-1)(delayed(self.generate_attributes_perboundary)(seq, boundary, attr_names_boa) for boundary in new_boundaries)
-            print("seq.seg_attr ", seq.seg_attr)
-            print("self.seg_attr ", self.seg_attr)
-            print("returned seg_attr", seg_attr)
+            seg_attrs = Parallel(n_jobs=-1)(delayed(self.generate_attributes_perboundary)(boundary, attr_names_boa) for boundary in new_boundaries)
+#             print("seq.seg_attr ", seq.seg_attr)
+#             print("self.seg_attr ", self.seg_attr)
+#             print("returned seg_attr", seg_attrs)
             # save generated attributes in seq
-            for attr_dict in seg_attr:
-                for boundary in attr_dict:
-                    seq.seg_attr[boundary] = attr_dict[boundary]
-            print("update seq.seg_attr", seq.seg_attr)
+            for elem_tup in seg_attrs:
+                boundary, attrs = elem_tup
+                seq.seg_attr[boundary] = attrs
+#             print("update seq.seg_attr", seq.seg_attr)
 #             print('saved attribute {}'.format(seq.seg_attr))
             # clear the instance variable seg_attr
             self.seg_attr = {}
         return(new_boundaries)
         
-    def generate_attributes_perboundary(self, seq, boundary, attr_names_boa):
+    def generate_attributes_perboundary(self, boundary, attr_names_boa):
         self.get_shape(boundary)
         self.get_degenerateshape(boundary)
         self.get_seg_length(boundary)
         self.get_num_chars(boundary)
         # generate bag of attributes properties in every segment
         self.get_seg_bagofattributes(boundary, attr_names_boa)
-        return(self.seg_attr)
+        print("boundary ", boundary)
+        print("self.seg_attr inside parallel", self.seg_attr)
+        return((boundary, self.seg_attr[boundary]))
             
     def _create_segment(self, X, boundary, attr_names, sep = " "):
         self.seg_attr[boundary] = {}
