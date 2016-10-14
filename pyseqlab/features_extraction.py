@@ -87,13 +87,28 @@ class HOFeatureExtractor(object):
     def extract_seq_features(self, seq):
         # this method is used to extract features from sequences in the training dataset 
         # (i.e. we know the labels and boundaries)
-        Y = seq.Y        
-        features = Parallel(n_jobs=-1)(delayed(self.extract_seq_features_perboundary)(seq, boundary) for boundary in Y)
+        Y = seq.Y
+        features = {}
+        for boundary in Y:
+            y_feat = self.extract_features_Y(seq, boundary, self.template_Y)
+            xy_feat = self.extract_features_XY(seq, boundary)
+#             print("boundary {}".format(boundary))
+#             print("boundary {}".format(boundary))
+#             print("y_feat {}".format(y_feat))
+#             print("xy_feat {}".format(xy_feat))
+            for offset_tup_y in y_feat['Y']:
+                for y_patt in y_feat['Y'][offset_tup_y]:
+                    if(y_patt in xy_feat):
+                        xy_feat[y_patt].update(Counter(y_feat['Y'][offset_tup_y]))
+                    else:
+                        xy_feat[y_patt] = Counter(y_feat['Y'][offset_tup_y])
+            features[boundary] = xy_feat
+#             print("features {}".format(features[boundary]))
+#             print("*"*40)
                 
         # summing up all detected features across all boundaries
         seq_features = {}
-        for elem_tup in features:
-            boundary, xy_features = elem_tup
+        for boundary, xy_features in features.items():
             for y_patt in xy_features:
                 if(y_patt in seq_features):
                     seq_features[y_patt].update(xy_features[y_patt])
@@ -102,23 +117,6 @@ class HOFeatureExtractor(object):
 #                 print("seq_features {}".format(seq_features))
         #print("features sum {}".format(seq_features))
         return(seq_features)
-    
-    def extract_seq_features_perboundary(self, seq, boundary):
-        y_feat = self.extract_features_Y(seq, boundary, self.template_Y)
-        xy_feat = self.extract_features_XY(seq, boundary)
-#             print("boundary {}".format(boundary))
-#             print("boundary {}".format(boundary))
-#             print("y_feat {}".format(y_feat))
-#             print("xy_feat {}".format(xy_feat))
-        for offset_tup_y in y_feat['Y']:
-            for y_patt in y_feat['Y'][offset_tup_y]:
-                if(y_patt in xy_feat):
-                    xy_feat[y_patt].update(Counter(y_feat['Y'][offset_tup_y]))
-                else:
-                    xy_feat[y_patt] = Counter(y_feat['Y'][offset_tup_y])
-        return((boundary, xy_feat))
-#             print("features {}".format(features[boundary]))
-#             print("*"*40)
                   
     def extract_features_Y(self, seq, boundary, templateY):
         """ template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
