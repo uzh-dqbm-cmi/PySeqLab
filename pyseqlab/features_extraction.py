@@ -1136,58 +1136,34 @@ class SeqsRepresentation(object):
         
         return(model)
 
-    def _parallel_activefeatures_extraction(self, seq_id, model, output_dir):
-        # lookup active features for the current sequence and store them on disk
-        print("looking for model active features for seq {}".format(seq_id))
-        seqs_info = self.seqs_info
-        L=model.L
-        f_extractor = self.feature_extractor
-        seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-        seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
-        if(L > 1):
-            self._lookup_seq_attributes(seq, L)
-            ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-        active_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
-        activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
-        seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
-        # dump model active features data
-        ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
-        print("seq_id ", seq_id)
-        print("seqs_info[{}] = {}".format(seq_id, seqs_info[seq_id]))
-        return({seq_id:{'activefeatures_dir':activefeatures_dir}})
-        
+    
     def extract_seqs_modelactivefeatures(self, seqs_id, seqs_info, model, output_foldername):
         # get the root_dir
         seq_id = seqs_id[0]
         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
         root_dir = os.path.dirname(os.path.dirname(seq_dir))
         output_dir = create_directory("model_activefeatures_{}".format(output_foldername), root_dir)
-#         L = model.L
-#         f_extractor = self.feature_extractor
-        self.seqs_info = seqs_info
+        L = model.L
+        f_extractor = self.feature_extractor
+        
         start_time = datetime.now()
-        from joblib import Parallel, delayed
-        activefeatures_dir = Parallel(n_jobs=10)(delayed(self._parallel_activefeatures_extraction)(seq_id, model, output_dir) for seq_id in seqs_id)
-        for seq_info in activefeatures_dir:
-            for seq_id in seq_info:
-                seqs_info[seq_id].update(seq_info[seq_id]) 
-#         for seq_id in seqs_id:
-#             # lookup active features for the current sequence and store them on disk
-#             print("looking for model active features for seq {}".format(seq_id))
-#             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-#             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
-#             if(L > 1):
-#                 self._lookup_seq_attributes(seq, L)
-#                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-#             active_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
-#             activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
-#             seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
-#             # dump model active features data
-#             ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
+        for seq_id in seqs_id:
+            # lookup active features for the current sequence and store them on disk
+            print("looking for model active features for seq {}".format(seq_id))
+            seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
+            seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
+            if(L > 1):
+                self._lookup_seq_attributes(seq, L)
+                ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
+            active_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
+            activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
+            seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
+            # dump model active features data
+            ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
                 
         end_time = datetime.now()
        
-        
+
         log_file = os.path.join(output_dir, "log.txt")
         line = "---Finding sequences' model active-features--- starting time: {} \n".format(start_time)
         line += "Total number of parsed sequences: {} \n".format(len(seqs_id))
@@ -1227,7 +1203,6 @@ class SeqsRepresentation(object):
         seqs_activefeatures = {}
         for seq_id in seqs_id:
             seq_dir = seqs_info[seq_id]["activefeatures_dir"]
-            
             active_features = ReaderWriter.read_data(os.path.join(seq_dir,"activefeatures"))
             seqs_activefeatures[seq_id] = active_features
         
