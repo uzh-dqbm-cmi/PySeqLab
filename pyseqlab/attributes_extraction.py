@@ -2,7 +2,7 @@
 @author: ahmed allam <ahmed.allam@yale.edu>
 '''
 from collections import defaultdict
-
+from pyseqlab.utilities import SequenceStruct
 
 class AttributeScaler(object):
     def __init__(self, scaling_info, method):
@@ -49,9 +49,6 @@ class NERSegmentAttributeExtractor(object):
         attr_desc['seg_len'] = {'description':'the length of a segment',
                                 'encoding':'real'
                                }
-        attr_desc['bag_of_attr_'] = {'description':'prefix attribute name for all attributes that implement/measure bag of attributes property',
-                                     'encoding':'real'
-                                    }
         return(attr_desc)
     
     def group_attributes(self):
@@ -79,24 +76,33 @@ class NERSegmentAttributeExtractor(object):
                 new_boundaries.append(boundary)
 #         print("seg_attr {}".format(self.seg_attr))
 #         print("new_boundaries {}".format(new_boundaries))
+
         if(self.seg_attr):
             attr_names_boa = ('w', 'shaped')
-            for boundary in new_boundaries:
-                self.get_shape(boundary)
-                self.get_degenerateshape(boundary)
-                self.get_seg_length(boundary)
-                self.get_num_chars(boundary)
-                # generate bag of attributes properties in every segment
-                for attr_name in attr_names_boa:
-                    self.get_seg_bagofattributes(boundary, attr_name)
-            
+            from joblib import Parallel, delayed
+            seg_attr = Parallel(n_jobs=-1)(delayed(self.generate_attributes_perboundary)(seq, boundary, attr_names_boa) for boundary in new_boundaries)
+            print("seq.seg_attr ", seq.seg_attr)
+            print("self.seg_attr ", self.seg_attr)
+            print("returned seg_attr", seg_attr)
             # save generated attributes in seq
-            seq.seg_attr.update(self.seg_attr)
+            for attr_dict in seg_attr:
+                for boundary in attr_dict:
+                    seq.seg_attr[boundary] = attr_dict[boundary]
+            print("update seq.seg_attr", seq.seg_attr)
 #             print('saved attribute {}'.format(seq.seg_attr))
             # clear the instance variable seg_attr
             self.seg_attr = {}
         return(new_boundaries)
         
+    def generate_attributes_perboundary(self, seq, boundary, attr_names_boa):
+        self.get_shape(boundary)
+        self.get_degenerateshape(boundary)
+        self.get_seg_length(boundary)
+        self.get_num_chars(boundary)
+        # generate bag of attributes properties in every segment
+        self.get_seg_bagofattributes(boundary, attr_names_boa)
+        return(self.seg_attr)
+            
     def _create_segment(self, X, boundary, attr_names, sep = " "):
         self.seg_attr[boundary] = {}
         for attr_name in attr_names:
@@ -150,26 +156,36 @@ class NERSegmentAttributeExtractor(object):
             num_chars += len(entry)
         self.seg_attr[boundary]['seg_numchars'] = num_chars
             
-    def get_seg_bagofattributes(self, boundary, attr_name, sep = " "):
+    def get_seg_bagofattributes(self, boundary, attr_names, sep = " "):
         # implements the bag-of-attributes concept within a segment 
         # it can be used with attributes that have binary_encoding type set equal True
         prefix = 'bag_of_attr'
         attr_desc = self.attr_desc
-        segment = self.seg_attr[boundary][attr_name]
-        split_segment = segment.split(sep)
-        count_dict = defaultdict(int)
-        for elem in split_segment:
-            count_dict[elem] += 1
+        # generate bag of attributes properties in every segment
+        for attr_name in attr_names:
+            segment = self.seg_attr[boundary][attr_name]
+            split_segment = segment.split(sep)
+            count_dict = defaultdict(int)
+            for elem in split_segment:
+                count_dict[elem] += 1
             
-        for attr_value, count in count_dict.items():
-            fkey = prefix + '_' + attr_name + '_' + attr_value
-            self.seg_attr[boundary][fkey] = count
-            # adding dynamically the description and the encoding of the new bag of attributes property
-            if(fkey not in attr_desc):
-                attr_desc[fkey] = {'description':'{} -- bag of attributes property'.format("fkey"),
-                                   'encoding':'real'
-                                  }
+            for attr_value, count in count_dict.items():
+                fkey = prefix + '_' + attr_name + '_' + attr_value
+                self.seg_attr[boundary][fkey] = count
+                # adding dynamically the description and the encoding of the new bag of attributes property
+                if(fkey not in attr_desc):
+                    attr_desc[fkey] = {'description':'{} -- bag of attributes property'.format("fkey"),
+                                       'encoding':'real'
+                                      }
     
 if __name__ == "__main__":
-    pass
-    
+    X = [{'w':'Peter'}, {'w':'goes'}, {'w':'to'}, {'w':'Britain'}, {'w':'and'}, {'w':'France'}, {'w':'annually'},{'w':'.'}]
+    Y = ['P', 'O', 'O', 'L', 'O', 'L', 'O', 'O']
+    seq = SequenceStruct(X, Y)
+    attr_extractor = NERSegmentAttributeExtractor()
+    print("attr_desc {}".format(attr_extractor.attr_desc))
+    attr_extractor.generate_attributes(seq, seq.get_y_boundaries())
+    for boundary, seg_attr in seq.seg_attr.items():
+        print("boundary {}".format(boundary))
+        print("attributes {}".format(seg_attr))
+    print("seg_attr {}".format(seq.seg_attr))
