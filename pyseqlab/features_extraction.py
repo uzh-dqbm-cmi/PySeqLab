@@ -1160,8 +1160,8 @@ class SeqsRepresentation(object):
         seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
         # dump model active features data
         ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
-        print("seq_id ", seq_id)
-        print("seqs_info[{}] = {}".format(seq_id, seqs_info[seq_id]))
+#         print("seq_id ", seq_id)
+#         print("seqs_info[{}] = {}".format(seq_id, seqs_info[seq_id]))
         return((seq_id, activefeatures_dir))
 #         return({seq_id:{'activefeatures_dir':activefeatures_dir}})
         

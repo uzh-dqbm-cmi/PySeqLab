@@ -341,7 +341,7 @@ class HOCRF(object):
         if(self.write_pf_ondisk):
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
             ReaderWriter.dump_data(f_potential_features, os.path.join(target_dir, "f_potential_features"))
-            print("writing f_potential_features on disk")
+#             print("writing f_potential_features on disk")
         self.seqs_info[seq_id]['f_potential_features'] = f_potential_features
 
     def compute_f_potential(self, w, seq_id):

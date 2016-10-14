@@ -405,7 +405,7 @@ class Learner(object):
                 error_count = 0
                 numpy.random.shuffle(train_seqs_id)
                 for seq_id in train_seqs_id:
-#                     print("sequences left {}".format(seq_left))
+                    print("sequences left {}".format(seq_left))
                     y_imposter = crf_model.viterbi(w, seq_id)
 
                     if(k == 0):
@@ -476,7 +476,7 @@ class Learner(object):
                 error_count = 0
                 numpy.random.shuffle(train_seqs_id)
                 for seq_id in train_seqs_id:
-#                     print("sequences left {}".format(seq_left))
+                    print("sequences left {}".format(seq_left))
                     y_imposter = crf_model.viterbi(w, seq_id)
 
                     if(k == 0):
