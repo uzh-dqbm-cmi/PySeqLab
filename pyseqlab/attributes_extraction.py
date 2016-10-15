@@ -4,6 +4,7 @@
 from collections import defaultdict
 from pyseqlab.utilities import SequenceStruct
 
+
 class AttributeScaler(object):
     def __init__(self, scaling_info, method):
         self.scaling_info = scaling_info
