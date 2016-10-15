@@ -1176,7 +1176,7 @@ class SeqsRepresentation(object):
         self.out_dir = output_dir
         
         start_time = datetime.now()
-        activefeatures_dirs = Parallel(n_jobs=10)(delayed(self._parallel_activefeatures_extraction)(seq_id) for seq_id in seqs_id)
+        activefeatures_dirs = Parallel(n_jobs=10, backend='threading')(delayed(self._parallel_activefeatures_extraction)(seq_id) for seq_id in seqs_id)
         for elem_tup in activefeatures_dirs:
             seq_id, activefeatures_dir = elem_tup
             seqs_info[seq_id]['activefeatures_dir'] = activefeatures_dir

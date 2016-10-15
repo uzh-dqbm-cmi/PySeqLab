@@ -84,8 +84,7 @@ class NERSegmentAttributeExtractor(object):
                 self.get_seg_length(boundary)
                 self.get_num_chars(boundary)
                 # generate bag of attributes properties in every segment
-                for attr_name in attr_names_boa:
-                    self.get_seg_bagofattributes(boundary, attr_name)
+                self.get_seg_bagofattributes(boundary, attr_names_boa)
             
             # save generated attributes in seq
             seq.seg_attr.update(self.seg_attr)
