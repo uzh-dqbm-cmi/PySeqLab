@@ -49,9 +49,7 @@ class NERSegmentAttributeExtractor(object):
         attr_desc['seg_len'] = {'description':'the length of a segment',
                                 'encoding':'real'
                                }
-        attr_desc['bag_of_attr_'] = {'description':'prefix attribute name for all attributes that implement/measure bag of attributes property',
-                                     'encoding':'real'
-                                    }
+
         return(attr_desc)
     
     def group_attributes(self):
@@ -87,8 +85,7 @@ class NERSegmentAttributeExtractor(object):
                 self.get_seg_length(boundary)
                 self.get_num_chars(boundary)
                 # generate bag of attributes properties in every segment
-                for attr_name in attr_names_boa:
-                    self.get_seg_bagofattributes(boundary, attr_name)
+                self.get_seg_bagofattributes(boundary, attr_names_boa)
             
             # save generated attributes in seq
             seq.seg_attr.update(self.seg_attr)
@@ -150,25 +147,26 @@ class NERSegmentAttributeExtractor(object):
             num_chars += len(entry)
         self.seg_attr[boundary]['seg_numchars'] = num_chars
             
-    def get_seg_bagofattributes(self, boundary, attr_name, sep = " "):
+    def get_seg_bagofattributes(self, boundary, attr_names_boa, sep = " "):
         # implements the bag-of-attributes concept within a segment 
         # it can be used with attributes that have binary_encoding type set equal True
         prefix = 'bag_of_attr'
         attr_desc = self.attr_desc
-        segment = self.seg_attr[boundary][attr_name]
-        split_segment = segment.split(sep)
-        count_dict = defaultdict(int)
-        for elem in split_segment:
-            count_dict[elem] += 1
+        for attr_name in attr_names_boa:
+            segment = self.seg_attr[boundary][attr_name]
+            split_segment = segment.split(sep)
+            count_dict = defaultdict(int)
+            for elem in split_segment:
+                count_dict[elem] += 1
             
-        for attr_value, count in count_dict.items():
-            fkey = prefix + '_' + attr_name + '_' + attr_value
-            self.seg_attr[boundary][fkey] = count
-            # adding dynamically the description and the encoding of the new bag of attributes property
-            if(fkey not in attr_desc):
-                attr_desc[fkey] = {'description':'{} -- bag of attributes property'.format("fkey"),
-                                   'encoding':'real'
-                                  }
+            for attr_value, count in count_dict.items():
+                fkey = prefix + '_' + attr_name + '_' + attr_value
+                self.seg_attr[boundary][fkey] = count
+                # adding dynamically the description and the encoding of the new bag of attributes property
+                if(fkey not in attr_desc):
+                    attr_desc[fkey] = {'description':'{} -- bag of attributes property'.format("fkey"),
+                                       'encoding':'real'
+                                       }
     
 if __name__ == "__main__":
     pass
