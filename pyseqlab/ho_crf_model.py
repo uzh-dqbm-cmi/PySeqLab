@@ -24,6 +24,7 @@ class HOCRFModelRepresentation(object):
         self.S_codebook = self.get_backward_states()
         self.f_transition = self.get_forward_transition()
         self.b_transition = self.get_backward_transitions()
+        self.pky_codebook = self.get_pky_codebook()
         
         self.pi_pky_z = self.map_pky_z()
         self.si_ysk_z = self.map_sky_z()
@@ -50,6 +51,8 @@ class HOCRFModelRepresentation(object):
     def represent_activefeatures(self, z_patts, seg_features):  
         modelfeatures = self.modelfeatures
         modelfeatures_codebook = self.modelfeatures_codebook 
+        Z_codebook = self.Z_codebook
+        
         activefeatures = {}
 #         print("segfeatures {}".format(seg_features))
 #         print("z_patts {}".format(z_patts))
@@ -67,7 +70,7 @@ class HOCRFModelRepresentation(object):
                     windx_fval[modelfeatures_codebook[fkey]] = 1
                     
                 if(windx_fval):
-                    activefeatures[z_patt] = windx_fval
+                    activefeatures[Z_codebook[z_patt]] = windx_fval
 #         print("activefeatures {}".format(activefeatures))         
         return(activefeatures)
     
@@ -150,6 +153,7 @@ class HOCRFModelRepresentation(object):
         for p in P_codebook:
             for y in Y_codebook:
                 pk_y[(p, y)] = 1
+        
         pk_y_suffix = {}
         for p in P_codebook:
             if(p != ""):
@@ -175,7 +179,17 @@ class HOCRFModelRepresentation(object):
             else:
                 f_transition[pi] = {elmkey:(pk, y)}
         return(f_transition)
-                    
+    
+    def get_pky_codebook(self):
+        f_transition = self.f_transition
+        pky_codebook = {}
+        counter = 0
+        for pi in f_transition:
+            for pky in f_transition[pi]:
+                pky_codebook[pky] = counter
+                counter += 1
+        return(pky_codebook)
+
     def get_backward_transitions(self):
         Y_codebook = self.Y_codebook
         S_codebook = self.S_codebook
@@ -315,24 +329,26 @@ class HOCRF(object):
     
     def prepare_f_potentialfeatures(self, seq_id):
         pi_pky_z = self.model.pi_pky_z
+        pky_codebook = self.model.pky_codebook
+        Z_codebook = self.model.Z_codebook
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
-        cached_pf = self.seqs_info[seq_id]["cached_pf"]
+        cached_pf = {}
         f_potential_features = {}
          
         for j in range(1, T+1):
             boundary = (j, j)
             for pi in pi_pky_z:
                 for pky in pi_pky_z[pi]:
-                    f_potential_features[j, pi, pky] = []
+                    f_potential_features[j, pky_codebook[pky]] = []
                     for z_patt in pi_pky_z[pi][pky]:
-                        if(z_patt in activefeatures[boundary]):
-                            if((j, z_patt) not in cached_pf):
+                        if(Z_codebook[z_patt] in activefeatures[boundary]):
+                            if((j, Z_codebook[z_patt]) not in cached_pf):
                                 f_val = list(activefeatures[boundary][z_patt].values())
                                 w_indx = list(activefeatures[boundary][z_patt].keys())
-                                cached_pf[j, z_patt] = {'f_val':f_val,'w_indx':w_indx}
-                            if((j, z_patt) not in f_potential_features[j, pi, pky]):
-                                f_potential_features[j, pi, pky].append((j, z_patt)) 
+                                cached_pf[j, Z_codebook[z_patt]] = (w_indx, f_val)
+                            if((j, Z_codebook[z_patt]) not in f_potential_features[j, pky_codebook[pky]]):
+                                f_potential_features[j, pky_codebook[pky]].append((j, Z_codebook[z_patt])) 
                     
 #                     if(not f_potential_features[j, pi, pky]):
 #                         f_potential_features[j, pi, pky] = None
@@ -341,22 +357,22 @@ class HOCRF(object):
         if(self.write_pf_ondisk):
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
             ReaderWriter.dump_data(f_potential_features, os.path.join(target_dir, "f_potential_features"))
+            ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))
 #             print("writing f_potential_features on disk")
         self.seqs_info[seq_id]['f_potential_features'] = f_potential_features
+        self.seqs_info["cached_pf"] = cached_pf
 
     def compute_f_potential(self, w, seq_id):
         f_potential_features = self.seqs_info[seq_id]['f_potential_features']
         cached_pf = self.seqs_info[seq_id]["cached_pf"]
         cached_comp = self.seqs_info[seq_id]["cached_comp"]
         f_potential = {}
-
-        
-        for j, pi, pky in f_potential_features:
+        for j, pky in f_potential_features:
             potential = 0
-            for j, z_patt in f_potential_features[j, pi, pky]:
+            for j, z_patt in f_potential_features[j, pky]:
                 if((j, z_patt) not in cached_comp):
-                    w_indx = cached_pf[j, z_patt]['w_indx']
-                    f_val = cached_pf[j, z_patt]['f_val']
+                    w_indx = cached_pf[j, z_patt][0]
+                    f_val = cached_pf[j, z_patt][1]
                     cached_comp[j, z_patt] = numpy.inner(w[w_indx], f_val)
                 potential += cached_comp[j, z_patt]
             f_potential[j, pky] = potential
@@ -364,10 +380,12 @@ class HOCRF(object):
         return(f_potential)
     
     def compute_forward_vec(self, seq_id):
-        f_potential = self.seqs_info[seq_id]["f_potential"]
         f_transition = self.model.f_transition
         P_codebook = self.model.P_codebook
+        # to consider adding it as instance variable in the model representation
+        pky_codebook_rev = {code:pky for pky, code in self.model.pky_codebook}
         T = self.seqs_info[seq_id]["T"]
+        f_potential = self.seqs_info[seq_id]["f_potential"]
         alpha = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         alpha[0,P_codebook[""]] = 0
          
@@ -376,7 +394,7 @@ class HOCRF(object):
                 accumulator = -numpy.inf
                 for pky, (pk, _) in f_transition[pi].items():
                     pk_code = P_codebook[pk]
-                    potential = f_potential[j, pky]
+                    potential = f_potential[j, pky_codebook_rev[pky]]
                     accumulator = numpy.logaddexp(accumulator, potential + alpha[j-1, pk_code])
                 alpha[j, P_codebook[pi]] = accumulator 
                  
@@ -505,9 +523,10 @@ class HOCRF(object):
             seq_info["f_potential_features"] = f_potential_features
 #             seq_info["f_potential"] = f_potential
             print("loading f_potential_features from disk")
-            
+            if(self.seqs_info.get("cached_pf") == None):
+                self.seqs_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
+                
         elif(seq_info.get("f_potential_features") == None):
-            seq_info["cached_pf"] = {}
             self.prepare_f_potentialfeatures(seq_id)
             print("preparing f_potential_features")
 

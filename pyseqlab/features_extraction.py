@@ -1180,14 +1180,13 @@ class SeqsRepresentation(object):
         for elem_tup in activefeatures_dirs:
             seq_id, activefeatures_dir = elem_tup
             seqs_info[seq_id]['activefeatures_dir'] = activefeatures_dir
-
-
         end_time = datetime.now()
        
         # clear vars
         for var in (self.seqs_info, self.model, self.out_dir):
             var = None
             del var
+            
         log_file = os.path.join(output_dir, "log.txt")
         line = "---Finding sequences' model active-features--- starting time: {} \n".format(start_time)
         line += "Total number of parsed sequences: {} \n".format(len(seqs_id))
