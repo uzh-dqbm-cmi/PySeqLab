@@ -24,8 +24,9 @@ class HOCRFModelRepresentation(object):
         self.S_codebook = self.get_backward_states()
         self.f_transition = self.get_forward_transition()
         self.b_transition = self.get_backward_transitions()
-        self.pky_codebook = self.get_pky_codebook()
         
+        self.pky_codebook = self.get_pky_codebook()
+        self.pky_codebook_rev = self.get_pky_codebook_rev()
         self.pi_pky_z = self.map_pky_z()
         self.si_ysk_z = self.map_sky_z()
         
@@ -50,9 +51,7 @@ class HOCRFModelRepresentation(object):
         
     def represent_activefeatures(self, z_patts, seg_features):  
         modelfeatures = self.modelfeatures
-        modelfeatures_codebook = self.modelfeatures_codebook 
-        Z_codebook = self.Z_codebook
-        
+        modelfeatures_codebook = self.modelfeatures_codebook         
         activefeatures = {}
 #         print("segfeatures {}".format(seg_features))
 #         print("z_patts {}".format(z_patts))
@@ -70,9 +69,20 @@ class HOCRFModelRepresentation(object):
                     windx_fval[modelfeatures_codebook[fkey]] = 1
                     
                 if(windx_fval):
-                    activefeatures[Z_codebook[z_patt]] = windx_fval
+                    activefeatures[z_patt] = windx_fval
 #         print("activefeatures {}".format(activefeatures))         
         return(activefeatures)
+    
+    def code_activefeatures(self, active_features):
+        Z_codebook = self.Z_codebook
+        activefeatures_coded = {}
+#         print("active_features ", active_features)
+        for boundary in active_features:
+            activefeatures_coded[boundary] = {}
+            for z_patt in active_features[boundary]:
+                activefeatures_coded[boundary][Z_codebook[z_patt]] = active_features[boundary][z_patt]
+        
+        return(activefeatures_coded)
     
     @property
     def modelfeatures_codebook(self):
@@ -189,7 +199,12 @@ class HOCRFModelRepresentation(object):
                 pky_codebook[pky] = counter
                 counter += 1
         return(pky_codebook)
-
+    
+    def get_pky_codebook_rev(self):
+        # to consider adding it as instance variable in the model representation
+        pky_codebook_rev = {code:pky for pky, code in self.pky_codebook.items()}
+        return(pky_codebook_rev)
+    
     def get_backward_transitions(self):
         Y_codebook = self.Y_codebook
         S_codebook = self.S_codebook
@@ -344,8 +359,8 @@ class HOCRF(object):
                     for z_patt in pi_pky_z[pi][pky]:
                         if(Z_codebook[z_patt] in activefeatures[boundary]):
                             if((j, Z_codebook[z_patt]) not in cached_pf):
-                                f_val = list(activefeatures[boundary][z_patt].values())
-                                w_indx = list(activefeatures[boundary][z_patt].keys())
+                                f_val = list(activefeatures[boundary][Z_codebook[z_patt]].values())
+                                w_indx = list(activefeatures[boundary][Z_codebook[z_patt]].keys())
                                 cached_pf[j, Z_codebook[z_patt]] = (w_indx, f_val)
                             if((j, Z_codebook[z_patt]) not in f_potential_features[j, pky_codebook[pky]]):
                                 f_potential_features[j, pky_codebook[pky]].append((j, Z_codebook[z_patt])) 
@@ -360,7 +375,7 @@ class HOCRF(object):
             ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))
 #             print("writing f_potential_features on disk")
         self.seqs_info[seq_id]['f_potential_features'] = f_potential_features
-        self.seqs_info["cached_pf"] = cached_pf
+        self.seqs_info[seq_id]["cached_pf"] = cached_pf
 
     def compute_f_potential(self, w, seq_id):
         f_potential_features = self.seqs_info[seq_id]['f_potential_features']
@@ -383,7 +398,7 @@ class HOCRF(object):
         f_transition = self.model.f_transition
         P_codebook = self.model.P_codebook
         # to consider adding it as instance variable in the model representation
-        pky_codebook_rev = {code:pky for pky, code in self.model.pky_codebook}
+        pky_codebook_rev = self.model.pky_codebook_rev
         T = self.seqs_info[seq_id]["T"]
         f_potential = self.seqs_info[seq_id]["f_potential"]
         alpha = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
@@ -691,6 +706,7 @@ class HOCRF(object):
         l = ("activefeatures_by_position", "f_potential")
         self.check_cached_info(w, seq_id, l)
         f_potential = self.seqs_info[seq_id]["f_potential"]
+        pky_codebook = self.model.pky_codebook
         f_transition = self.model.f_transition
         P_codebook = self.model.P_codebook
         T = self.seqs_info[seq_id]["T"]
@@ -704,7 +720,7 @@ class HOCRF(object):
                 max_val = -numpy.inf
                 for pky, (pk,y) in f_transition[pi].items():
                     pk_code = P_codebook[pk]
-                    potential = f_potential[j, pky]
+                    potential = f_potential[j, pky_codebook[pky]]
                     score = potential + delta[j-1, pk_code]
                     if(score > max_val):
                         max_val = score
