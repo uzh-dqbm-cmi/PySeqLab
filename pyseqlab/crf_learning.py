@@ -474,7 +474,7 @@ class Learner(object):
             for k in range(num_epochs):
                 seq_left = N
                 error_count = 0
-                numpy.random.shuffle(train_seqs_id)
+#                 numpy.random.shuffle(train_seqs_id)
                 for seq_id in train_seqs_id:
                     print("sequences left {}".format(seq_left))
                     y_imposter = crf_model.viterbi(w, seq_id)
