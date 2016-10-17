@@ -474,7 +474,7 @@ class Learner(object):
             for k in range(num_epochs):
                 seq_left = N
                 error_count = 0
-#                 numpy.random.shuffle(train_seqs_id)
+                numpy.random.shuffle(train_seqs_id)
                 for seq_id in train_seqs_id:
                     print("sequences left {}".format(seq_left))
                     y_imposter = crf_model.viterbi(w, seq_id)
@@ -484,8 +484,8 @@ class Learner(object):
                     
                     y_original = seqs_info[seq_id]['flat_y']
                     T = seqs_info[seq_id]['T']
-                    print("y original {}".format(y_original))
-                    print("y imposter {}".format(y_imposter))
+#                     print("y original {}".format(y_original))
+#                     print("y imposter {}".format(y_imposter))
                     missmatch = [i for i in range(T) if y_original[i] != y_imposter[i]]
                     len_diff = len(missmatch)
                     if(len_diff):
