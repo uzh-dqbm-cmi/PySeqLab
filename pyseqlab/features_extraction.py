@@ -283,70 +283,7 @@ class HOFeatureExtractor(object):
 #         print("seg_features lookup {}".format(seg_features))
         return(seg_features)
     
-#     def lookup_seq_modelactivefeatures(self, seq, model):
-#         
-#         model_patt = deepcopy(model.patt_order)
-#         print("original model patt_order {} with id {}".format(model.patt_order, id(model.patt_order)))
-#         print("copied model patt_order {} with id {}".format(model_patt, id(model_patt)))
-#         del model_patt[1]
-#         print("modified model patt_order {} with id {}".format(model_patt, id(model_patt)))
-# 
-#         
-#         model_states = list(model.Y_codebook.keys())
-#         L = model.L
-#         T = seq.T
-#         
-#         active_features = {}
-#         accum_pattern = {}
-#         
-#         for j in range(1, T+1):
-#             for d in range(L):
-#                 if(j-d <= 0):
-#                     break
-#                 boundary = (j-d, j)
-# 
-#                 seg_features = self.lookup_features_X(seq, boundary)
-#                 print("seg_features {}".format(seg_features))
-# 
-#                 # active features that  uses only the current states
-#                 active_features[boundary] = model.represent_activefeatures(model_states, seg_features)
-#                 print("prev active_features[{}] {}".format(boundary, active_features[boundary]))
-# 
-#                 if(active_features[boundary]):
-#                     # z pattern of length 1 (i.e. detected labels from set Y}
-#                     detected_seg_patt = {patt:1 for patt in active_features[boundary]}
-#                     if(j in accum_pattern):
-#                         accum_pattern[j][1].update(detected_seg_patt)
-#                     else:
-#                         accum_pattern[j] = {1:detected_seg_patt}
-# #                     print("j {}".format(j))
-#                     print("accum_pattern {}".format(accum_pattern))
-# #                     print("active features {}".format(active_features))
-#                     tracked_z_patt = self._build_z_patt(boundary, detected_seg_patt, accum_pattern, model_patt)
-#                     if(tracked_z_patt):
-#                         for patt_len in tracked_z_patt:
-#                             if(patt_len in accum_pattern[j]):
-#                                 accum_pattern[j][patt_len].update(tracked_z_patt[patt_len])
-#                             else:
-#                                 accum_pattern[j].update({patt_len:tracked_z_patt[patt_len]})
-#                         print("new accum_pattern {}".format(accum_pattern))
-#                         new_patts = {z_patt:1 for order in tracked_z_patt for z_patt in tracked_z_patt[order]}
-# #                         print("new_patts {}".format(new_patts))
-# #                         print("current boundary {}".format(boundary))
-# 
-#                         new_activefeatures = model.represent_activefeatures(new_patts, seg_features)
-#                         print("new_activefeatures {}".format(new_activefeatures))
-#                         for z_patt in new_activefeatures:
-#                             if(z_patt in active_features[boundary]):
-#                                 active_features[boundary][z_patt].update(new_activefeatures[z_patt])
-#                             else:
-#                                 active_features[boundary].update({z_patt: new_activefeatures[z_patt]})
-#                         print("after active_features[{}] {}".format(boundary, active_features[boundary]))
-# 
-#         # update seqs_info
-#         # unpack active features
-#         print("accum_pattern {}".format(accum_pattern))
-#         return(active_features)
+
     def lookup_seq_modelactivefeatures(self, seq, model):
         
         model_patt = deepcopy(model.patt_order)
@@ -409,12 +346,6 @@ class HOFeatureExtractor(object):
                 accum_activefeatures[boundary][z_patt].update(detected_activefeatures[z_patt])
             else:
                 accum_activefeatures[boundary].update({z_patt: detected_activefeatures[z_patt]})
-            
-    def _check_pattern_len(self, detected_patt):
-        cached_patt_len = self.cached_patt_len
-        if(detected_patt not in cached_patt_len):
-            # get the length of the detected_patt
-            cached_patt_len[detected_patt] = len(detected_patt)
        
     
     def _build_z_patt(self, boundary, detected_y_patt, accum_pattern, model_patt):
@@ -460,58 +391,6 @@ class HOFeatureExtractor(object):
         feature_val = sum(attributes) 
         return({feature_name:feature_val})
     
-
-#     def extract_features_X(self, seq, boundary):
-#         """template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-#            boundary is a tuple (u,v) indicating the beginning and end of the current segment
-#         """
-#         # get template X
-#         template_X = self.template_X
-#         attr_desc = self.attr_desc
-#         y_boundaries = seq.y_boundaries
-#         range_y = range(len(y_boundaries))
-#         curr_pos = y_boundaries.index(boundary)
-# 
-# #         print("positions {}".format(positions))
-#         seg_features = {}
-#         for attr_name in template_X:
-# #             print("attr_name {}".format(attr_name))
-#             # check the type of attribute
-#             if(attr_desc[attr_name]["encoding"] == "binary"):
-#                 represent_attr = self._represent_binary_attr
-#             else:
-#                 represent_attr = self._represent_real_attr
-#             
-#             feat_template = {}
-#             for offset_tup_x in template_X[attr_name]:
-#                 attributes = []
-#                 feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
-# #                 print("feature_name {}".format(feature_name))
-#                 for offset_x in offset_tup_x:
-# #                     print("offset_x {}".format(offset_x))
-#                     pos = curr_pos + offset_x             
-#                     if(pos in range_y):
-#                         b = y_boundaries[pos]
-#                         segment = seq.seg_attr[b]
-# #                         print("segment {}".format(segment))
-#                         attributes.append(segment[attr_name])
-# #                         print("attributes {}".format(attributes))
-#                     else:
-#                         attributes = []
-#                         break
-#                 if(attributes):
-#                     feat_template[offset_tup_x] = represent_attr(attributes, feature_name)
-#             seg_features[attr_name] = feat_template
-# #         
-# #         print("X"*40)
-# #         print("boundary {}".format(boundary))
-# #         for attr_name, f_template in seg_features.items():
-# #             for offset, features in f_template.items():
-# #                 print("{} -> {}".format(offset, features))
-# #         print("X"*40)
-# 
-#         return(seg_features)
-
 
     def dump_features(self, seq_file, seq_features):
         """store the features of the current sequence"""
@@ -1243,18 +1122,6 @@ class SeqsRepresentation(object):
                     # this will update the value of the seg_attr of the sequence 
                     attr_extractor.generate_attributes(seq, [boundary])
                     attr_scaler.scale_real_attributes(seq, [boundary])
-  
-    
-#     def _unpack_activefeatures(self, activefeatures, model):
-#         modelfeatures_codebook_rev = {code:feature for feature, code in model.modelfeatures_codebook.items()}
-# #         print("$" *40)
-# #         print(activefeatures)
-#         for boundary in activefeatures:
-#             print("boundary {}".format(boundary))
-#             for z_patt, windxfval_dict in activefeatures[boundary].items():
-#                 for w_indx, f_val in windxfval_dict.items():
-#                     f_name = modelfeatures_codebook_rev[w_indx]
-#                     print("{}:{}".format(f_name, f_val))
                 
     @staticmethod      
     def get_seqs_modelactivefeatures(seqs_id, seqs_info):
@@ -1266,8 +1133,9 @@ class SeqsRepresentation(object):
         
         return(seqs_activefeatures)
     
+    # to change it into static method
     def get_seqs_globalfeatures(self, seqs_id, seqs_info, model):
-        """ it retrieves the features available for the current sequence (i.e. F(X,Y) for all j \in [1...J] 
+        """it retrieves the features available for the current sequence (i.e. F(X,Y) for all j \in [1...J] 
         """
         seqs_globalfeatures = {}
         for seq_id in seqs_id:
@@ -1278,10 +1146,10 @@ class SeqsRepresentation(object):
             
         return(seqs_globalfeatures)
 
-    # to be used for processing a sequence, generating global features and return back without storing on disk
     def get_imposterseq_globalfeatures(self, seq_id, seqs_info, model, y_imposter, seg_other_symbol = None):
-        """ - Function that parses a sequence and generates global feature  F_j(X,Y)
-              without saving intermediary results on disk
+        """to be used for processing a sequence, generating global features and return back without storing on disk
+            Function that parses a sequence and generates global feature  F_j(X,Y)
+            without saving intermediary results on disk
         """
         feature_extractor = self.feature_extractor
         attr_extractor = self.attr_extractor
