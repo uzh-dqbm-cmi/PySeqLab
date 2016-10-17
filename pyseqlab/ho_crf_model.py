@@ -617,7 +617,7 @@ class HOCRF(object):
                 func_dict[varname](w, seq_id)
 
     def clear_cached_info(self, seqs_id, cached_entities = []):
-        default_entitites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp"]
+        default_entitites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp", "f_potential_features"]
         args = default_entitites  + cached_entities
         for seq_id in seqs_id:
             seq_info = self.seqs_info[seq_id]
