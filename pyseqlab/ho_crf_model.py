@@ -27,6 +27,7 @@ class HOCRFModelRepresentation(object):
         
         self.pky_codebook = self.get_pky_codebook()
         self.pky_codebook_rev = self.get_pky_codebook_rev()
+        self.pi_pky_codebook = self.get_pi_pky_codebook()
         self.pi_pky_z = self.map_pky_z()
         self.si_ysk_z = self.map_sky_z()
         
@@ -205,6 +206,19 @@ class HOCRFModelRepresentation(object):
         pky_codebook_rev = {code:pky for pky, code in self.pky_codebook.items()}
         return(pky_codebook_rev)
     
+    def get_pi_pky_codebook(self):
+        f_transition = self.f_transition
+        pky_codebook = self.pky_codebook
+        P_codebook = self.P_codebook
+        pi_pky_codebook = {}
+        for pi in f_transition:
+            pi_pky_codebook[pi]=([],[])
+            for pky, (pk, _) in f_transition[pi].items():
+                pi_pky_codebook[pi][0].append(pky_codebook[pky])
+                pi_pky_codebook[pi][1].append(P_codebook[pk])
+
+        return(pi_pky_codebook)
+    
     def get_backward_transitions(self):
         Y_codebook = self.Y_codebook
         S_codebook = self.S_codebook
@@ -363,10 +377,10 @@ class HOCRF(object):
                                 w_indx = list(activefeatures[boundary][Z_codebook[z_patt]].keys())
                                 cached_pf[j, Z_codebook[z_patt]] = (w_indx, f_val)
                             if((j, Z_codebook[z_patt]) not in f_potential_features[j, pky_codebook[pky]]):
-                                f_potential_features[j, pky_codebook[pky]].append((j, Z_codebook[z_patt])) 
+                                f_potential_features[j, pky_codebook[pky]].append(Z_codebook[z_patt]) 
                     
-#                     if(not f_potential_features[j, pi, pky]):
-#                         f_potential_features[j, pi, pky] = None
+                    if(not f_potential_features[j, pky_codebook[pky]]):
+                        del f_potential_features[j, pky_codebook[pky]]
          
         # write on disk
         if(self.write_pf_ondisk):
@@ -380,11 +394,15 @@ class HOCRF(object):
     def compute_f_potential(self, w, seq_id):
         f_potential_features = self.seqs_info[seq_id]['f_potential_features']
         cached_pf = self.seqs_info[seq_id]["cached_pf"]
+        T = self.seqs_info[seq_id]['T']
         cached_comp = self.seqs_info[seq_id]["cached_comp"]
-        f_potential = {}
+
+        pky_codebook = self.model.pky_codebook
+        f_potential = numpy.zeros((T+1, len(pky_codebook)))
+
         for j, pky in f_potential_features:
             potential = 0
-            for j, z_patt in f_potential_features[j, pky]:
+            for z_patt in f_potential_features[j, pky]:
                 if((j, z_patt) not in cached_comp):
                     w_indx = cached_pf[j, z_patt][0]
                     f_val = cached_pf[j, z_patt][1]
@@ -395,24 +413,18 @@ class HOCRF(object):
         return(f_potential)
     
     def compute_forward_vec(self, seq_id):
-        f_transition = self.model.f_transition
+        pi_pky_codebook = self.model.pi_pky_codebook
         P_codebook = self.model.P_codebook
-        # to consider adding it as instance variable in the model representation
-        pky_codebook_rev = self.model.pky_codebook_rev
+
         T = self.seqs_info[seq_id]["T"]
         f_potential = self.seqs_info[seq_id]["f_potential"]
         alpha = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         alpha[0,P_codebook[""]] = 0
          
         for j in range(1, T+1):
-            for pi in f_transition:
-                accumulator = -numpy.inf
-                for pky, (pk, _) in f_transition[pi].items():
-                    pk_code = P_codebook[pk]
-                    potential = f_potential[j, pky_codebook_rev[pky]]
-                    accumulator = numpy.logaddexp(accumulator, potential + alpha[j-1, pk_code])
-                alpha[j, P_codebook[pi]] = accumulator 
-                 
+            for pi in pi_pky_codebook:
+                vec = f_potential[j, pi_pky_codebook[pi][0]] + alpha[j-1, pi_pky_codebook[pi][1]]
+                alpha[j, P_codebook[pi]] = vectorized_logsumexp(vec)           
         return(alpha)
 
     def prepare_b_potentialfeatures(self, seq_id):
@@ -706,30 +718,30 @@ class HOCRF(object):
         l = ("activefeatures_by_position", "f_potential")
         self.check_cached_info(w, seq_id, l)
         f_potential = self.seqs_info[seq_id]["f_potential"]
-        pky_codebook = self.model.pky_codebook
+        pky_codebook_rev = self.model.pky_codebook_rev
+        pi_pky_codebook = self.model.pi_pky_codebook
         f_transition = self.model.f_transition
         P_codebook = self.model.P_codebook
         T = self.seqs_info[seq_id]["T"]
         # records max score at every time step
         delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         # the score for the empty sequence at time 0 is 1
-        delta[0,P_codebook[""]] = 0
+        delta[0, P_codebook[""]] = 0
         back_track = {}
+        
         for j in range(1, T+1):
-            for pi in f_transition:
-                max_val = -numpy.inf
-                for pky, (pk,y) in f_transition[pi].items():
-                    pk_code = P_codebook[pk]
-                    potential = f_potential[j, pky_codebook[pky]]
-                    score = potential + delta[j-1, pk_code]
-                    if(score > max_val):
-                        max_val = score
-                        back_track[(j,P_codebook[pi])] = (pk, y)
-                            
-                delta[j, P_codebook[pi]] = max_val
+            for pi in pi_pky_codebook:
+                vec = f_potential[j, pi_pky_codebook[pi][0]] + delta[j-1, pi_pky_codebook[pi][1]]
+                delta[j, P_codebook[pi]] = numpy.max(vec)
+                argmax_ind = numpy.argmax(vec)
+                pky = pi_pky_codebook[pi][0][argmax_ind]
+                pky_dec = pky_codebook_rev[pky]
+                back_track[j, P_codebook[pi]] = (f_transition[pi][pky_dec][0], f_transition[pi][pky_dec][1])
+
+        
         # decoding the sequence
         p_T_code = numpy.argmax(delta[T,:])
-        p_T, y_T = back_track[(T, p_T_code)]
+        p_T, y_T = back_track[T, p_T_code]
         Y_decoded = []
       
         Y_decoded.append((p_T,y_T))
