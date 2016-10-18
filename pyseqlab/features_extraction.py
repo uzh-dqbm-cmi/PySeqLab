@@ -327,7 +327,7 @@ class HOFeatureExtractor(object):
 
 #         print("accum_pattern {}".format(accum_pattern))
         # code active features
-        active_features_coded = model.code_activefeatures(active_features)
+        active_features_coded = model.encode_activefeatures(active_features)
         return(active_features_coded)
     
     def _update_accum_pattern(self, accum_pattern, detected_patt, j):
@@ -1248,7 +1248,7 @@ class FeatureFilter(object):
             relation = filter_info['filter_relation']
             # filter based on specific patterns
             for z in featuresum_dict:
-                rel_func[relation](z, filter_pattern, filtered_dict[z])
+                rel_func[relation](z, filter_pattern, filtered_dict)
 #                 if(relation == "="):
 #                     # delete any z that matches any of the provided filter patterns
 #                     if(z in filter_pattern):
@@ -1284,10 +1284,10 @@ class FeatureFilter(object):
 
     @staticmethod
     def _in_rel(x, y, z):
-        if(x in y): del z
+        if(x in y): del z[x]
     @staticmethod
     def _notin_rel(x, y, z):
-        if(x not in y): del z
+        if(x not in y): del z[x]
         
 def main():
     

@@ -373,10 +373,13 @@ class Learner(object):
     def _structured_perceptron(self, w, train_seqs_id):
         """ implements structured perceptron algorithm in particular the average perceptron that was
             introduced by Michael Collins in 2002 (see his paper xx)
+            it also adds different averaging schemes for the learned weights 
+            
+            TODO 
+                possibly add support for regularization although the averaging is sort of regularization
         """
         self._report_training()
         num_epochs = self.training_description["num_epochs"]
-        # TODO add support for regularization while using structured perceptron as training algorithm
 #         regularization_type = self.training_description["regularization_type"]
 #         # regularization parameter lambda
 #         C = self.training_description['regularization_value']
@@ -396,7 +399,6 @@ class Learner(object):
             # accumulated sum of estimated weights
             w_avg = numpy.zeros(len(w), dtype = "longdouble")
             avg_error_list = [0]
-            track_seqs = []
             survival_len = 0
             total_survival = 0
 
@@ -419,8 +421,6 @@ class Learner(object):
                     len_diff = len(missmatch)
                     if(len_diff):
 #                         print("miss match with seq_id {}".format(seq_id))
-                        if(seq_id not in track_seqs):
-                            track_seqs.append(seq_id)
                         if(survival_len):
                             w_avg += survival_len * w
                             total_survival += survival_len
@@ -438,20 +438,16 @@ class Learner(object):
                         
                         # the contribution of global features when using the imposter label sequence
                         w[list(y_imposter_gfeatures.keys())] -= list(y_imposter_gfeatures.values())
-                        crf_model.clear_cached_info(track_seqs)
-                        track_seqs = []
                     else:
 #                         print("nomiss match with seq_id {}".format(seq_id))
                         survival_len += 1
-                        if(seq_id not in track_seqs):
-                            track_seqs.append(seq_id)
                     seq_left -= 1
+                    crf_model.clear_cached_info([seq_id])
 #                 print("error count {}".format(error_count))
                 avg_error_list.append(float(error_count/N))
                 self._track_perceptron_optimizer(w, k, avg_error_list)
                 print("average error : {}".format(avg_error_list))
                 print("self._exitloop {}".format(self._exitloop))
-                print("track_seqs {}".format(track_seqs))
                 if(self._exitloop):
                     break
                 self._elapsed_time = datetime.now()
@@ -469,7 +465,6 @@ class Learner(object):
             # accumulated sum of estimated weights
             w_avg = numpy.zeros(len(w), dtype = "longdouble")
             avg_error_list = [0]
-            track_seqs = []
             num_upd = 0
             for k in range(num_epochs):
                 seq_left = N
@@ -490,8 +485,6 @@ class Learner(object):
                     len_diff = len(missmatch)
                     if(len_diff):
 #                         print("miss match with seq_id {}".format(seq_id))
-                        if(seq_id not in track_seqs):
-                            track_seqs.append(seq_id)
                             
                         # range of error is [0-1]
                         seq_err_count = len_diff/T
@@ -515,20 +508,14 @@ class Learner(object):
                             w_avg += (1-seq_err_count) * w
                         else:
                             w_avg += w
-                        crf_model.clear_cached_info(track_seqs)
-                        track_seqs = []
                         num_upd += 1
-                    else:
-#                         print("nomiss match with seq_id {}".format(seq_id))
-                        if(seq_id not in track_seqs):
-                            track_seqs.append(seq_id)
+                    crf_model.clear_cached_info([seq_id])
                     seq_left -= 1
 #                 print("error count {}".format(error_count))
                 avg_error_list.append(float(error_count/N))
                 self._track_perceptron_optimizer(w, k, avg_error_list)
                 print("average error : {}".format(avg_error_list))
                 print("self._exitloop {}".format(self._exitloop))
-                print("track_seqs {}".format(track_seqs)) 
                 if(self._exitloop):
                     break
                 self._elapsed_time = datetime.now()
@@ -997,24 +984,31 @@ class Evaluator(object):
         fp = collapsed_performance[0,1]
         fn = collapsed_performance[1,0]
         tn = collapsed_performance[1,1]
-
+        
+        perf_measure = 0
         if(metric == "f1"):
             precision = tp/(tp + fp)
             recall = tp/(tp + fn)
             f1 = 2 * ((precision * recall)/(precision +  recall))
             print("f1 {}".format(f1))
-            return(f1)
+            perf_measure = f1
         elif(metric == "precision"):
+            precision = tp/(tp + fp)
             print("precision {}".format(precision))
-            return(precision)
+            perf_measure = precision
         elif(metric == "recall"):
             recall = tp/(tp + fn)
             print("recall {}".format(recall))
-            return(recall)
+            perf_measure = recall
         elif(metric == "accuracy"):
             accuracy = (tp + tn)/(tp + fp + fn + tn)
             print("accuracy {}".format(accuracy))
-            return(accuracy)
+            perf_measure = accuracy
+        
+        with open(output_file, mode = 'w') as f:
+            f.write("The performance of the model based on the {} measure is {}".format(metric, perf_measure))
+        
+        return(perf_measure)
         
     def map_states_to_num(self, Y, Y_codebook, M):
         Y_coded = [Y_codebook[state] if state in Y_codebook else M for state in Y]

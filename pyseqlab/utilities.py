@@ -7,7 +7,10 @@ import shutil
 from datetime import datetime
 from copy import deepcopy
 from itertools import combinations
+import warnings
 import numpy
+
+warnings.filterwarnings('error')
 
 class SequenceStruct():
     def __init__(self, X, Y, seg_other_symbol = None):
@@ -425,9 +428,15 @@ def generate_datetime_str():
                                                  datetime_now.microsecond)
     return(datetime_str)
 
+
+
 def vectorized_logsumexp(vec):
-    max_a = numpy.max(vec)
-    res = max_a + numpy.log(numpy.sum(numpy.exp(vec - max_a)))
+    with numpy.errstate(invalid='warn'):
+        max_a = numpy.max(vec)
+        try:
+            res = max_a + numpy.log(numpy.sum(numpy.exp(vec - max_a)))
+        except Warning:
+            res = max_a
     return(res)
     
 ##################

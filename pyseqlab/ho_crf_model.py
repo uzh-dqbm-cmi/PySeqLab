@@ -22,12 +22,16 @@ class HOCRFModelRepresentation(object):
         self.patt_order = self.get_pattern_order()
         self.P_codebook = self.get_forward_states()
         self.S_codebook = self.get_backward_states()
+        
         self.f_transition = self.get_forward_transition()
         self.b_transition = self.get_backward_transitions()
         
         self.pky_codebook = self.get_pky_codebook()
         self.pky_codebook_rev = self.get_pky_codebook_rev()
         self.pi_pky_codebook = self.get_pi_pky_codebook()
+        self.ysk_codebook = self.get_ysk_codebook()
+        self.si_ysk_codebook = self.get_si_ysk_codebook()
+        
         self.pky_z = self.map_pky_z()
         self.ysk_z = self.map_sky_z()
         
@@ -74,14 +78,14 @@ class HOCRFModelRepresentation(object):
 #         print("activefeatures {}".format(activefeatures))         
         return(activefeatures)
     
-    def code_activefeatures(self, active_features):
+    def encode_activefeatures(self, activefeatures):
         Z_codebook = self.Z_codebook
         activefeatures_coded = {}
 #         print("active_features ", active_features)
-        for boundary in active_features:
+        for boundary in activefeatures:
             activefeatures_coded[boundary] = {}
-            for z_patt in active_features[boundary]:
-                activefeatures_coded[boundary][Z_codebook[z_patt]] = active_features[boundary][z_patt]
+            for z_patt in activefeatures[boundary]:
+                activefeatures_coded[boundary][Z_codebook[z_patt]] = activefeatures[boundary][z_patt]
         
         return(activefeatures_coded)
     
@@ -201,6 +205,16 @@ class HOCRFModelRepresentation(object):
                 counter += 1
         return(pky_codebook)
     
+    def get_ysk_codebook(self):
+        b_transition = self.b_transition
+        ysk_codebook = {}
+        counter = 0
+        for si in b_transition:
+            for ysk in b_transition[si]:
+                ysk_codebook[ysk] = counter
+                counter += 1
+        return(ysk_codebook)
+    
     def get_pky_codebook_rev(self):
         # to consider adding it as instance variable in the model representation
         pky_codebook_rev = {code:pky for pky, code in self.pky_codebook.items()}
@@ -218,6 +232,19 @@ class HOCRFModelRepresentation(object):
                 pi_pky_codebook[pi][1].append(P_codebook[pk])
 
         return(pi_pky_codebook)
+    
+    def get_si_ysk_codebook(self):
+        b_transition = self.b_transition
+        ysk_codebook = self.ysk_codebook
+        S_codebook = self.S_codebook
+        si_ysk_codebook = {}
+        for si in b_transition:
+            si_ysk_codebook[si] = ([],[])
+            for ysk, sk in b_transition[si].items():
+                si_ysk_codebook[si][0].append(ysk_codebook[ysk])
+                si_ysk_codebook[si][1].append(S_codebook[sk])
+
+        return(si_ysk_codebook)
     
     def get_backward_transitions(self):
         Y_codebook = self.Y_codebook
@@ -375,6 +402,8 @@ class HOCRF(object):
                 
                 if(not f_potential_features[j, pky_codebook[pky]]):
                     del f_potential_features[j, pky_codebook[pky]]
+                else:
+                    f_potential_features[j, pky_codebook[pky]] = tuple(f_potential_features[j, pky_codebook[pky]])
          
         # write on disk
         if(self.write_pf_ondisk):
@@ -403,7 +432,6 @@ class HOCRF(object):
                     cached_comp[j, z_patt] = numpy.inner(w[w_indx], f_val)
                 potential += cached_comp[j, z_patt]
             f_potential[j, pky] = potential
-
         return(f_potential)
     
     def compute_forward_vec(self, seq_id):
@@ -414,7 +442,6 @@ class HOCRF(object):
         f_potential = self.seqs_info[seq_id]["f_potential"]
         alpha = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         alpha[0,P_codebook[""]] = 0
-         
         for j in range(1, T+1):
             for pi in pi_pky_codebook:
                 vec = f_potential[j, pi_pky_codebook[pi][0]] + alpha[j-1, pi_pky_codebook[pi][1]]
@@ -423,7 +450,9 @@ class HOCRF(object):
 
     # TODO fix the backward vector computation to be similar to the forward one
     def prepare_b_potentialfeatures(self, seq_id):
-        si_ysk_z = self.model.si_ysk_z
+        ysk_z = self.model.ysk_z
+        ysk_codebook = self.model.ysk_codebook
+        Z_codebook = self.model.Z_codebook
         z_lendict = self.model.z_lendict
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
@@ -431,64 +460,67 @@ class HOCRF(object):
         b_potential_features = {}
         
         for j in range(1, T+1):
-            for si in si_ysk_z:
-                for ysk in si_ysk_z[si]:
-                    b_potential_features[j, si, ysk] = []
-                    for z_patt in si_ysk_z[si][ysk]:
-                        b = j + z_lendict[z_patt] - 1
-                        upd_boundary = (b, b)
-                        if(upd_boundary in activefeatures):
-                            if(z_patt in activefeatures[upd_boundary]):
-                                if((b, z_patt) not in cached_pf):
-                                    f_val = list(activefeatures[upd_boundary][z_patt].values())
-                                    w_indx = list(activefeatures[upd_boundary][z_patt].keys())
-                                    cached_pf[b, z_patt] = {'f_val':f_val, 'w_indx':w_indx}
-                                if((b, z_patt) not in b_potential_features[j, si, ysk]):
-                                    b_potential_features[j, si, ysk].append((b, z_patt)) 
-
+            for ysk in ysk_z:
+                b_potential_features[j, ysk_codebook[ysk]] = []
+                for z_patt in ysk_z[ysk]:
+                    b = j + z_lendict[z_patt] - 1
+                    upd_boundary = (b, b)
+                    if(upd_boundary in activefeatures):
+                        if(Z_codebook[z_patt] in activefeatures[upd_boundary]):
+                            if((b, Z_codebook[z_patt]) not in cached_pf):
+                                f_val = list(activefeatures[upd_boundary][Z_codebook[z_patt]].values())
+                                w_indx = list(activefeatures[upd_boundary][Z_codebook[z_patt]].keys())
+                                cached_pf[b, Z_codebook[z_patt]] = (w_indx, f_val)
+                            if((b, Z_codebook[z_patt]) not in b_potential_features[j, ysk_codebook[ysk]]):
+                                b_potential_features[j, ysk_codebook[ysk]].append((b, Z_codebook[z_patt])) 
+                if(not b_potential_features[j, ysk_codebook[ysk]]):
+                    del b_potential_features[j, ysk_codebook[ysk]]
+                else:
+                    b_potential_features[j, ysk_codebook[ysk]] = tuple(b_potential_features[j, ysk_codebook[ysk]])
+         
         # write on disk
         if(self.write_pf_ondisk):  
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
             ReaderWriter.dump_data(b_potential_features, os.path.join(target_dir, "b_potential_features"))
+            ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))     
             print("writing b_potential_features on disk")
+            
         self.seqs_info[seq_id]['b_potential_features'] = b_potential_features
     
     def compute_b_potential(self, w, seq_id):
         b_potential_features = self.seqs_info[seq_id]['b_potential_features']
         cached_pf = self.seqs_info[seq_id]["cached_pf"]
         cached_comp = self.seqs_info[seq_id]["cached_comp"]
-        b_potential= {}
+        ysk_codebook = self.model.ysk_codebook
+        T = self.seqs_info[seq_id]['T']
+        b_potential = numpy.zeros((T+1, len(ysk_codebook)))
         
-        for j, si, ysk in b_potential_features:
+        for j, ysk in b_potential_features:
             potential = 0
-            for b, z_patt in b_potential_features[j, si, ysk]:
+            for b, z_patt in b_potential_features[j, ysk]:
                 if((b, z_patt) not in cached_comp):
-                    w_indx = cached_pf[b, z_patt]['w_indx']
-                    f_val = cached_pf[b, z_patt]['f_val']
+                    w_indx = cached_pf[b, z_patt][0]
+                    f_val = cached_pf[b, z_patt][1]
                     cached_comp[b, z_patt] = numpy.dot(w[w_indx], f_val)
                 potential += cached_comp[b, z_patt]
 
-            b_potential[j, ysk] = potential       
+            b_potential[j, ysk] = potential 
+        print("b_potential", b_potential)      
             
         return(b_potential)
     
     def compute_backward_vec(self, seq_id):
         b_potential = self.seqs_info[seq_id]["b_potential"]
-        b_transition = self.model.b_transition
+        si_ysk_codebook = self.model.si_ysk_codebook
         S_codebook = self.model.S_codebook
         T = self.seqs_info[seq_id]["T"]
         beta = numpy.ones((T+2,len(S_codebook)), dtype='longdouble') * (-numpy.inf)
-
         beta[T+1, S_codebook[""]] = 0
         
         for j in reversed(range(1, T+1)):
-            for si in b_transition:
-                accumulator = -numpy.inf
-                for ysk, sk in b_transition[si].items():
-                    sk_code = S_codebook[sk]
-                    potential = b_potential[j, ysk]
-                    accumulator = numpy.logaddexp(accumulator, potential + beta[j+1, sk_code])
-                beta[j, S_codebook[si]] = accumulator 
+            for si in si_ysk_codebook:
+                vec = b_potential[j, si_ysk_codebook[si][0]] + beta[j+1, si_ysk_codebook[si][1]]
+                beta[j, S_codebook[si]] = vectorized_logsumexp(vec)  
                     
         return(beta)
     

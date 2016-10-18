@@ -227,31 +227,26 @@ def load_predined_seq():
 def run_suppl_example():
     attr_names = ('w', )
     window = list(range(0,1))
-    n_y = 3
-    n_x = 3
+    y_options = {'n':3, 'cummulative':True, 'comb':True}
+    x_options =  {'n':1, 'cummulative':True, 'comb':True}
     seqs = load_predined_seq()
-    y, xy = generate_templates(attr_names, window, n_y, n_x)
+    y, xy = generate_templates(attr_names, window, y_options, x_options)
     # filter templates to keep at least one unigram feature (it is a MUST)
-    f_y = filter_templates(y, '1-gram_2-gram_3-gram', "=")
-#     f_y = filter_templates(y, '1-gram_3-gram', "=")
+    f_y = filter_templates(y, '3-gram', "=")
     f_xy = filter_templates(xy, '1-gram:1-gram', "=")
-#     options = ("1-gram:1-gram", "1-gram:1-gram_2-gram", "1-gram:","1-gram:1-gram_2-gram_3-gram")
-#     f_xy = {}
-#     for option in options:
-#         f_xy.update(filter_templates(xy, option, "="))
-#     filter_info = {"filter_type":"pattern", "filter_val": ['P','O', 'L', 'L|O|L'], "filter_relation": "not in"}
-#     filter_obj = FeatureFilter(filter_info)
-    filter_obj = None
+    filter_info = {"filter_type":"pattern", "filter_val": ['P','O', 'L', 'L|O|L'], "filter_relation": "not in"}
+    filter_obj = FeatureFilter(filter_info)
     return(seqs, f_y, f_xy, filter_obj)
 
 def run_loaded_conll00_seqs():
     attr_names = ('w',)
     window = list(range(-2,2))
-    n_y = 4
-    n_x = 3
+    y_options = {'n':3, 'cummulative':True, 'comb':True}
+    x_options =  {'n':3, 'cummulative':True, 'comb':True}
     data_file_path = os.path.join(root_dir, "dataset/conll00/train.txt")
     seqs = read_data(data_file_path, header = "main")
-    y, xy = generate_templates(attr_names, window, n_y, n_x)
+
+    y, xy = generate_templates(attr_names, window, y_options, x_options)
     # filter templates to keep at least one unigram feature (it is a MUST)
     f_y = filter_templates(y, '1-gram_2-gram_3-gram', "=")
     f_xy = filter_templates(xy, '1-gram:1-gram_2-gram_3-gram', "=")
@@ -259,7 +254,7 @@ def run_loaded_conll00_seqs():
 #     filter_obj = FeatureFilter(filter_info)
     filter_obj = None
     print("f_xy {}".format(f_xy))
-    return(seqs[0:100], {'empty_y':{'Y':()}}, f_xy, filter_obj)
+    return(seqs[0:1], {'empty_y':{'Y':()}}, f_xy, filter_obj)
     
     
 def test_crfs(model_type, scaling_method, optimization_options, run_config):
@@ -283,9 +278,9 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config):
         raise("ill-formed template..")
     else:
 #         mv = crf_tester.test_crf_learning(seqs)
-        crf_tester.test_model_validity()
-#         fb = crf_tester.test_crf_forwardbackward(seqs)
-#         print("fb {}".format(fb))
+#         crf_tester.test_model_validity()
+        fb = crf_tester.test_crf_forwardbackward(seqs)
+        print("fb {}".format(fb))
 #         gc = crf_tester.test_crf_grad(seqs[0:1])
 #         print("gc {}".format(gc))
     return(crf_tester._crf_model)
