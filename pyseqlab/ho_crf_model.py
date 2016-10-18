@@ -355,13 +355,12 @@ class HOCRFModelRepresentation(object):
         return(len(self.Y_codebook)) 
                
 class HOCRF(object):
-    def __init__(self, model, seqs_representer, seqs_info, load_pf_fromdisk = True):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = "partial"):
         self.model = model
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
         self.seqs_info = seqs_info
-        self.load_pf_fromdisk = load_pf_fromdisk
-        self.write_pf_ondisk = True and load_pf_fromdisk
+        self.load_info_fromdisk = load_info_fromdisk
         self.func_dict = {"alpha": self._load_alpha,
                          "beta": self._load_beta,
                          "f_potential": self._load_fpotential,
@@ -406,10 +405,12 @@ class HOCRF(object):
                     f_potential_features[j, pky_codebook[pky]] = tuple(f_potential_features[j, pky_codebook[pky]])
          
         # write on disk
-        if(self.write_pf_ondisk):
+        if(self.load_info_fromdisk in ("all", "partial")):
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
             ReaderWriter.dump_data(f_potential_features, os.path.join(target_dir, "f_potential_features"))
             ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))
+            self.seqs_info[seq_id]['f_info_ondisk'] = True
+
 #             print("writing f_potential_features on disk")
         self.seqs_info[seq_id]['f_potential_features'] = f_potential_features
         self.seqs_info[seq_id]["cached_pf"] = cached_pf
@@ -479,14 +480,15 @@ class HOCRF(object):
                     b_potential_features[j, ysk_codebook[ysk]] = tuple(b_potential_features[j, ysk_codebook[ysk]])
          
         # write on disk
-        if(self.write_pf_ondisk):  
+        if(self.load_info_fromdisk in ("all", "partial")):
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
             ReaderWriter.dump_data(b_potential_features, os.path.join(target_dir, "b_potential_features"))
             ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))     
             print("writing b_potential_features on disk")
-            
+            self.seqs_info[seq_id]['b_info_ondisk'] = True
+       
         self.seqs_info[seq_id]['b_potential_features'] = b_potential_features
-    
+
     def compute_b_potential(self, w, seq_id):
         b_potential_features = self.seqs_info[seq_id]['b_potential_features']
         cached_pf = self.seqs_info[seq_id]["cached_pf"]
@@ -569,20 +571,16 @@ class HOCRF(object):
         # load f_potential_features
         seq_info = self.seqs_info[seq_id]
         seq_info["cached_comp"] = {}
-        
-        if(seq_info.get("f_potential_features") == "on_disk"):
+        if(seq_info.get("f_info_ondisk")):
             target_dir = seq_info["activefeatures_dir"]
-            f_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "f_potential_features"))
-#             f_potential = ReaderWriter.read_data(os.path.join(target_dir, "f_potential"))
-            seq_info["f_potential_features"] = f_potential_features
-#             seq_info["f_potential"] = f_potential
-            print("loading f_potential_features from disk")
-            if(self.seqs_info.get("cached_pf") == None):
-                self.seqs_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
-                
-        elif(seq_info.get("f_potential_features") == None):
+            if(self.load_info_fromdisk in ("all", "partial")):
+                f_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "f_potential_features"))
+                seq_info["f_potential_features"] = f_potential_features
+                print("loading f_potential_features from disk")
+            if(self.load_info_fromdisk == "all"):
+                seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
+        else:
             self.prepare_f_potentialfeatures(seq_id)
-            print("preparing f_potential_features")
 
         seq_info["f_potential"] = self.compute_f_potential(w, seq_id)
 #                     print("... Computing f_potential ...")
@@ -590,13 +588,15 @@ class HOCRF(object):
     def _load_bpotential(self, w, seq_id):
         # assumes the activefeatures_by_position matrix has been loaded into seq_info
         seq_info = self.seqs_info[seq_id]
-        if(seq_info.get("b_potential_features") == "on_disk"):
+        if(seq_info.get('b_info_ondisk')):
             target_dir = seq_info["activefeatures_dir"]
-            b_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "b_potential_features"))
-            seq_info["b_potential_features"] = b_potential_features
-            print("loading b_potential_features from disk")
-
-        elif(seq_info.get("b_potential_features") == None):
+            if(self.load_info_fromdisk in ("all", "partial")):
+                b_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "b_potential_features"))
+                seq_info["b_potential_features"] = b_potential_features
+                print("loading b_potential_features from disk")
+            if(self.load_info_fromdisk == "all"):
+                seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
+        else:
             self.prepare_b_potentialfeatures(seq_id)
             print("preparing b_potential_features")
 
@@ -649,24 +649,18 @@ class HOCRF(object):
                 func_dict[varname](w, seq_id)
 
     def clear_cached_info(self, seqs_id, cached_entities = []):
-        default_entitites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp", "f_potential_features"]
-        args = default_entitites  + cached_entities
+        default_entitites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp"]
+        if(self.load_info_fromdisk == "partial"):
+            default_entitites += ["f_potential_features", "b_potential_features"]
+        elif(self.load_info_fromdisk == "all"):
+            default_entitites += ["f_potential_features", "b_potential_features", "cached_pf", "activefeatures_by_position", "globalfeatures"]
+        
+        args = default_entitites + cached_entities
         for seq_id in seqs_id:
             seq_info = self.seqs_info[seq_id]
             for varname in args:
                 if(varname in seq_info):
                     seq_info[varname] = None
-        
-        if(self.load_pf_fromdisk):
-            self._update_loadfromdisk_info(seqs_id)
-            
-    def _update_loadfromdisk_info(self, seqs_id):
-        args = ("f_potential_features", "b_potential_features")
-        for seq_id in seqs_id:
-            seq_info = self.seqs_info[seq_id]
-            for varname in args:
-                if(varname in seq_info):
-                    seq_info[varname] = "on_disk"
                     
     def save_model(self, file_name):
         # to clean and save things before pickling the model
@@ -681,11 +675,10 @@ class HOCRF(object):
         corpus_name = "decoding_seqs"
         out_file = os.path.join(create_directory(corpus_name, out_dir), "decoded.txt")
         w = self.weights
-        # keep a copy of the original choice
-        load_pf = self.load_pf_fromdisk
-        
-        self.write_pf_ondisk = False
-        self.load_pf_fromdisk = False
+        # keep a copy
+        loadfromdisk = self.load_info_fromdisk
+        # this will not write the potential features on disk
+        self.load_info_fromdisk = "none"
         
         # supporting only viterbi for now
         if(decoding_method == "viterbi"):
@@ -717,8 +710,8 @@ class HOCRF(object):
         
         # clear seqs_info
         self.seqs_info.clear()
-        self.load_pf_fromdisk = load_pf
-        self.write_pf_ondisk = True and load_pf
+        # set back the original setting
+        self.load_info_fromdisk = loadfromdisk
         return(seqs_pred)
 
             
