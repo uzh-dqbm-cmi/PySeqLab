@@ -383,6 +383,8 @@ class HOFeatureExtractor(object):
     ########################################################
 
     def _represent_binary_attr(self, attributes, feature_name):
+#         print("attributes ",attributes)
+#         print("featurename ", feature_name)
         feature_val = '|'.join(attributes)
         feature = '{}={}'.format(feature_name, feature_val)
         return({feature:1})
@@ -864,8 +866,12 @@ class SeqsRepresentation(object):
     def preprocess_attributes(self, seqs_id, seqs_info, method = "rescaling"):
         attr_extractor = self.attr_extractor
         grouped_attr = attr_extractor.group_attributes()
-        active_attr = list(self.feature_extractor.template_X.keys())
-        active_continuous_attr = [attr for attr in active_attr if attr in grouped_attr['real']]
+        if(grouped_attr.get("real")):
+            active_attr = list(self.feature_extractor.template_X.keys())
+            active_continuous_attr = [attr for attr in active_attr if attr in grouped_attr['real']]
+        else:
+            active_continuous_attr = {}
+            
         attr_dict = {}
         
         #print(continuous_attr)

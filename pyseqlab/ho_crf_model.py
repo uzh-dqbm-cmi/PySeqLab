@@ -572,15 +572,13 @@ class HOCRF(object):
         seq_info["cached_comp"] = {}
         if(seq_info.get("f_info_ondisk")):
             target_dir = seq_info["activefeatures_dir"]
-            if(self.load_info_fromdisk in ("all", "partial")):
-                f_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "f_potential_features"))
-                seq_info["f_potential_features"] = f_potential_features
-                print("loading f_potential_features from disk")
-            if(self.load_info_fromdisk == "all"):
+            f_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "f_potential_features"))
+            seq_info["f_potential_features"] = f_potential_features
+            print("loading f_potential_features from disk")
+            if(not seq_info.get('cached_pf')):
                 seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
         else:
             self.prepare_f_potentialfeatures(seq_id)
-
         seq_info["f_potential"] = self.compute_f_potential(w, seq_id)
 #                     print("... Computing f_potential ...")
 
@@ -589,11 +587,10 @@ class HOCRF(object):
         seq_info = self.seqs_info[seq_id]
         if(seq_info.get('b_info_ondisk')):
             target_dir = seq_info["activefeatures_dir"]
-            if(self.load_info_fromdisk in ("all", "partial")):
-                b_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "b_potential_features"))
-                seq_info["b_potential_features"] = b_potential_features
-                print("loading b_potential_features from disk")
-            if(self.load_info_fromdisk == "all"):
+            b_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "b_potential_features"))
+            seq_info["b_potential_features"] = b_potential_features
+            print("loading b_potential_features from disk")
+            if(not seq_info.get('cached_pf')):
                 seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
         else:
             self.prepare_b_potentialfeatures(seq_id)

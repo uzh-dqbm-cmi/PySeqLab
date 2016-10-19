@@ -172,6 +172,7 @@ class DataFileParser():
                 if line:
 #                     print(line)
                     *x_arg, y = line.split(column_sep)
+#                     print(x_arg)
                     # first line of a sequence
                     if(counter == 1):
                         if(header == "main"):
@@ -262,14 +263,14 @@ class TemplateGenerator(object):
         templateX = self._traverse_x(attr_name, ngram_options, wsize)
         templateY = self.generate_template_Y(y_spec)
         templateXY = self._mix_template_XY(templateX, templateY)
-        
         #update the template we are building
         for attr_name in templateXY:
             if(attr_name in template):
                 for x_offset in templateXY[attr_name]:
                     template[attr_name][x_offset] = templateXY[attr_name][x_offset]
+            else:
+                template[attr_name] = templateXY[attr_name]
                         
-    
     def _traverse_x(self, attr_name, ngram_options, wsize):
         options = ngram_options.split(":")
         l = list(wsize)
