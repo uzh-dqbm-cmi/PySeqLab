@@ -253,7 +253,77 @@ class ReaderWriter(object):
 #######################
 # template generating utility functions
 #######################
+class TemplateGenerator(object):
+    def __init__(self):
+        pass
+    
+    def generate_template_XY(self, attr_name, x_spec, y_spec, template):
+        ngram_options, wsize = x_spec
+        templateX = self._traverse_x(attr_name, ngram_options, wsize)
+        templateY = self.generate_template_Y(y_spec)
+        templateXY = self._mix_template_XY(templateX, templateY)
+        
+        #update the template we are building
+        for attr_name in templateXY:
+            if(attr_name in template):
+                for x_offset in templateXY[attr_name]:
+                    template[attr_name][x_offset] = templateXY[attr_name][x_offset]
+                        
+    
+    def _traverse_x(self, attr_name, ngram_options, wsize):
+        options = ngram_options.split(":")
+        l = list(wsize)
+        template = {attr_name:{}}
+        for option in options:
+            n = int(option.split("-")[0])
+            ngram_list = self.generate_ngram(l, n)
+            for offset in ngram_list:
+                template[attr_name][offset] = None
+        return(template)
+    
+    def generate_template_Y(self, ngram_options):
+        template = {'Y':[]}
+        options = ngram_options.split(":")
+        for option in options:
+            max_order = int(option.split("-")[0])
+            template['Y'] += self._traverse_y(max_order, accumulative = False)['Y']
+        return(template)
+    
+    @staticmethod
+    def _traverse_y(max_order, accumulative = True):
+        attr_name = 'Y'
+        template = {attr_name:[]}
+        if(accumulative):
+            for j in range(max_order):
+                offsets_y = [-i for i in range(j+1)]
+                offsets_y = tuple(reversed(offsets_y))
+                template[attr_name].append(offsets_y)
+        else:
+            offsets_y = [-i for i in range(max_order)]
+            offsets_y = tuple(reversed(offsets_y))
+            template[attr_name].append(offsets_y) 
+    
+        return(template)
+    
+    @staticmethod
+    def _mix_template_XY(templateX, templateY):
+        template_XY = deepcopy(templateX)
+        for attr_name in template_XY:
+            for offset_x in template_XY[attr_name]:
+                template_XY[attr_name][offset_x] = tuple(templateY['Y'])
+        return(template_XY)
+    @staticmethod
+    def generate_ngram(l, n):
+        ngram_list = []
+        for i in range(0, len(l)):
+            elem = tuple(l[i:i+n])
+            if(len(elem) != n):
+                break
+            ngram_list.append(elem)
+            
+        return(ngram_list)
 
+    
 def filter_templates(ngram_template, condition, operator):
     f_ngram_template = {}
     if(operator == "="):
@@ -489,7 +559,7 @@ def split_data(seqs_id, options):
 
 #########################################
 ## split data based on seqs length -
-## we need to executed the three functions in order:
+## we need to execute the three functions in order:
 ## (1) group_seqs_by_length, (2) weighted_sample, (3) aggregate_weightedsample
 #########################################
 def group_seqs_by_length(seqs_info):
@@ -511,16 +581,10 @@ def group_seqs_by_length(seqs_info):
     return(grouped_seqs)
     
 def weighted_sample(grouped_seqs, trainset_size):
-#     count_seqs = {}
-#     total = 0
-#     for group_var, seqs_id in grouped_seqs.items():
-#         num_seqs = len(seqs_id)
-#         count_seqs[group_var] = num_seqs
-#         total += num_seqs
+    options = {'method':'random', 'num_splits':1, 'trainset_size':trainset_size}
     wsample = {}
     for group_var, seqs_id in grouped_seqs.items():
 #         quota = trainset_size*count_seqs[group_var]/total
-        options = {'method':'random', 'num_splits':1, 'trainset_size':trainset_size}
         data_split = split_data(seqs_id, options)
         wsample[group_var] = data_split[0]
     return(wsample)

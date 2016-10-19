@@ -449,7 +449,6 @@ class HOCRF(object):
                 alpha[j, P_codebook[pi]] = vectorized_logsumexp(vec)           
         return(alpha)
 
-    # TODO fix the backward vector computation to be similar to the forward one
     def prepare_b_potentialfeatures(self, seq_id):
         ysk_z = self.model.ysk_z
         ysk_codebook = self.model.ysk_codebook
@@ -688,7 +687,18 @@ class HOCRF(object):
             
         if(kwargs.get("seqs_info")):
             self.seqs_info = kwargs["seqs_info"]
-            
+            # using/modifying the copied seqs_info
+            seqs_info = self.seqs_info
+            seqs_id = list(seqs_info.keys())
+            # check if f_info is already on disk -- case of decoding training data
+            target_dir = seqs_info[seqs_id[0]]['activefeatures_dir']
+            if os.path.exists(os.path.join(target_dir, 'f_potential_features')):
+                print("decoding training data .. ")
+                for seq_id in seqs_id:
+                    seqs_info[seq_id]['f_info_ondisk'] = True   
+            else:
+                print("decoding testing data")          
+                
         elif(kwargs.get("seqs")): 
             seqs = kwargs["seqs"]           
             seqs_dict = {i+1:seqs[i] for i in range(len(seqs))}
