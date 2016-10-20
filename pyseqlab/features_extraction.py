@@ -282,100 +282,61 @@ class HOFeatureExtractor(object):
                     seg_features.update(represent_attr(attributes, feature_name))
 #         print("seg_features lookup {}".format(seg_features))
         return(seg_features)
-    
 
     def lookup_seq_modelactivefeatures(self, seq, model):
-        
-        model_patt = deepcopy(model.patt_order)
-        del model_patt[1]
-#         print("modified model patt_order {} with id {}".format(model_patt, id(model_patt)))
-        
-        model_states = list(model.Y_codebook.keys())
         L = model.L
         T = seq.T
-        
+        max_patt_len = model.max_patt_len
         active_features = {}
-        accum_pattern = {}
-        
+        accum_active_states = {}
+        # length of a unary label/state (i.e. pattern of length 1)
+        state_len = 1
+        patts_len = model.patts_len
+        ypatt_features = model.ypatt_features
+#         print("patts_len ", patts_len)
+#         print("ypatt_features ", ypatt_features)
         for j in range(1, T+1):
             for d in range(L):
                 if(j-d <= 0):
                     break
-                boundary = (j-d, j)
+                # start boundary
+                u = j-d
+                # end boundary
+                v = j
+                boundary = (u, v)
+                if(u < max_patt_len):
+                    max_len = u
+                else:
+                    max_len = max_patt_len
+                    
+                allowed_z_len = [z_len for z_len in patts_len if z_len <= max_len]
 
                 seg_features = self.lookup_features_X(seq, boundary)
-#                 print("seg_features {}".format(seg_features))
-
-                # active features that  uses only the current states
-                active_features[boundary] = model.represent_activefeatures(model_states, seg_features)
-#                 print("initial active_features[{}] {}".format(boundary, active_features[boundary]))
-
-                if(active_features[boundary]):
-                    # z pattern of length 1 (i.e. detected labels from set Y}
-                    detected_y_patt = {y_patt:1 for y_patt in active_features[boundary]}
-                    self._update_accum_pattern(accum_pattern, {1:detected_y_patt}, j)
-#                     print("accum_pattern {}".format(accum_pattern))
-                    tracked_z_patt = self._build_z_patt(boundary, detected_y_patt, accum_pattern, model_patt)
-                    if(tracked_z_patt):
-                        self._update_accum_pattern(accum_pattern, tracked_z_patt, j)
-#                         print("updated accum_pattern {}".format(accum_pattern))
-                        new_patts = {z_patt:1 for order in tracked_z_patt for z_patt in tracked_z_patt[order]}
-                        new_activefeatures = model.represent_activefeatures(new_patts, seg_features)
-#                         print("new_activefeatures {}".format(new_activefeatures))
-                        self._update_accum_activefeatures(active_features, new_activefeatures, boundary)
-#                         print("updated active_features[{}] {}".format(boundary, active_features[boundary]))
-
-#         print("accum_pattern {}".format(accum_pattern))
-        # code active features
-        active_features_coded = model.encode_activefeatures(active_features)
-        return(active_features_coded)
-    
-    def _update_accum_pattern(self, accum_pattern, detected_patt, j):
-        if(j in accum_pattern):
-            for patt_len in detected_patt:
-                if(patt_len in accum_pattern[j]):
-                    accum_pattern[j][patt_len].update(detected_patt[patt_len])
+#                 print("seg_features ", seg_features)
+                activated_states = model.find_activated_states(seg_features, allowed_z_len)
+                ypatt_activated_states = model.find_activated_states(ypatt_features, allowed_z_len)        
+#                 print("ypatt_activated_states ", ypatt_activated_states)
+                # combine activated_states and ypatt_activated states
+                for zlen, ypatts in ypatt_activated_states.items():
+                    if(zlen in activated_states):
+                        activated_states[zlen].union(ypatts)
+                    else:
+                        activated_states[zlen] = ypatts 
+            
+#                 print("activated states", activated_states)
+#                 print('u', u)
+#                 print("max_len ", max_len)
+                if(v not in accum_active_states):
+                    accum_active_states[v] = activated_states[state_len]
                 else:
-                    accum_pattern[j].update({patt_len:detected_patt[patt_len]})
-        else:
-            accum_pattern[j] = detected_patt
-        
-    def _update_accum_activefeatures(self, accum_activefeatures, detected_activefeatures, boundary):
-        for z_patt in detected_activefeatures:
-            if(z_patt in accum_activefeatures[boundary]):
-                accum_activefeatures[boundary][z_patt].update(detected_activefeatures[z_patt])
-            else:
-                accum_activefeatures[boundary].update({z_patt: detected_activefeatures[z_patt]})
-       
-    
-    def _build_z_patt(self, boundary, detected_y_patt, accum_pattern, model_patt):
-        u = boundary[0]
-        tracked_z_patt = {}
-        if(u-1 in accum_pattern):
-            for patt_len in model_patt:
-#                 print("current pattern length {}".format(patt_len))
-                for z_patt in model_patt[patt_len]:
-#                     print("z_patt {}".format(z_patt))
-                    for i in reversed(range(1, patt_len)):
-                        if(i in accum_pattern[u-1]):
-#                             print("current order i {}".format(i))
-                            for prev_patt in accum_pattern[u-1][i]:
-#                                 print("prev_patt {}".format(prev_patt))
-                                if(z_patt[0:len(prev_patt)] == prev_patt):
-                                    for curr_detected_patt in detected_y_patt:
-#                                         print('detected_patt {}'.format(curr_detected_patt))
-                                        mix_patt = prev_patt + "|" + curr_detected_patt
-#                                         print("mix_patt {}".format(mix_patt))
-                                        if(z_patt[0:len(mix_patt)] == mix_patt):
-                                            if(i+1 in tracked_z_patt):
-                                                tracked_z_patt[i+1][mix_patt] = 1
-                                            else:
-                                                tracked_z_patt[i+1] = {mix_patt:1}
-         
-#         print("tracked_z_patt {}".format(tracked_z_patt))
-#         print("accum_pattern {}".format(accum_pattern))
-        return(tracked_z_patt)    
-    
+                    accum_active_states[v].union(activated_states[state_len])
+                    
+                filtered_states = model.filter_activated_states(activated_states, accum_active_states, u, allowed_z_len[1:])
+                filtered_states[state_len] = activated_states[state_len]
+#                 print("filtered_states ", filtered_states)
+                active_features[boundary] = model.represent_activefeatures(filtered_states, seg_features)
+
+        return(active_features)
     
     
     ########################################################
@@ -1025,94 +986,94 @@ class SeqsRepresentation(object):
         
         return(model)
 
-#     def extract_seqs_modelactivefeatures(self, seqs_id, seqs_info, model, output_foldername):
-#         # get the root_dir
-#         seq_id = seqs_id[0]
-#         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-#         root_dir = os.path.dirname(os.path.dirname(seq_dir))
-#         output_dir = create_directory("model_activefeatures_{}".format(output_foldername), root_dir)
-#         L = model.L
-#         f_extractor = self.feature_extractor
-#         
-#         start_time = datetime.now()
-#         for seq_id in seqs_id:
-#             # lookup active features for the current sequence and store them on disk
-#             print("looking for model active features for seq {}".format(seq_id))
-#             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-#             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
-#             if(L > 1):
-#                 self._lookup_seq_attributes(seq, L)
-#                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-#             active_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
-#             activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
-#             seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
-#             # dump model active features data
-#             ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
-#                 
-#         end_time = datetime.now()
-#        
-# 
-#         log_file = os.path.join(output_dir, "log.txt")
-#         line = "---Finding sequences' model active-features--- starting time: {} \n".format(start_time)
-#         line += "Total number of parsed sequences: {} \n".format(len(seqs_id))
-#         line += "---Finding sequences' model active-features--- end time: {} \n".format(end_time)
-#         line += "\n \n"
-#         ReaderWriter.log_progress(line, log_file)
-    
-    def _parallel_activefeatures_extraction(self, seq_id):
-        # lookup active features for the current sequence and store them on disk
-        print("looking for model active features for seq {}".format(seq_id))
-        seqs_info = self.seqs_info
-        model = self.model
-        L = model.L
-        output_dir = self.out_dir
-         
-        f_extractor = self.feature_extractor
-        seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-        seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
-        if(L > 1):
-            self._lookup_seq_attributes(seq, L)
-            ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-        active_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
-        activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
-        seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
-        # dump model active features data
-        ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
-#         print("seq_id ", seq_id)
-#         print("seqs_info[{}] = {}".format(seq_id, seqs_info[seq_id]))
-        return((seq_id, activefeatures_dir))
-#         return({seq_id:{'activefeatures_dir':activefeatures_dir}})
-         
     def extract_seqs_modelactivefeatures(self, seqs_id, seqs_info, model, output_foldername):
         # get the root_dir
         seq_id = seqs_id[0]
         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
         root_dir = os.path.dirname(os.path.dirname(seq_dir))
         output_dir = create_directory("model_activefeatures_{}".format(output_foldername), root_dir)
-#         L = model.L
-#         f_extractor = self.feature_extractor
-        self.seqs_info = seqs_info
-        self.model = model
-        self.out_dir = output_dir
+        L = model.L
+        f_extractor = self.feature_extractor
          
         start_time = datetime.now()
-        activefeatures_dirs = Parallel(n_jobs=-1, backend='threading')(delayed(self._parallel_activefeatures_extraction)(seq_id) for seq_id in seqs_id)
-        for elem_tup in activefeatures_dirs:
-            seq_id, activefeatures_dir = elem_tup
-            seqs_info[seq_id]['activefeatures_dir'] = activefeatures_dir
+        for seq_id in seqs_id:
+            # lookup active features for the current sequence and store them on disk
+            print("looking for model active features for seq {}".format(seq_id))
+            seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
+            seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
+            if(L > 1):
+                self._lookup_seq_attributes(seq, L)
+                ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
+            active_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
+            activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
+            seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
+            # dump model active features data
+            ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
+                 
         end_time = datetime.now()
         
-        # clear vars
-        for var in (self.seqs_info, self.model, self.out_dir):
-            var = None
-            del var
-             
+ 
         log_file = os.path.join(output_dir, "log.txt")
         line = "---Finding sequences' model active-features--- starting time: {} \n".format(start_time)
         line += "Total number of parsed sequences: {} \n".format(len(seqs_id))
         line += "---Finding sequences' model active-features--- end time: {} \n".format(end_time)
         line += "\n \n"
         ReaderWriter.log_progress(line, log_file)
+    
+#     def _parallel_activefeatures_extraction(self, seq_id):
+#         # lookup active features for the current sequence and store them on disk
+#         print("looking for model active features for seq {}".format(seq_id))
+#         seqs_info = self.seqs_info
+#         model = self.model
+#         L = model.L
+#         output_dir = self.out_dir
+#          
+#         f_extractor = self.feature_extractor
+#         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
+#         seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
+#         if(L > 1):
+#             self._lookup_seq_attributes(seq, L)
+#             ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
+#         active_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
+#         activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
+#         seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
+#         # dump model active features data
+#         ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
+# #         print("seq_id ", seq_id)
+# #         print("seqs_info[{}] = {}".format(seq_id, seqs_info[seq_id]))
+#         return((seq_id, activefeatures_dir))
+# #         return({seq_id:{'activefeatures_dir':activefeatures_dir}})
+#          
+#     def extract_seqs_modelactivefeatures(self, seqs_id, seqs_info, model, output_foldername):
+#         # get the root_dir
+#         seq_id = seqs_id[0]
+#         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
+#         root_dir = os.path.dirname(os.path.dirname(seq_dir))
+#         output_dir = create_directory("model_activefeatures_{}".format(output_foldername), root_dir)
+# #         L = model.L
+# #         f_extractor = self.feature_extractor
+#         self.seqs_info = seqs_info
+#         self.model = model
+#         self.out_dir = output_dir
+#          
+#         start_time = datetime.now()
+#         activefeatures_dirs = Parallel(n_jobs=-1, backend='threading')(delayed(self._parallel_activefeatures_extraction)(seq_id) for seq_id in seqs_id)
+#         for elem_tup in activefeatures_dirs:
+#             seq_id, activefeatures_dir = elem_tup
+#             seqs_info[seq_id]['activefeatures_dir'] = activefeatures_dir
+#         end_time = datetime.now()
+#         
+#         # clear vars
+#         for var in (self.seqs_info, self.model, self.out_dir):
+#             var = None
+#             del var
+#              
+#         log_file = os.path.join(output_dir, "log.txt")
+#         line = "---Finding sequences' model active-features--- starting time: {} \n".format(start_time)
+#         line += "Total number of parsed sequences: {} \n".format(len(seqs_id))
+#         line += "---Finding sequences' model active-features--- end time: {} \n".format(end_time)
+#         line += "\n \n"
+#         ReaderWriter.log_progress(line, log_file)
     
     def _lookup_seq_attributes(self, seq, L):
         # generate the missing attributes if the segment length is greater than 1

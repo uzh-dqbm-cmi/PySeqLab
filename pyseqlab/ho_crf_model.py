@@ -18,8 +18,13 @@ class HOCRFModelRepresentation(object):
         self.modelfeatures_codebook = modelfeatures
         self.Y_codebook = states
         self.L = L
-        self.Z_codebook = self.get_pattern_set()
-        self.patt_order = self.get_pattern_order()
+        self.Z_codebook = self.get_Z_pattern()
+        self.Z_lendict = self.get_len_Z()
+        self.patts_len = set(self.Z_lendict.values())
+        self.max_patt_len = max(self.patts_len)
+        self.modelfeatures_inverted = modelfeatures
+        self.Z_elems = self.get_Z_split_elems()
+        
         self.P_codebook = self.get_forward_states()
         self.S_codebook = self.get_backward_states()
         
@@ -36,7 +41,6 @@ class HOCRFModelRepresentation(object):
         self.ysk_z = self.map_sky_z()
         
         # useful dictionary regarding length of elements
-        self.z_lendict = self.get_len_z()
         self.pi_lendict = self.get_len_pi()
         self.si_lendict = self.get_len_si()
         
@@ -54,19 +58,21 @@ class HOCRFModelRepresentation(object):
         return(windx_fval)
 
         
-    def represent_activefeatures(self, z_patts, seg_features):  
+    def represent_activefeatures(self, activestates, seg_features):  
         modelfeatures = self.modelfeatures
-        modelfeatures_codebook = self.modelfeatures_codebook         
+        modelfeatures_codebook = self.modelfeatures_codebook   
+        Z_codebook = self.Z_codebook      
         activefeatures = {}
 #         print("segfeatures {}".format(seg_features))
 #         print("z_patts {}".format(z_patts))
-        for z_patt in z_patts:
-            if(z_patt in modelfeatures):
+        for z_patt_set in activestates.values():
+            for z_patt in z_patt_set:
+#                 print("z_patt ", z_patt)
                 windx_fval = {}
                 for seg_featurename in seg_features:
                     if(seg_featurename in modelfeatures[z_patt]):
-#                         print("seg_featurename {}".format(seg_featurename))
-#                         print("z_patt {}".format(z_patt))
+    #                         print("seg_featurename {}".format(seg_featurename))
+    #                         print("z_patt {}".format(z_patt))
                         fkey = z_patt + "&&" + seg_featurename
                         windx_fval[modelfeatures_codebook[fkey]] = seg_features[seg_featurename]     
                 if(z_patt in modelfeatures[z_patt]):
@@ -74,20 +80,43 @@ class HOCRFModelRepresentation(object):
                     windx_fval[modelfeatures_codebook[fkey]] = 1
                     
                 if(windx_fval):
-                    activefeatures[z_patt] = windx_fval
+                    activefeatures[Z_codebook[z_patt]] = windx_fval
 #         print("activefeatures {}".format(activefeatures))         
         return(activefeatures)
     
-    def encode_activefeatures(self, activefeatures):
-        Z_codebook = self.Z_codebook
-        activefeatures_coded = {}
-#         print("active_features ", active_features)
-        for boundary in activefeatures:
-            activefeatures_coded[boundary] = {}
-            for z_patt in activefeatures[boundary]:
-                activefeatures_coded[boundary][Z_codebook[z_patt]] = activefeatures[boundary][z_patt]
-        
-        return(activefeatures_coded)
+    def find_activated_states(self, seg_features, allowed_z_len):
+        modelfeatures_inverted = self.modelfeatures_inverted
+        active_states = {}
+
+        for feature in seg_features:
+            if(feature in modelfeatures_inverted):
+                factivestates = modelfeatures_inverted[feature]  
+                for z_len in allowed_z_len:
+                    if(z_len in factivestates):
+                        if(z_len in active_states):
+                            active_states[z_len].union(factivestates[z_len])
+                        else:
+                            active_states[z_len] = factivestates[z_len]
+            
+        return(active_states)
+
+    def filter_activated_states(self, activated_states, accum_active_states, pos, allowed_z_len):
+        Z_elems = self.Z_elems
+        filtered_activestates = {}
+        for z_len in allowed_z_len:
+            start_pos = pos - z_len + 1
+            if(z_len in activated_states and start_pos in accum_active_states):
+                filtered_activestates[z_len] = set()
+                for z_patt in activated_states[z_len]:
+                    check = True
+                    zelems = Z_elems[z_patt]
+                    for i in range(len(zelems)):
+                        if(zelems[i] not in accum_active_states[start_pos+i]):
+                            check = False
+                            break
+                    if(check):                        
+                        filtered_activestates[z_len].add(z_patt)
+        return(filtered_activestates)
     
     @property
     def modelfeatures_codebook(self):
@@ -110,10 +139,54 @@ class HOCRFModelRepresentation(object):
     def Y_codebook(self, states):
         self._Y_codebook = {s:i for (i, s) in enumerate(states)}
         
-    def get_pattern_set(self):
+    def get_Z_pattern(self):
         modelfeatures = self.modelfeatures
         Z_codebook = {y_patt:index for index, y_patt in enumerate(modelfeatures)}
         return(Z_codebook)
+    
+    def get_len_Z(self):
+        Z_codebook = self.Z_codebook
+        Z_lendict = {}
+        for z in Z_codebook:
+            Z_lendict[z] = len(z.split("|"))
+        
+        return(Z_lendict)
+    
+    @property
+    def modelfeatures_inverted(self):
+        return(self._modelfeatures_inverted)
+    @modelfeatures_inverted.setter
+    def modelfeatures_inverted(self, modelfeatures):
+        modelfeatures = self.modelfeatures
+        Z_lendict = self.Z_lendict
+        inverted_segfeatures = {}
+        ypatt_features = set()
+        for y_patt, featuresum in modelfeatures.items():
+            for feature in featuresum:
+                # get features that are based only on y_patts
+                if(feature == y_patt):
+                    ypatt_features.add(feature)
+                if(feature in inverted_segfeatures):
+                    if(Z_lendict[y_patt] in inverted_segfeatures[feature]):
+                        inverted_segfeatures[feature][Z_lendict[y_patt]].add(y_patt)
+                    else:
+                        s = set()
+                        s.add(y_patt)                      
+                        inverted_segfeatures[feature][Z_lendict[y_patt]] = s
+                else:
+                    s = set()
+                    s.add(y_patt)
+                    inverted_segfeatures[feature] = {Z_lendict[y_patt]:s}
+        self._modelfeatures_inverted = inverted_segfeatures
+        self.ypatt_features = ypatt_features
+   
+    def get_Z_split_elems(self):
+        Z_split_elems = {}
+        Z_codebook = self.Z_codebook
+        for z in Z_codebook:
+            Z_split_elems[z] = tuple(z.split("|"))
+
+        return(Z_split_elems)
     
     def get_pattern_order(self):
         Z_codebook = self.Z_codebook
@@ -329,12 +402,7 @@ class HOCRFModelRepresentation(object):
                 si_lendict[si] = len(si.split("|"))
         return(si_lendict)
     
-    def get_len_z(self):
-        Z_codebook = self.Z_codebook
-        z_lendict = {}
-        for z in Z_codebook:
-            z_lendict[z] = len(z.split("|"))
-        return(z_lendict)
+
         
     def keep_longest_elems(self, s):
         """ used to figure out longest suffix and prefix on sets """
@@ -453,7 +521,7 @@ class HOCRF(object):
         ysk_z = self.model.ysk_z
         ysk_codebook = self.model.ysk_codebook
         Z_codebook = self.model.Z_codebook
-        z_lendict = self.model.z_lendict
+        Z_lendict = self.model.Z_lendict
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
         cached_pf = self.seqs_info[seq_id]["cached_pf"]
@@ -463,7 +531,7 @@ class HOCRF(object):
             for ysk in ysk_z:
                 b_potential_features[j, ysk_codebook[ysk]] = []
                 for z_patt in ysk_z[ysk]:
-                    b = j + z_lendict[z_patt] - 1
+                    b = j + Z_lendict[z_patt] - 1
                     upd_boundary = (b, b)
                     if(upd_boundary in activefeatures):
                         if(Z_codebook[z_patt] in activefeatures[upd_boundary]):
