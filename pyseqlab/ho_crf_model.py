@@ -7,13 +7,16 @@ import os
 from copy import deepcopy
 import numpy
 from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
- 
+from datetime import datetime
 class HOCRFModelRepresentation(object):
     def __init__(self, modelfeatures, states, L):
         """ modelfeatures: set of features defining the model
             states: set of states (i.e. tags)
             L: length of longest segment
         """ 
+        self.create_model(modelfeatures, states, L)
+        
+    def create_model(self, modelfeatures, states, L):
         self.modelfeatures = modelfeatures
         self.modelfeatures_codebook = modelfeatures
         self.Y_codebook = states
@@ -46,7 +49,7 @@ class HOCRFModelRepresentation(object):
         
         self.num_features = self.get_num_features()
         self.num_states = self.get_num_states()
-
+        
     def represent_globalfeatures(self, seq_featuresum):
         modelfeatures_codebook = self.modelfeatures_codebook
         windx_fval = {}
@@ -123,6 +126,7 @@ class HOCRFModelRepresentation(object):
         return(self._modelfeatures_codebook)
     @modelfeatures_codebook.setter
     def modelfeatures_codebook(self, modelfeatures):
+        print('model codebook - start {}', datetime.now())       
         codebook = {}
         code = 0
         for y_patt, featuresum in modelfeatures.items():
@@ -131,6 +135,7 @@ class HOCRFModelRepresentation(object):
                 codebook[fkey] = code
                 code += 1
         self._modelfeatures_codebook = codebook
+        print('model codebook - end {}', datetime.now())       
 
     @property
     def Y_codebook(self):
@@ -157,6 +162,7 @@ class HOCRFModelRepresentation(object):
         return(self._modelfeatures_inverted)
     @modelfeatures_inverted.setter
     def modelfeatures_inverted(self, modelfeatures):
+        print('model inverted features - start {}', datetime.now())       
         modelfeatures = self.modelfeatures
         Z_lendict = self.Z_lendict
         inverted_segfeatures = {}
@@ -179,7 +185,7 @@ class HOCRFModelRepresentation(object):
                     inverted_segfeatures[feature] = {Z_lendict[y_patt]:s}
         self._modelfeatures_inverted = inverted_segfeatures
         self.ypatt_features = ypatt_features
-   
+        print("model inverted features -- end {}", datetime.now())
     def get_Z_split_elems(self):
         Z_split_elems = {}
         Z_codebook = self.Z_codebook
@@ -187,18 +193,7 @@ class HOCRFModelRepresentation(object):
             Z_split_elems[z] = tuple(z.split("|"))
 
         return(Z_split_elems)
-    
-    def get_pattern_order(self):
-        Z_codebook = self.Z_codebook
-        patt_order = {}
-        for y_patt in Z_codebook:
-            elems = y_patt.split("|")
-            l = len(elems)
-            if(l in patt_order):
-                patt_order[l].append(y_patt)
-            else:
-                patt_order[l] = [y_patt]
-        return(patt_order)  
+
     
     def get_forward_states(self):
         Y_codebook = self.Y_codebook
@@ -412,9 +407,13 @@ class HOCRFModelRepresentation(object):
         return(longest_elems)
                   
     def check_suffix(self, token, ref_str):
+        # check if ref_str ends with the token
+#         return(ref_str[len(ref_str)-len(token):] == token)
         return(ref_str.endswith(token))
     
     def check_prefix(self, token, ref_str):
+        # check if ref_str starts with a token
+#         return(ref_str[:len(token)] == token)
         return(ref_str.startswith(token))
     
     def get_num_features(self):
@@ -423,7 +422,7 @@ class HOCRFModelRepresentation(object):
         return(len(self.Y_codebook)) 
                
 class HOCRF(object):
-    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = "partial"):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 3):
         self.model = model
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
@@ -436,6 +435,8 @@ class HOCRF(object):
                          "activefeatures_by_position": self.load_activefeatures,
                          "globalfeatures": self.load_globalfeatures,
                          "flat_y":self._load_flaty}
+        self.info_ondisk_fname = ["b_potential_features", "f_potential_features", "cached_pf", "activefeatures_by_position", "globalfeatures"]
+        self.cached_entites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp"]
 
     @property
     def seqs_info(self):
@@ -473,7 +474,7 @@ class HOCRF(object):
                     f_potential_features[j, pky_codebook[pky]] = tuple(f_potential_features[j, pky_codebook[pky]])
          
         # write on disk
-        if(self.load_info_fromdisk in ("all", "partial")):
+        if(self.load_info_fromdisk):
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
             ReaderWriter.dump_data(f_potential_features, os.path.join(target_dir, "f_potential_features"))
             ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))
@@ -547,7 +548,7 @@ class HOCRF(object):
                     b_potential_features[j, ysk_codebook[ysk]] = tuple(b_potential_features[j, ysk_codebook[ysk]])
          
         # write on disk
-        if(self.load_info_fromdisk in ("all", "partial")):
+        if(self.load_info_fromdisk):
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
             ReaderWriter.dump_data(b_potential_features, os.path.join(target_dir, "b_potential_features"))
             ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))     
@@ -642,9 +643,10 @@ class HOCRF(object):
             target_dir = seq_info["activefeatures_dir"]
             f_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "f_potential_features"))
             seq_info["f_potential_features"] = f_potential_features
-            print("loading f_potential_features from disk")
+#             print("loading f_potential_features from disk")
             if(not seq_info.get('cached_pf')):
                 seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
+#                 print("loading cached_pf")        
         else:
             self.prepare_f_potentialfeatures(seq_id)
         seq_info["f_potential"] = self.compute_f_potential(w, seq_id)
@@ -662,7 +664,7 @@ class HOCRF(object):
                 seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
         else:
             self.prepare_b_potentialfeatures(seq_id)
-            print("preparing b_potential_features")
+#             print("preparing b_potential_features")
 
         seq_info["b_potential"] = self.compute_b_potential(w, seq_id)
 #                     print("... Computing b_potential ...")
@@ -670,18 +672,21 @@ class HOCRF(object):
     def _load_flaty(self, w, seq_id):
         seq = self._load_seq(seq_id, target="seq")
         self.seqs_info[seq_id]['flat_y'] = seq.flat_y
+#         print("loading flaty")
 
     def load_activefeatures(self, w, seq_id):
         # get the sequence model active features
         seqs_representer = self.seqs_representer
         seqs_activefeatures = seqs_representer.get_seqs_modelactivefeatures([seq_id], self.seqs_info)
         self.seqs_info[seq_id]["activefeatures_by_position"] = seqs_activefeatures[seq_id]
+#         print("loading activefeatures")
         
     def load_globalfeatures(self, w, seq_id):
         # get sequence global features
         seqs_representer = self.seqs_representer
         seqs_globalfeatures = seqs_representer.get_seqs_globalfeatures([seq_id], self.seqs_info, self.model)
         self.seqs_info[seq_id]["globalfeatures"] = seqs_globalfeatures[seq_id]
+#         print("loading globalfeatures")
         
     def load_imposter_globalfeatures(self, seq_id, y_imposter, seg_other_symbol):
         # get sequence global features
@@ -713,12 +718,11 @@ class HOCRF(object):
                 func_dict[varname](w, seq_id)
 
     def clear_cached_info(self, seqs_id, cached_entities = []):
-        default_entitites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp"]
-        if(self.load_info_fromdisk == "partial"):
-            default_entitites += ["f_potential_features", "b_potential_features"]
-        elif(self.load_info_fromdisk == "all"):
-            default_entitites += ["f_potential_features", "b_potential_features", "cached_pf", "activefeatures_by_position", "globalfeatures"]
-        
+        default_entitites = self.cached_entites[:]
+        cached_info_ondisk = self.info_ondisk_fname
+        for i in range(1, self.load_info_fromdisk + 1):
+            default_entitites.append(cached_info_ondisk[i])
+
         args = default_entitites + cached_entities
         for seq_id in seqs_id:
             seq_info = self.seqs_info[seq_id]
@@ -742,7 +746,7 @@ class HOCRF(object):
         # keep a copy
         loadfromdisk = self.load_info_fromdisk
         # this will not write the potential features on disk
-        self.load_info_fromdisk = "none"
+        self.load_info_fromdisk = 0
         
         # supporting only viterbi for now
         if(decoding_method == "viterbi"):

@@ -962,8 +962,6 @@ class SeqsRepresentation(object):
                 for state in parts:
                     Y_states[state] = 1       
                                      
-        end_time = datetime.now()
-        
         # apply a filter 
         if(filter_obj):
             # this will trim unwanted features from modelfeatures dictionary
@@ -971,6 +969,8 @@ class SeqsRepresentation(object):
             
         # create model representation
         model = model_repr_class(modelfeatures, Y_states, L)
+
+        end_time = datetime.now()
 
         # any sequence would lead to the parent directory
         target_dir = os.path.dirname(seq_dir)
