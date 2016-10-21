@@ -26,7 +26,8 @@ class HOCRFModelRepresentation(object):
     def generate_instance_properties(self, modelfeatures):
         self.Z_codebook = self.get_Z_pattern()
         self.Z_lendict, self.Z_elems, self.Z_numchar= self.get_Z_elems_info()
-        self.max_patt_len = max(self.Z_lendict.values())
+        self.patts_len = set(self.Z_lendict.values())
+        self.max_patt_len = max(self.patts_len)
 
         self.modelfeatures_inverted = modelfeatures
         
@@ -133,6 +134,7 @@ class HOCRFModelRepresentation(object):
         # empty element         
         P[""] = 1
         P_codebook = {s:i for (i, s) in enumerate(P)}
+        #print("P_codebook ", P_codebook)
         return(P_codebook) 
     
     def get_len_pi(self): 
@@ -168,6 +170,7 @@ class HOCRFModelRepresentation(object):
         # empty element         
         S[""] = 1
         S_codebook = {s:i for (i, s) in enumerate(S)}
+        #print("S_codebook ", S_codebook)
         return(S_codebook)
     
     def get_len_si(self): 
@@ -188,30 +191,44 @@ class HOCRFModelRepresentation(object):
         P_codebook = self.P_codebook
         pi_numchar = self.pi_numchar
         Z_numchar = self.Z_numchar
-        print("pi_numchar ", pi_numchar)
-        print("z_numchar ", Z_numchar)
+        #print("pi_numchar ", pi_numchar)
+        #print("z_numchar ", Z_numchar)
         pk_y= {}
         for p in P_codebook:
             for y in Y_codebook:
                 pk_y[(p, y)] = 1
-        print("pky ", pk_y)
+        #print("pky ", pk_y)
         pk_y_suffix = {}
         for p in P_codebook:
             if(p != ""):
+                len_p = pi_numchar[p]
                 for (pk, y) in pk_y:
                     ref_str = pk + "|" + y
-                    len_p = pi_numchar[p]
-                    len_ref = pi_numchar[pk] + Z_numchar[y]
-                    # check suffix relation
-                    check = ref_str[len_ref-len_p:] == p
-                    #check = self.check_suffix(p, ref_str)
-                    if(check):
-                        if((pk, y) in pk_y_suffix):
-                            pk_y_suffix[(pk, y)].append(p)
-                        else:
-                            pk_y_suffix[(pk, y)] = [p]
+                    if(pk == ""):
+                        len_ref = Z_numchar[y] + 1
+                    else:
+                        len_ref = pi_numchar[pk] + Z_numchar[y] + 1
+                    #print("ref_str ", ref_str)
+                    #print("p ", p)
+                    #print("len ref_str ", len_ref)
+                    #print("len p ", len_p)
+                    start_pos = len_ref - len_p
+                    #print("start_pos ", start_pos)
+                    #print("slice ", ref_str[start_pos:])
+                    #print("="*8)
+                    if(start_pos>=0):
+                        # check suffix relation
+                        check = ref_str[start_pos:] == p
+                        #print("check ", check)
+                        #check = self.check_suffix(p, ref_str)
+                        if(check):
+                            if((pk, y) in pk_y_suffix):
+                                pk_y_suffix[(pk, y)].append(p)
+                            else:
+                                pk_y_suffix[(pk, y)] = [p]
                             
         pk_y_suffix = self.keep_longest_elems(pk_y_suffix)
+        #print("pk_y_suffix ", pk_y_suffix)
         f_transition = {}
         
         for (pk, y), pi in pk_y_suffix.items():
@@ -223,6 +240,7 @@ class HOCRFModelRepresentation(object):
                 f_transition[pi][elmkey] = (pk, y)
             else:
                 f_transition[pi] = {elmkey:(pk, y)}
+        #print("f_transition ", f_transition)
         return(f_transition)
 
     def get_backward_transitions(self):
@@ -238,9 +256,9 @@ class HOCRFModelRepresentation(object):
         sk_y_prefix = {}
         for s in S_codebook:
 #             if(s != ""):
+            len_s = si_numchar[s]
             for (sk, y) in sk_y:
                 ref_str = y + "|" + sk
-                len_s = si_numchar[s]
                 #check prefix relation
                 check = ref_str[:len_s] == s
                 #check = self.check_prefix(s, ref_str)
@@ -274,16 +292,19 @@ class HOCRFModelRepresentation(object):
         for pi in f_transition:
             for pky, pk_y_tup in f_transition[pi].items():
                 pk, y = pk_y_tup
-                len_pky = pi_numchar[pk] + Z_numchar[y]
+                if(pk == ""):
+                    len_pky =  Z_numchar[y]
+                else:
+                    len_pky = pi_numchar[pk] + Z_numchar[y] + 1
                 l = []
                 for z in Z_codebook:
                     len_z = Z_numchar[z]
                     # check suffix relation
-                    check = pky[len_pky-len_z:] == z
-                    if(check):
-                        l.append(z)
-#                     if(self.check_suffix(z, pky)):
-#                         l.append(z)
+                    start_pos = len_pky - len_z
+                    if(start_pos >= 0):
+                        check = pky[start_pos:] == z
+                        if(check):
+                            l.append(z)
                 pky_z[pky] = l
         return(pky_z)
     
