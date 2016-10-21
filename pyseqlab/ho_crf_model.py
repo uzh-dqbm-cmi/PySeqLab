@@ -449,23 +449,24 @@ class HOCRF(object):
     def prepare_f_potentialfeatures(self, seq_id):
         pky_z = self.model.pky_z
         Z_codebook = self.model.Z_codebook
+        f_transition = self.model.f_transition
+        pi_lendict = self.model.pi_lendict
+
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
-        f_transition = self.model.f_transition
         cached_pf = {}
-        pi_lendict = self.model.pi_lendict
-        
-        for j in range(1, T+1):
-            boundary = (j, j)
-            for pi in f_transition:
-                if(j >= pi_lendict[pi]):
-                    for pky in f_transition[pi]:
-                        for z_patt in pky_z[pky]:
-                            if(Z_codebook[z_patt] in activefeatures[boundary]):
-                                if((j, Z_codebook[z_patt]) not in cached_pf):
-                                    f_val = list(activefeatures[boundary][Z_codebook[z_patt]].values())
-                                    w_indx = list(activefeatures[boundary][Z_codebook[z_patt]].keys())
-                                    cached_pf[j, Z_codebook[z_patt]] = (w_indx, f_val)
+            
+        for pi in f_transition:
+            start_pos = pi_lendict[pi]
+            for j in range(start_pos, T+1):
+                boundary = (j, j)
+                for pky in f_transition[pi]:
+                    for z_patt in pky_z[pky]:
+                        if(Z_codebook[z_patt] in activefeatures[boundary]):
+                            if((j, Z_codebook[z_patt]) not in cached_pf):
+                                f_val = list(activefeatures[boundary][Z_codebook[z_patt]].values())
+                                w_indx = list(activefeatures[boundary][Z_codebook[z_patt]].keys())
+                                cached_pf[j, Z_codebook[z_patt]] = (w_indx, f_val)
 
         # write on disk
         if(self.load_info_fromdisk):
@@ -481,119 +482,96 @@ class HOCRF(object):
         cached_comp = self.seqs_info[seq_id]["cached_comp"]
         f_transition = self.model.f_transition
         pky_codebook = self.model.pky_codebook
-        f_potential = numpy.zeros((T+1, len(pky_codebook)))
         pi_lendict = self.model.pi_lendict
         pky_z = self.model.pky_z
         Z_codebook = self.model.Z_codebook
         pky_codebok = self.model.pky_codebook
-#         f_transition[pi] = {elmkey:(pk, y)}
-        for j in range(1, T+1):
-            for pi in f_transition:
-                if(j >= pi_lendict[pi]):
-                    for pky in f_transition[pi]:
-                        potential = 0
-                        for z_patt in pky_z[pky]:
-                            z_patt_c = Z_codebook[z_patt]
-                            if((j, z_patt_c) in cached_pf):
-                                if((j, z_patt_c) not in cached_comp):
-                                    w_indx = cached_pf[j, z_patt_c][0]
-                                    f_val = cached_pf[j, z_patt_c][1]
-                                    cached_comp[j, z_patt_c] = numpy.inner(w[w_indx], f_val)
-                                potential += cached_comp[j, z_patt_c]
-                        f_potential[j, pky_codebok[pky]] = potential
+        f_potential = numpy.zeros((T+1, len(pky_codebook)))
+
+        for pi in f_transition:
+            start_pos = pi_lendict[pi]
+            for j in range(start_pos, T+1):
+                for pky in f_transition[pi]:
+                    potential = 0
+                    for z_patt in pky_z[pky]:
+                        z_patt_c = Z_codebook[z_patt]
+                        if((j, z_patt_c) in cached_pf):
+                            if((j, z_patt_c) not in cached_comp):
+                                w_indx = cached_pf[j, z_patt_c][0]
+                                f_val = cached_pf[j, z_patt_c][1]
+                                cached_comp[j, z_patt_c] = numpy.inner(w[w_indx], f_val)
+                            potential += cached_comp[j, z_patt_c]
+                    f_potential[j, pky_codebok[pky]] = potential
         return(f_potential)
-    
-#     def compute_f_potential(self, w, seq_id):
-#         f_potential_features = self.seqs_info[seq_id]['f_potential_features']
-#         cached_pf = self.seqs_info[seq_id]["cached_pf"]
-#         T = self.seqs_info[seq_id]['T']
-#         cached_comp = self.seqs_info[seq_id]["cached_comp"]
-# 
-#         pky_codebook = self.model.pky_codebook
-#         f_potential = numpy.zeros((T+1, len(pky_codebook)))
-# 
-#         for j, pky in f_potential_features:
-#             potential = 0
-#             for z_patt in f_potential_features[j, pky]:
-#                 if((j, z_patt) not in cached_comp):
-#                     w_indx = cached_pf[j, z_patt][0]
-#                     f_val = cached_pf[j, z_patt][1]
-#                     cached_comp[j, z_patt] = numpy.inner(w[w_indx], f_val)
-#                 potential += cached_comp[j, z_patt]
-#             f_potential[j, pky] = potential
-#         return(f_potential)
     
     def compute_forward_vec(self, seq_id):
         pi_pky_codebook = self.model.pi_pky_codebook
         P_codebook = self.model.P_codebook
-
+        pi_lendict = self.model.pi_lendict
         T = self.seqs_info[seq_id]["T"]
         f_potential = self.seqs_info[seq_id]["f_potential"]
         alpha = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         alpha[0,P_codebook[""]] = 0
         for j in range(1, T+1):
             for pi in pi_pky_codebook:
-                vec = f_potential[j, pi_pky_codebook[pi][0]] + alpha[j-1, pi_pky_codebook[pi][1]]
-                alpha[j, P_codebook[pi]] = vectorized_logsumexp(vec)           
+                if(j >= pi_lendict[pi]):
+                    vec = f_potential[j, pi_pky_codebook[pi][0]] + alpha[j-1, pi_pky_codebook[pi][1]]
+                    alpha[j, P_codebook[pi]] = vectorized_logsumexp(vec)           
         return(alpha)
 
     def prepare_b_potentialfeatures(self, seq_id):
         ysk_z = self.model.ysk_z
-        ysk_codebook = self.model.ysk_codebook
         Z_codebook = self.model.Z_codebook
         Z_lendict = self.model.Z_lendict
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
         cached_pf = self.seqs_info[seq_id]["cached_pf"]
-        b_potential_features = {}
-        
+        upd = False
         for j in range(1, T+1):
             for ysk in ysk_z:
-                b_potential_features[j, ysk_codebook[ysk]] = []
                 for z_patt in ysk_z[ysk]:
                     b = j + Z_lendict[z_patt] - 1
                     upd_boundary = (b, b)
                     if(upd_boundary in activefeatures):
-                        if(Z_codebook[z_patt] in activefeatures[upd_boundary]):
-                            if((b, Z_codebook[z_patt]) not in cached_pf):
-                                f_val = list(activefeatures[upd_boundary][Z_codebook[z_patt]].values())
-                                w_indx = list(activefeatures[upd_boundary][Z_codebook[z_patt]].keys())
-                                cached_pf[b, Z_codebook[z_patt]] = (w_indx, f_val)
-                            if((b, Z_codebook[z_patt]) not in b_potential_features[j, ysk_codebook[ysk]]):
-                                b_potential_features[j, ysk_codebook[ysk]].append((b, Z_codebook[z_patt])) 
-                if(not b_potential_features[j, ysk_codebook[ysk]]):
-                    del b_potential_features[j, ysk_codebook[ysk]]
-                else:
-                    b_potential_features[j, ysk_codebook[ysk]] = tuple(b_potential_features[j, ysk_codebook[ysk]])
-         
+                        z_patt_c = Z_codebook[z_patt]
+                        if(z_patt_c in activefeatures[upd_boundary]):
+                            if((b, z_patt_c) not in cached_pf):
+                                f_val = list(activefeatures[upd_boundary][z_patt_c].values())
+                                w_indx = list(activefeatures[upd_boundary][z_patt_c].keys())
+                                cached_pf[b, z_patt_c] = (w_indx, f_val)
+                                if(not upd):
+                                    upd = True
+
         # write on disk
-        if(self.load_info_fromdisk):
+        if(self.load_info_fromdisk and upd):
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
-            ReaderWriter.dump_data(b_potential_features, os.path.join(target_dir, "b_potential_features"))
             ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))     
             print("writing b_potential_features on disk")
-            self.seqs_info[seq_id]['b_info_ondisk'] = True
        
-        self.seqs_info[seq_id]['b_potential_features'] = b_potential_features
-
     def compute_b_potential(self, w, seq_id):
-        b_potential_features = self.seqs_info[seq_id]['b_potential_features']
+        ysk_z = self.model.ysk_z
+        Z_lendict = self.model.Z_lendict
+        Z_codebook = self.model.Z_codebook
         cached_pf = self.seqs_info[seq_id]["cached_pf"]
         cached_comp = self.seqs_info[seq_id]["cached_comp"]
         ysk_codebook = self.model.ysk_codebook
         T = self.seqs_info[seq_id]['T']
         b_potential = numpy.zeros((T+1, len(ysk_codebook)))
         
-        for j, ysk in b_potential_features:
-            potential = 0
-            for b, z_patt in b_potential_features[j, ysk]:
-                if((b, z_patt) not in cached_comp):
-                    w_indx = cached_pf[b, z_patt][0]
-                    f_val = cached_pf[b, z_patt][1]
-                    cached_comp[b, z_patt] = numpy.dot(w[w_indx], f_val)
-                potential += cached_comp[b, z_patt]
-
-            b_potential[j, ysk] = potential 
+        for j in range(1, T+1):
+            for ysk in ysk_z:
+                potential = 0
+                ysk_c = ysk_codebook[ysk]
+                for z_patt in ysk_z[ysk]:
+                    b = j + Z_lendict[z_patt] - 1
+                    z_patt_c = Z_codebook[z_patt]
+                    if((b, z_patt_c) in cached_pf):
+                        if((b, z_patt_c) not in cached_comp):
+                            w_indx = cached_pf[b, z_patt_c][0]
+                            f_val = cached_pf[b, z_patt_c][1]
+                            cached_comp[b, z_patt_c] = numpy.dot(w[w_indx], f_val)
+                        potential += cached_comp[b, z_patt_c]
+                b_potential[j, ysk_c] = potential 
         print("b_potential", b_potential)      
             
         return(b_potential)
@@ -671,13 +649,10 @@ class HOCRF(object):
     def _load_bpotential(self, w, seq_id):
         # assumes the activefeatures_by_position matrix has been loaded into seq_info
         seq_info = self.seqs_info[seq_id]
-        if(seq_info.get('b_info_ondisk')):
+
+        if(not seq_info.get('cached_pf')):
             target_dir = seq_info["activefeatures_dir"]
-            b_potential_features = ReaderWriter.read_data(os.path.join(target_dir, "b_potential_features"))
-            seq_info["b_potential_features"] = b_potential_features
-            print("loading b_potential_features from disk")
-            if(not seq_info.get('cached_pf')):
-                seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
+            seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
         else:
             self.prepare_b_potentialfeatures(seq_id)
 #             print("preparing b_potential_features")
