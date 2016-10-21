@@ -7,7 +7,7 @@ import os
 from copy import deepcopy
 import numpy
 from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
-from datetime import datetime
+
 class HOCRFModelRepresentation(object):
     def __init__(self, modelfeatures, states, L):
         """ modelfeatures: set of features defining the model
@@ -21,15 +21,20 @@ class HOCRFModelRepresentation(object):
         self.modelfeatures_codebook = modelfeatures
         self.Y_codebook = states
         self.L = L
+        self.generate_instance_properties(modelfeatures)
+    
+    def generate_instance_properties(self, modelfeatures):
         self.Z_codebook = self.get_Z_pattern()
-        self.Z_lendict = self.get_len_Z()
-        self.patts_len = set(self.Z_lendict.values())
-        self.max_patt_len = max(self.patts_len)
+        self.Z_lendict, self.Z_elems, self.Z_numchar= self.get_Z_elems_info()
+        self.max_patt_len = max(self.Z_lendict.values())
+
         self.modelfeatures_inverted = modelfeatures
-        self.Z_elems = self.get_Z_split_elems()
         
         self.P_codebook = self.get_forward_states()
+        self.pi_lendict, self.pi_numchar = self.get_len_pi()
+        
         self.S_codebook = self.get_backward_states()
+        self.si_lendict, self.si_numchar = self.get_len_si()
         
         self.f_transition = self.get_forward_transition()
         self.b_transition = self.get_backward_transitions()
@@ -43,13 +48,340 @@ class HOCRFModelRepresentation(object):
         self.pky_z = self.map_pky_z()
         self.ysk_z = self.map_sky_z()
         
-        # useful dictionary regarding length of elements
-        self.pi_lendict = self.get_len_pi()
-        self.si_lendict = self.get_len_si()
-        
         self.num_features = self.get_num_features()
         self.num_states = self.get_num_states()
         
+
+    @property
+    def modelfeatures_codebook(self):
+        return(self._modelfeatures_codebook)
+    @modelfeatures_codebook.setter
+    def modelfeatures_codebook(self, modelfeatures):
+        codebook = {}
+        code = 0
+        for y_patt, featuresum in modelfeatures.items():
+            for feature in featuresum:
+                fkey = y_patt + "&&" + feature
+                codebook[fkey] = code
+                code += 1
+        self._modelfeatures_codebook = codebook
+
+    @property
+    def Y_codebook(self):
+        return(self._Y_codebook)
+    @Y_codebook.setter     
+    def Y_codebook(self, states):
+        self._Y_codebook = {s:i for (i, s) in enumerate(states)}
+        
+    def get_Z_pattern(self):
+        modelfeatures = self.modelfeatures
+        Z_codebook = {y_patt:index for index, y_patt in enumerate(modelfeatures)}
+        return(Z_codebook)
+    
+    def get_Z_elems_info(self):
+        Z_codebook = self.Z_codebook
+        Z_lendict = {}
+        Z_split_elems = {}
+        Z_nchar = {}
+        for z in Z_codebook:
+            elems = z.split("|")
+            Z_lendict[z] = len(elems)
+            Z_split_elems[z] = elems
+            Z_nchar[z] = len(z)            
+        return(Z_lendict, Z_split_elems, Z_nchar)
+    
+    @property
+    def modelfeatures_inverted(self):
+        return(self._modelfeatures_inverted)
+    @modelfeatures_inverted.setter
+    def modelfeatures_inverted(self, modelfeatures):
+        modelfeatures = self.modelfeatures
+        Z_lendict = self.Z_lendict
+        inverted_segfeatures = {}
+        ypatt_features = set()
+        for y_patt, featuresum in modelfeatures.items():
+            for feature in featuresum:
+                # get features that are based only on y_patts
+                if(feature == y_patt):
+                    ypatt_features.add(feature)
+                if(feature in inverted_segfeatures):
+                    if(Z_lendict[y_patt] in inverted_segfeatures[feature]):
+                        inverted_segfeatures[feature][Z_lendict[y_patt]].add(y_patt)
+                    else:
+                        s = set()
+                        s.add(y_patt)                      
+                        inverted_segfeatures[feature][Z_lendict[y_patt]] = s
+                else:
+                    s = set()
+                    s.add(y_patt)
+                    inverted_segfeatures[feature] = {Z_lendict[y_patt]:s}
+        self._modelfeatures_inverted = inverted_segfeatures
+        self.ypatt_features = ypatt_features
+
+    def get_forward_states(self):
+        Y_codebook = self.Y_codebook
+        Z_elems = self.Z_elems
+        Z_lendict = self.Z_lendict
+        P = {}
+        for z_patt in Z_elems:
+            elems = Z_elems[z_patt]
+            z_len = Z_lendict[z_patt]
+            for i in range(z_len-1):
+                P["|".join(elems[:i+1])] = 1
+        for y in Y_codebook:
+            P[y] = 1
+        # empty element         
+        P[""] = 1
+        P_codebook = {s:i for (i, s) in enumerate(P)}
+        return(P_codebook) 
+    
+    def get_len_pi(self): 
+        P_codebook = self.P_codebook
+        pi_lendict = {}
+        pi_numchar = {}
+        
+        for pi in P_codebook:
+            if(pi == ""):
+                pi_lendict[pi] = 0
+                pi_numchar[pi] = 0
+            else:
+                pi_lendict[pi] = len(pi.split("|"))
+                pi_numchar[pi] = len(pi)
+        return(pi_lendict, pi_numchar)
+    
+    
+    def get_backward_states(self):
+        Y_codebook = self.Y_codebook
+        Z_elems = self.Z_elems
+        Z_lendict = self.Z_lendict
+        S = {}
+        for z_patt in Z_elems:
+            elems = Z_elems[z_patt]
+            z_len = Z_lendict[z_patt]
+            #print("z_patt")
+            for i in range(1, z_len):
+                S["|".join(elems[i:])] = 1
+                #print("i = {}".format(i))
+                #print("suffix {}".format("|".join(elems[i:])))
+        for y in Y_codebook:
+            S[y] = 1
+        # empty element         
+        S[""] = 1
+        S_codebook = {s:i for (i, s) in enumerate(S)}
+        return(S_codebook)
+    
+    def get_len_si(self): 
+        S_codebook = self.S_codebook
+        si_lendict = {}
+        si_numchar = {}
+        for si in S_codebook:
+            if(si == ""):
+                si_lendict[si] = 0
+                si_numchar[si] = 0
+            else:
+                si_lendict[si] = len(si.split("|"))
+                si_numchar[si] = len(si)
+        return(si_lendict, si_numchar)
+                
+    def get_forward_transition(self):
+        Y_codebook = self.Y_codebook
+        P_codebook = self.P_codebook
+        pi_numchar = self.pi_numchar
+        Z_numchar = self.Z_numchar
+        print("pi_numchar ", pi_numchar)
+        print("z_numchar ", Z_numchar)
+        pk_y= {}
+        for p in P_codebook:
+            for y in Y_codebook:
+                pk_y[(p, y)] = 1
+        print("pky ", pk_y)
+        pk_y_suffix = {}
+        for p in P_codebook:
+            if(p != ""):
+                for (pk, y) in pk_y:
+                    ref_str = pk + "|" + y
+                    len_p = pi_numchar[p]
+                    len_ref = pi_numchar[pk] + Z_numchar[y]
+                    # check suffix relation
+                    check = ref_str[len_ref-len_p:] == p
+                    #check = self.check_suffix(p, ref_str)
+                    if(check):
+                        if((pk, y) in pk_y_suffix):
+                            pk_y_suffix[(pk, y)].append(p)
+                        else:
+                            pk_y_suffix[(pk, y)] = [p]
+                            
+        pk_y_suffix = self.keep_longest_elems(pk_y_suffix)
+        f_transition = {}
+        
+        for (pk, y), pi in pk_y_suffix.items():
+            if(pk == ""):
+                elmkey = y
+            else:
+                elmkey = pk + "|" + y
+            if(pi in f_transition):
+                f_transition[pi][elmkey] = (pk, y)
+            else:
+                f_transition[pi] = {elmkey:(pk, y)}
+        return(f_transition)
+
+    def get_backward_transitions(self):
+        Y_codebook = self.Y_codebook
+        S_codebook = self.S_codebook
+        si_numchar = self.si_numchar
+        sk_y = {}
+        
+        for s in S_codebook:
+            for y in Y_codebook:
+                sk_y[(s, y)] = 1
+        
+        sk_y_prefix = {}
+        for s in S_codebook:
+#             if(s != ""):
+            for (sk, y) in sk_y:
+                ref_str = y + "|" + sk
+                len_s = si_numchar[s]
+                #check prefix relation
+                check = ref_str[:len_s] == s
+                #check = self.check_prefix(s, ref_str)
+                if(check):
+                    if((sk, y) in sk_y_prefix):
+                        sk_y_prefix[(sk, y)].append(s)
+                    else:
+                        sk_y_prefix[(sk, y)] = [s]
+                            
+        sk_y_prefix = self.keep_longest_elems(sk_y_prefix)
+        b_transition = {}
+        for (sk, y), si in sk_y_prefix.items():
+            if(sk == ""):
+                elmkey = y
+            else:
+                elmkey = y + "|" + sk
+            if(si in b_transition):
+                b_transition[si][elmkey] = sk
+            else:
+                b_transition[si] = {elmkey:sk}
+        return(b_transition)    
+        
+    def map_pky_z(self):
+        f_transition = self.f_transition
+        Z_codebook = self.Z_codebook
+        # given that we demand to have a unigram label features then Z set will always contain Y elems
+        Z_numchar = self.Z_numchar
+        pi_numchar = self.pi_numchar
+        
+        pky_z = {}
+        for pi in f_transition:
+            for pky, pk_y_tup in f_transition[pi].items():
+                pk, y = pk_y_tup
+                len_pky = pi_numchar[pk] + Z_numchar[y]
+                l = []
+                for z in Z_codebook:
+                    len_z = Z_numchar[z]
+                    # check suffix relation
+                    check = pky[len_pky-len_z:] == z
+                    if(check):
+                        l.append(z)
+#                     if(self.check_suffix(z, pky)):
+#                         l.append(z)
+                pky_z[pky] = l
+        return(pky_z)
+    
+    
+    def map_sky_z(self):
+        b_transition = self.b_transition
+        Z_codebook = self.Z_codebook
+        Z_numchar = self.Z_numchar
+        ysk_z = {}
+        for si in b_transition:
+            for ysk in b_transition[si]:
+                l = []
+                for z in Z_codebook:
+                    len_z = Z_numchar[z]
+                    #check prefix relation
+                    check = ysk[:len_z] == z
+                    if(check):
+                        l.append(z)
+                ysk_z[ysk] = l
+        #print("b_transition {}".format(b_transition))
+        #print("si_ysk_z {}".format(si_ysk_z))
+        return(ysk_z)  
+    
+    def get_pky_codebook(self):
+        f_transition = self.f_transition
+        pky_codebook = {}
+        counter = 0
+        for pi in f_transition:
+            for pky in f_transition[pi]:
+                pky_codebook[pky] = counter
+                counter += 1
+        return(pky_codebook)
+    
+    def get_ysk_codebook(self):
+        b_transition = self.b_transition
+        ysk_codebook = {}
+        counter = 0
+        for si in b_transition:
+            for ysk in b_transition[si]:
+                ysk_codebook[ysk] = counter
+                counter += 1
+        return(ysk_codebook)
+    
+    def get_pky_codebook_rev(self):
+        # to consider adding it as instance variable in the model representation
+        pky_codebook_rev = {code:pky for pky, code in self.pky_codebook.items()}
+        return(pky_codebook_rev)
+    
+    def get_pi_pky_codebook(self):
+        f_transition = self.f_transition
+        pky_codebook = self.pky_codebook
+        P_codebook = self.P_codebook
+        pi_pky_codebook = {}
+        for pi in f_transition:
+            pi_pky_codebook[pi]=([],[])
+            for pky, (pk, _) in f_transition[pi].items():
+                pi_pky_codebook[pi][0].append(pky_codebook[pky])
+                pi_pky_codebook[pi][1].append(P_codebook[pk])
+
+        return(pi_pky_codebook)
+    
+    def get_si_ysk_codebook(self):
+        b_transition = self.b_transition
+        ysk_codebook = self.ysk_codebook
+        S_codebook = self.S_codebook
+        si_ysk_codebook = {}
+        for si in b_transition:
+            si_ysk_codebook[si] = ([],[])
+            for ysk, sk in b_transition[si].items():
+                si_ysk_codebook[si][0].append(ysk_codebook[ysk])
+                si_ysk_codebook[si][1].append(S_codebook[sk])
+
+        return(si_ysk_codebook)
+    
+        
+    def keep_longest_elems(self, s):
+        """ used to figure out longest suffix and prefix on sets """
+        longest_elems = {}
+        for tup, l in s.items():
+            longest_elems[tup] = max(l, key = len)
+        return(longest_elems)
+                  
+    def check_suffix(self, token, ref_str):
+        # check if ref_str ends with the token
+#         return(ref_str[len(ref_str)-len(token):] == token)
+        return(ref_str.endswith(token))
+    
+    def check_prefix(self, token, ref_str):
+        # check if ref_str starts with a token
+#         return(ref_str[:len(token)] == token)
+        return(ref_str.startswith(token))
+    
+    def get_num_features(self):
+        return(len(self.modelfeatures_codebook))
+    
+    def get_num_states(self):
+        return(len(self.Y_codebook)) 
+    
     def represent_globalfeatures(self, seq_featuresum):
         modelfeatures_codebook = self.modelfeatures_codebook
         windx_fval = {}
@@ -121,305 +453,6 @@ class HOCRFModelRepresentation(object):
                         filtered_activestates[z_len].add(z_patt)
         return(filtered_activestates)
     
-    @property
-    def modelfeatures_codebook(self):
-        return(self._modelfeatures_codebook)
-    @modelfeatures_codebook.setter
-    def modelfeatures_codebook(self, modelfeatures):
-        print('model codebook - start {}', datetime.now())       
-        codebook = {}
-        code = 0
-        for y_patt, featuresum in modelfeatures.items():
-            for feature in featuresum:
-                fkey = y_patt + "&&" + feature
-                codebook[fkey] = code
-                code += 1
-        self._modelfeatures_codebook = codebook
-        print('model codebook - end {}', datetime.now())       
-
-    @property
-    def Y_codebook(self):
-        return(self._Y_codebook)
-    @Y_codebook.setter     
-    def Y_codebook(self, states):
-        self._Y_codebook = {s:i for (i, s) in enumerate(states)}
-        
-    def get_Z_pattern(self):
-        modelfeatures = self.modelfeatures
-        Z_codebook = {y_patt:index for index, y_patt in enumerate(modelfeatures)}
-        return(Z_codebook)
-    
-    def get_len_Z(self):
-        Z_codebook = self.Z_codebook
-        Z_lendict = {}
-        for z in Z_codebook:
-            Z_lendict[z] = len(z.split("|"))
-        
-        return(Z_lendict)
-    
-    @property
-    def modelfeatures_inverted(self):
-        return(self._modelfeatures_inverted)
-    @modelfeatures_inverted.setter
-    def modelfeatures_inverted(self, modelfeatures):
-        print('model inverted features - start {}', datetime.now())       
-        modelfeatures = self.modelfeatures
-        Z_lendict = self.Z_lendict
-        inverted_segfeatures = {}
-        ypatt_features = set()
-        for y_patt, featuresum in modelfeatures.items():
-            for feature in featuresum:
-                # get features that are based only on y_patts
-                if(feature == y_patt):
-                    ypatt_features.add(feature)
-                if(feature in inverted_segfeatures):
-                    if(Z_lendict[y_patt] in inverted_segfeatures[feature]):
-                        inverted_segfeatures[feature][Z_lendict[y_patt]].add(y_patt)
-                    else:
-                        s = set()
-                        s.add(y_patt)                      
-                        inverted_segfeatures[feature][Z_lendict[y_patt]] = s
-                else:
-                    s = set()
-                    s.add(y_patt)
-                    inverted_segfeatures[feature] = {Z_lendict[y_patt]:s}
-        self._modelfeatures_inverted = inverted_segfeatures
-        self.ypatt_features = ypatt_features
-        print("model inverted features -- end {}", datetime.now())
-    def get_Z_split_elems(self):
-        Z_split_elems = {}
-        Z_codebook = self.Z_codebook
-        for z in Z_codebook:
-            Z_split_elems[z] = tuple(z.split("|"))
-
-        return(Z_split_elems)
-
-    
-    def get_forward_states(self):
-        Y_codebook = self.Y_codebook
-        Z_codebook = self.Z_codebook
-        P = {}
-        for z_patt in Z_codebook:
-            elems = z_patt.split("|")
-            for i in range(len(elems)-1):
-                P["|".join(elems[:i+1])] = 1
-        for y in Y_codebook:
-            P[y] = 1
-        # empty element         
-        P[""] = 1
-        P_codebook = {s:i for (i, s) in enumerate(P)}
-        return(P_codebook) 
-    
-    def get_backward_states(self):
-        Y_codebook = self.Y_codebook
-        Z_codebook = self.Z_codebook
-        S = {}
-        for z_patt in Z_codebook:
-            elems = z_patt.split("|")
-            #print("z_patt")
-            for i in range(1, len(elems)):
-                S["|".join(elems[i:])] = 1
-                #print("i = {}".format(i))
-                #print("suffix {}".format("|".join(elems[i:])))
-        for y in Y_codebook:
-            S[y] = 1
-        # empty element         
-        S[""] = 1
-        S_codebook = {s:i for (i, s) in enumerate(S)}
-        return(S_codebook)
-        
-                
-    def get_forward_transition(self):
-        Y_codebook = self.Y_codebook
-        P_codebook = self.P_codebook
-        pk_y= {}
-        for p in P_codebook:
-            for y in Y_codebook:
-                pk_y[(p, y)] = 1
-        
-        pk_y_suffix = {}
-        for p in P_codebook:
-            if(p != ""):
-                for (pk, y) in pk_y:
-                    ref_str = pk + "|" + y
-                    check = self.check_suffix(p, ref_str)
-                    if(check):
-                        if((pk, y) in pk_y_suffix):
-                            pk_y_suffix[(pk, y)].append(p)
-                        else:
-                            pk_y_suffix[(pk, y)] = [p]
-                            
-        pk_y_suffix = self.keep_longest_elems(pk_y_suffix)
-        f_transition = {}
-        
-        for (pk, y), pi in pk_y_suffix.items():
-            if(pk == ""):
-                elmkey = y
-            else:
-                elmkey = pk + "|" + y
-            if(pi in f_transition):
-                f_transition[pi][elmkey] = (pk, y)
-            else:
-                f_transition[pi] = {elmkey:(pk, y)}
-        return(f_transition)
-    
-    def get_pky_codebook(self):
-        f_transition = self.f_transition
-        pky_codebook = {}
-        counter = 0
-        for pi in f_transition:
-            for pky in f_transition[pi]:
-                pky_codebook[pky] = counter
-                counter += 1
-        return(pky_codebook)
-    
-    def get_ysk_codebook(self):
-        b_transition = self.b_transition
-        ysk_codebook = {}
-        counter = 0
-        for si in b_transition:
-            for ysk in b_transition[si]:
-                ysk_codebook[ysk] = counter
-                counter += 1
-        return(ysk_codebook)
-    
-    def get_pky_codebook_rev(self):
-        # to consider adding it as instance variable in the model representation
-        pky_codebook_rev = {code:pky for pky, code in self.pky_codebook.items()}
-        return(pky_codebook_rev)
-    
-    def get_pi_pky_codebook(self):
-        f_transition = self.f_transition
-        pky_codebook = self.pky_codebook
-        P_codebook = self.P_codebook
-        pi_pky_codebook = {}
-        for pi in f_transition:
-            pi_pky_codebook[pi]=([],[])
-            for pky, (pk, _) in f_transition[pi].items():
-                pi_pky_codebook[pi][0].append(pky_codebook[pky])
-                pi_pky_codebook[pi][1].append(P_codebook[pk])
-
-        return(pi_pky_codebook)
-    
-    def get_si_ysk_codebook(self):
-        b_transition = self.b_transition
-        ysk_codebook = self.ysk_codebook
-        S_codebook = self.S_codebook
-        si_ysk_codebook = {}
-        for si in b_transition:
-            si_ysk_codebook[si] = ([],[])
-            for ysk, sk in b_transition[si].items():
-                si_ysk_codebook[si][0].append(ysk_codebook[ysk])
-                si_ysk_codebook[si][1].append(S_codebook[sk])
-
-        return(si_ysk_codebook)
-    
-    def get_backward_transitions(self):
-        Y_codebook = self.Y_codebook
-        S_codebook = self.S_codebook
-        sk_y = {}
-        
-        for s in S_codebook:
-            for y in Y_codebook:
-                sk_y[(s, y)] = 1
-        
-        sk_y_prefix = {}
-        for s in S_codebook:
-#             if(s != ""):
-            for (sk, y) in sk_y:
-                ref_str = y + "|" + sk
-                check = self.check_prefix(s, ref_str)
-                if(check):
-                    if((sk, y) in sk_y_prefix):
-                        sk_y_prefix[(sk, y)].append(s)
-                    else:
-                        sk_y_prefix[(sk, y)] = [s]
-                            
-        sk_y_prefix = self.keep_longest_elems(sk_y_prefix)
-        b_transition = {}
-        for (sk, y), si in sk_y_prefix.items():
-            if(sk == ""):
-                elmkey = y
-            else:
-                elmkey = y + "|" + sk
-            if(si in b_transition):
-                b_transition[si][elmkey] = sk
-            else:
-                b_transition[si] = {elmkey:sk}
-        return(b_transition)    
-        
-    def map_pky_z(self):
-        f_transition = self.f_transition
-        Z_codebook = self.Z_codebook
-        pky_z = {}
-        for pi in f_transition:
-            for pky in f_transition[pi]:
-                l = []
-                for z in Z_codebook:
-                    if(self.check_suffix(z, pky)):
-                        l.append(z)
-                pky_z[pky] = l
-        return(pky_z)
-    
-    
-    def map_sky_z(self):
-        b_transition = self.b_transition
-        Z_codebook = self.Z_codebook
-        ysk_z = {}
-        for si in b_transition:
-            for ysk in b_transition[si]:
-                l = []
-                for z in Z_codebook:
-                    if(self.check_prefix(z, ysk)):
-                        l.append(z)
-                ysk_z[ysk] = l
-        #print("b_transition {}".format(b_transition))
-        #print("si_ysk_z {}".format(si_ysk_z))
-        return(ysk_z)  
-    
-    def get_len_pi(self): 
-        P_codebook = self.P_codebook
-        pi_lendict = {}
-        for pi in P_codebook:
-            if(pi == ""):
-                pi_lendict[pi] = 0
-            else:
-                pi_lendict[pi] = len(pi.split("|"))
-        return(pi_lendict)
-    
-    def get_len_si(self): 
-        S_codebook = self.S_codebook
-        si_lendict = {}
-        for si in S_codebook:
-            if(si == ""):
-                si_lendict[si] = 0
-            else:
-                si_lendict[si] = len(si.split("|"))
-        return(si_lendict)
-    
-
-        
-    def keep_longest_elems(self, s):
-        """ used to figure out longest suffix and prefix on sets """
-        longest_elems = {}
-        for tup, l in s.items():
-            longest_elems[tup] = max(l, key = len)
-        return(longest_elems)
-                  
-    def check_suffix(self, token, ref_str):
-        # check if ref_str ends with the token
-#         return(ref_str[len(ref_str)-len(token):] == token)
-        return(ref_str.endswith(token))
-    
-    def check_prefix(self, token, ref_str):
-        # check if ref_str starts with a token
-#         return(ref_str[:len(token)] == token)
-        return(ref_str.startswith(token))
-    
-    def get_num_features(self):
-        return(len(self.modelfeatures_codebook))
-    def get_num_states(self):
-        return(len(self.Y_codebook)) 
                
 class HOCRF(object):
     def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 3):
@@ -435,6 +468,7 @@ class HOCRF(object):
                          "activefeatures_by_position": self.load_activefeatures,
                          "globalfeatures": self.load_globalfeatures,
                          "flat_y":self._load_flaty}
+        
         self.info_ondisk_fname = ["cached_pf", "activefeatures_by_position", "globalfeatures"]
         self.cached_entites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp"]
 
@@ -462,18 +496,19 @@ class HOCRF(object):
                 boundary = (j, j)
                 for pky in f_transition[pi]:
                     for z_patt in pky_z[pky]:
-                        if(Z_codebook[z_patt] in activefeatures[boundary]):
-                            if((j, Z_codebook[z_patt]) not in cached_pf):
-                                f_val = list(activefeatures[boundary][Z_codebook[z_patt]].values())
-                                w_indx = list(activefeatures[boundary][Z_codebook[z_patt]].keys())
-                                cached_pf[j, Z_codebook[z_patt]] = (w_indx, f_val)
+                        z_patt_c = Z_codebook[z_patt]
+                        if(z_patt_c in activefeatures[boundary]):
+                            if((j, z_patt_c) not in cached_pf):
+                                f_val = list(activefeatures[boundary][z_patt_c].values())
+                                w_indx = list(activefeatures[boundary][z_patt_c].keys())
+                                cached_pf[j, z_patt_c] = (w_indx, f_val)
 
         # write on disk
         if(self.load_info_fromdisk):
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
             ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))
-
-#             print("writing f_potential_features on disk")
+            self.seqs_info[seq_id]['cached_pf_ondisk'] = True
+            #print("writing f_potential_features on disk")
         self.seqs_info[seq_id]["cached_pf"] = cached_pf
         
     def compute_f_potential(self, w, seq_id):
@@ -492,6 +527,7 @@ class HOCRF(object):
             start_pos = pi_lendict[pi]
             for j in range(start_pos, T+1):
                 for pky in f_transition[pi]:
+                    pky_c = pky_codebok[pky]
                     potential = 0
                     for z_patt in pky_z[pky]:
                         z_patt_c = Z_codebook[z_patt]
@@ -501,7 +537,7 @@ class HOCRF(object):
                                 f_val = cached_pf[j, z_patt_c][1]
                                 cached_comp[j, z_patt_c] = numpy.inner(w[w_indx], f_val)
                             potential += cached_comp[j, z_patt_c]
-                    f_potential[j, pky_codebok[pky]] = potential
+                    f_potential[j, pky_c] = potential
         return(f_potential)
     
     def compute_forward_vec(self, seq_id):
@@ -512,6 +548,7 @@ class HOCRF(object):
         f_potential = self.seqs_info[seq_id]["f_potential"]
         alpha = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         alpha[0,P_codebook[""]] = 0
+        
         for j in range(1, T+1):
             for pi in pi_pky_codebook:
                 if(j >= pi_lendict[pi]):
@@ -526,7 +563,8 @@ class HOCRF(object):
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
         cached_pf = self.seqs_info[seq_id]["cached_pf"]
-        upd = False
+        updated = False
+        
         for j in range(1, T+1):
             for ysk in ysk_z:
                 for z_patt in ysk_z[ysk]:
@@ -539,14 +577,13 @@ class HOCRF(object):
                                 f_val = list(activefeatures[upd_boundary][z_patt_c].values())
                                 w_indx = list(activefeatures[upd_boundary][z_patt_c].keys())
                                 cached_pf[b, z_patt_c] = (w_indx, f_val)
-                                if(not upd):
-                                    upd = True
+                                updated = True
 
         # write on disk
-        if(self.load_info_fromdisk and upd):
+        if(self.load_info_fromdisk and updated):
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
-            ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))     
-            print("writing b_potential_features on disk")
+            ReaderWriter.dump_data(cached_pf, os.path.join(target_dir, "cached_pf"))  
+            #print("writing updated cached_pf on disk")   
        
     def compute_b_potential(self, w, seq_id):
         ysk_z = self.model.ysk_z
@@ -572,7 +609,8 @@ class HOCRF(object):
                             cached_comp[b, z_patt_c] = numpy.dot(w[w_indx], f_val)
                         potential += cached_comp[b, z_patt_c]
                 b_potential[j, ysk_c] = potential 
-        print("b_potential", b_potential)      
+        
+        #print("b_potential", b_potential)      
             
         return(b_potential)
     
@@ -624,60 +662,61 @@ class HOCRF(object):
         seq_info = self.seqs_info[seq_id]
         seq_info["alpha"] = self.compute_forward_vec(seq_id)
         seq_info["Z"] = vectorized_logsumexp(seq_info["alpha"][-1,:])
-#                     print("... Computing alpha probability ...")
+        #print("... Computing alpha probability ...")
+    
     def _load_beta(self, w, seq_id):
         # assumes the b_potential has been loaded into seq_info
         seq_info = self.seqs_info[seq_id]
         seq_info["beta"] = self.compute_backward_vec(seq_id)
-#                     print("... Computing beta probability ...")
+        #print("... Computing beta probability ...")
 
     def _load_fpotential(self, w, seq_id):
         # assumes the activefeatures_by_position matrix has been loaded into seq_info
         # load f_potential_features
         seq_info = self.seqs_info[seq_id]
         seq_info["cached_comp"] = {}
-
-        if(seq_info.get('cached_pf')):
+        
+        if(seq_info.get('cached_pf_ondisk')):
             target_dir = seq_info["activefeatures_dir"]
             seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
-#                 print("loading cached_pf")        
+            #print("loading cached_pf")        
         else:
             self.prepare_f_potentialfeatures(seq_id)
         seq_info["f_potential"] = self.compute_f_potential(w, seq_id)
-#                     print("... Computing f_potential ...")
+        #print("... Computing f_potential ...")
 
     def _load_bpotential(self, w, seq_id):
         # assumes the activefeatures_by_position matrix has been loaded into seq_info
         seq_info = self.seqs_info[seq_id]
 
-        if(not seq_info.get('cached_pf')):
+        if(seq_info.get('cached_pf_ondisk')):
             target_dir = seq_info["activefeatures_dir"]
             seq_info['cached_pf'] = ReaderWriter.read_data(os.path.join(target_dir, "cached_pf"))
         else:
             self.prepare_b_potentialfeatures(seq_id)
-#             print("preparing b_potential_features")
+            #print("preparing b_potential_features")
 
         seq_info["b_potential"] = self.compute_b_potential(w, seq_id)
-#                     print("... Computing b_potential ...")
+        #print("... Computing b_potential ...")
 
     def _load_flaty(self, w, seq_id):
         seq = self._load_seq(seq_id, target="seq")
         self.seqs_info[seq_id]['flat_y'] = seq.flat_y
-#         print("loading flaty")
+        #print("loading flaty")
 
     def load_activefeatures(self, w, seq_id):
         # get the sequence model active features
         seqs_representer = self.seqs_representer
         seqs_activefeatures = seqs_representer.get_seqs_modelactivefeatures([seq_id], self.seqs_info)
         self.seqs_info[seq_id]["activefeatures_by_position"] = seqs_activefeatures[seq_id]
-#         print("loading activefeatures")
+        #print("loading activefeatures")
         
     def load_globalfeatures(self, w, seq_id):
         # get sequence global features
         seqs_representer = self.seqs_representer
         seqs_globalfeatures = seqs_representer.get_seqs_globalfeatures([seq_id], self.seqs_info, self.model)
         self.seqs_info[seq_id]["globalfeatures"] = seqs_globalfeatures[seq_id]
-#         print("loading globalfeatures")
+        #print("loading globalfeatures")
         
     def load_imposter_globalfeatures(self, seq_id, y_imposter, seg_other_symbol):
         # get sequence global features
@@ -696,10 +735,9 @@ class HOCRF(object):
             return(seq.X)
         
     def check_cached_info(self, w, seq_id, entity_names):
-        """ order of args is very important
-            to compute 1 - alpha matrix we need to compute f_potential before
-                       2 - beta matrix we need to compute the b_potential before
-            
+        """order of elements in the entity_names list is important
+          possible entity elements: ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp"]
+ 
         """
         seq_info = self.seqs_info[seq_id]
         func_dict = self.func_dict
@@ -750,12 +788,14 @@ class HOCRF(object):
             # using/modifying the copied seqs_info
             seqs_info = self.seqs_info
             seqs_id = list(seqs_info.keys())
+            # get any seq_id
+            seq_id = seqs_id[0]
             # check if f_info is already on disk -- case of decoding training data
-            target_dir = seqs_info[seqs_id[0]]['activefeatures_dir']
-            if os.path.exists(os.path.join(target_dir, 'f_potential_features')):
+            target_dir = seqs_info[seq_id]['activefeatures_dir']
+            if os.path.exists(os.path.join(target_dir, 'cached_pf')):
                 print("decoding training data .. ")
                 for seq_id in seqs_id:
-                    seqs_info[seq_id]['f_info_ondisk'] = True   
+                    seqs_info[seq_id]['cached_pf_ondisk'] = True   
             else:
                 print("decoding testing data")          
                 
