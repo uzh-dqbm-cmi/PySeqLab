@@ -968,7 +968,8 @@ class SeqsRepresentation(object):
             modelfeatures = filter_obj.apply_filter(modelfeatures)
             
         # create model representation
-        model = model_repr_class(modelfeatures, Y_states, L)
+        model = model_repr_class()
+        model.create_model(modelfeatures, Y_states, L)
 
         end_time = datetime.now()
 

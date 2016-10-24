@@ -9,17 +9,21 @@ import numpy
 from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
 
 class HOCRFModelRepresentation(object):
-    def __init__(self, modelfeatures, states, L):
+    def __init__(self):
         """ modelfeatures: set of features defining the model
             states: set of states (i.e. tags)
             L: length of longest segment
         """ 
-        self.create_model(modelfeatures, states, L)
+        self.modelfeatures = None
+        self.modelfeatures_codebook = None
+        self.Y_codebook = None
+        self.L = None
+        
         
     def create_model(self, modelfeatures, states, L):
         self.modelfeatures = modelfeatures
-        self.modelfeatures_codebook = modelfeatures
-        self.Y_codebook = states
+        self.modelfeatures_codebook = self.get_modelfeatures_codebook(modelfeatures)
+        self.Y_codebook = self.get_modelstates_codebook(states)
         self.L = L
         self.generate_instance_properties(modelfeatures)
     
@@ -53,11 +57,8 @@ class HOCRFModelRepresentation(object):
         self.num_states = self.get_num_states()
         
 
-    @property
-    def modelfeatures_codebook(self):
-        return(self._modelfeatures_codebook)
-    @modelfeatures_codebook.setter
-    def modelfeatures_codebook(self, modelfeatures):
+
+    def get_modelfeatures_codebook(self, modelfeatures):
         codebook = {}
         code = 0
         for y_patt, featuresum in modelfeatures.items():
@@ -65,14 +66,11 @@ class HOCRFModelRepresentation(object):
                 fkey = y_patt + "&&" + feature
                 codebook[fkey] = code
                 code += 1
-        self._modelfeatures_codebook = codebook
+        return(codebook)
 
-    @property
-    def Y_codebook(self):
-        return(self._Y_codebook)
-    @Y_codebook.setter     
-    def Y_codebook(self, states):
-        self._Y_codebook = {s:i for (i, s) in enumerate(states)}
+
+    def get_modelstates_codebook(self, states):
+        return({s:i for (i, s) in enumerate(states)})
         
     def get_Z_pattern(self):
         modelfeatures = self.modelfeatures
