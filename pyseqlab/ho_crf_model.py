@@ -816,9 +816,10 @@ class HOCRF(object):
         ReaderWriter.dump_data(self, file_name)
 
     def decode_seqs(self, decoding_method, out_dir, **kwargs):
-        """ seqs: a list comprising of sequences that are instances of SequenceStrcut() class
-            method: a string referring to type of decoding {'viterbi', 'per_state_decoding'}
-            seqs_info: dictionary containing the info about the sequences to parse
+        """ decoding_method: a string referring to type of decoding {'viterbi', 'per_state_decoding'}
+            **kwargs could be one of the following:
+                seqs: a list comprising of sequences that are instances of SequenceStrcut() class
+                seqs_info: dictionary containing the info about the sequences to parse
         """
         corpus_name = "decoding_seqs"
         out_file = os.path.join(create_directory(corpus_name, out_dir), "decoded.txt")
@@ -881,8 +882,7 @@ class HOCRF(object):
         return(seqs_pred)
 
             
-    def write_decoded_seqs(self, ref_seqs, Y_pred_seqs, out_file):
-        sep = " "
+    def write_decoded_seqs(self, ref_seqs, Y_pred_seqs, out_file, sep = "\t"):
         for i in range(len(ref_seqs)):
             Y_pred_seq = Y_pred_seqs[i]
             ref_seq = ref_seqs[i]

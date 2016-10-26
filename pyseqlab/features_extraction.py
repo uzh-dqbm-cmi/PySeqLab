@@ -370,7 +370,7 @@ class HOFeatureExtractor(object):
 
     def dump_features(self, seq_file, seq_features):
         """store the features of the current sequence"""
-        #print("pickling table: {}\n".format(seq_file))
+        print("pickling table: {}\n".format(seq_file))
         with open(seq_file, 'wb') as f:
             pickle.dump(seq_features, f)
         
@@ -1012,7 +1012,7 @@ class SeqsRepresentation(object):
         start_time = datetime.now()
         for seq_id in seqs_id:
             # lookup active features for the current sequence and store them on disk
-            #print("looking for model active features for seq {}".format(seq_id))
+            print("looking for model active features for seq {}".format(seq_id))
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
             if(L > 1):
