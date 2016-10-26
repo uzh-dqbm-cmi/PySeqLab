@@ -10,31 +10,56 @@ from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
 
 class HOCRFModelRepresentation(object):
     def __init__(self):
-        """ modelfeatures: set of features defining the model
-            states: set of states (i.e. tags)
-            L: length of longest segment
+        """model representation class that will hold data structures to be used in HCRF class
         """ 
         self.modelfeatures = None
         self.modelfeatures_codebook = None
         self.Y_codebook = None
         self.L = None
-        
+        self.Z_codebook = None
+        self.Z_lendict = None
+        self.Z_elems = None
+        self.Z_numchar= None
+        self.patts_len = None
+        self.max_patt_len = None
+        self.modelfeatures_inverted = None
+        self.ypatt_features = None
+        self.P_codebook = None
+        self.pi_lendict = None
+        self.S_codebook = None
+        self.si_lendict = None
+        self.si_numchar = None
+        self.f_transition = None
+        self.b_transition = None
+        self.pky_codebook = None
+        self.pky_codebook_rev = None
+        self.pi_pky_codebook = None
+        self.ysk_codebook = None
+        self.si_ysk_codebook = None
+        self.pky_z = None
+        self.ysk_z = None
+        self.num_features = None
+        self.num_states = None
         
     def create_model(self, modelfeatures, states, L):
+        """modelfeatures: set of features defining the model
+           states: set of states (i.e. tags)
+           L: length of longest segment
+        """
         self.modelfeatures = modelfeatures
-        self.modelfeatures_codebook = self.get_modelfeatures_codebook(modelfeatures)
+        self.modelfeatures_codebook = self.get_modelfeatures_codebook()
         self.Y_codebook = self.get_modelstates_codebook(states)
         self.L = L
-        self.generate_instance_properties(modelfeatures)
+        self.generate_instance_properties()
     
-    def generate_instance_properties(self, modelfeatures):
+    def generate_instance_properties(self):
         self.Z_codebook = self.get_Z_pattern()
-        self.Z_lendict, self.Z_elems, self.Z_numchar= self.get_Z_elems_info()
+        self.Z_lendict, self.Z_elems, self.Z_numchar = self.get_Z_elems_info()
         self.patts_len = set(self.Z_lendict.values())
         self.max_patt_len = max(self.patts_len)
 
-        self.modelfeatures_inverted = modelfeatures
-        
+        self.modelfeatures_inverted, self.ypatt_features = self.get_inverted_modelfeatures()
+    
         self.P_codebook = self.get_forward_states()
         self.pi_lendict, self.pi_numchar = self.get_len_pi()
         
@@ -55,10 +80,9 @@ class HOCRFModelRepresentation(object):
         
         self.num_features = self.get_num_features()
         self.num_states = self.get_num_states()
-        
 
-
-    def get_modelfeatures_codebook(self, modelfeatures):
+    def get_modelfeatures_codebook(self):
+        modelfeatures = self.modelfeatures
         codebook = {}
         code = 0
         for y_patt, featuresum in modelfeatures.items():
@@ -89,33 +113,30 @@ class HOCRFModelRepresentation(object):
             Z_nchar[z] = len(z)            
         return(Z_lendict, Z_split_elems, Z_nchar)
     
-    @property
-    def modelfeatures_inverted(self):
-        return(self._modelfeatures_inverted)
-    @modelfeatures_inverted.setter
-    def modelfeatures_inverted(self, modelfeatures):
+
+    def get_inverted_modelfeatures(self):
         modelfeatures = self.modelfeatures
         Z_lendict = self.Z_lendict
         inverted_segfeatures = {}
         ypatt_features = set()
         for y_patt, featuresum in modelfeatures.items():
+            z_len = Z_lendict[y_patt]
+            # get features that are based only on y_patts
+            if(y_patt in featuresum):
+                ypatt_features.add(y_patt)
             for feature in featuresum:
-                # get features that are based only on y_patts
-                if(feature == y_patt):
-                    ypatt_features.add(feature)
                 if(feature in inverted_segfeatures):
-                    if(Z_lendict[y_patt] in inverted_segfeatures[feature]):
-                        inverted_segfeatures[feature][Z_lendict[y_patt]].add(y_patt)
+                    if(z_len in inverted_segfeatures[feature]):
+                        inverted_segfeatures[feature][z_len].add(y_patt)
                     else:
                         s = set()
                         s.add(y_patt)                      
-                        inverted_segfeatures[feature][Z_lendict[y_patt]] = s
+                        inverted_segfeatures[feature][z_len] = s
                 else:
                     s = set()
                     s.add(y_patt)
-                    inverted_segfeatures[feature] = {Z_lendict[y_patt]:s}
-        self._modelfeatures_inverted = inverted_segfeatures
-        self.ypatt_features = ypatt_features
+                    inverted_segfeatures[feature] = {z_len:s}
+        return(inverted_segfeatures, ypatt_features)
 
     def get_forward_states(self):
         Y_codebook = self.Y_codebook
@@ -441,21 +462,24 @@ class HOCRFModelRepresentation(object):
     def find_activated_states(self, seg_features, allowed_z_len):
         modelfeatures_inverted = self.modelfeatures_inverted
         active_states = {}
-
         for feature in seg_features:
             if(feature in modelfeatures_inverted):
                 factivestates = modelfeatures_inverted[feature]  
+                #print("feature ", feature)
+                #print("factivestates ", factivestates)
                 for z_len in allowed_z_len:
                     if(z_len in factivestates):
                         if(z_len in active_states):
-                            active_states[z_len].union(factivestates[z_len])
+                            active_states[z_len].update(factivestates[z_len])
                         else:
-                            active_states[z_len] = factivestates[z_len]
-            
+                            active_states[z_len] = set(factivestates[z_len])
+                #print("active_states from func ", active_states)
         return(active_states)
 
     def filter_activated_states(self, activated_states, accum_active_states, pos, allowed_z_len):
         Z_elems = self.Z_elems
+        Z_lendict = self.Z_lendict
+        #print("Z_lendict ", Z_lendict)
         filtered_activestates = {}
         for z_len in allowed_z_len:
             start_pos = pos - z_len + 1
@@ -464,7 +488,10 @@ class HOCRFModelRepresentation(object):
                 for z_patt in activated_states[z_len]:
                     check = True
                     zelems = Z_elems[z_patt]
-                    for i in range(len(zelems)):
+                    for i in range(Z_lendict[z_patt]):
+                        if(start_pos+i not in accum_active_states):
+                            check = False
+                            break
                         if(zelems[i] not in accum_active_states[start_pos+i]):
                             check = False
                             break
@@ -507,6 +534,7 @@ class HOCRF(object):
 
         T = self.seqs_info[seq_id]["T"]
         activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
+        #print("activefeatures ", activefeatures)
         cached_pf = {}
             
         for pi in f_transition:
@@ -522,6 +550,7 @@ class HOCRF(object):
                                 w_indx = list(activefeatures[boundary][z_patt_c].keys())
                                 cached_pf[j, z_patt_c] = (w_indx, f_val)
 
+
         # write on disk
         if(self.load_info_fromdisk):
             target_dir = self.seqs_info[seq_id]['activefeatures_dir']
@@ -529,7 +558,8 @@ class HOCRF(object):
             self.seqs_info[seq_id]['cached_pf_ondisk'] = True
             #print("writing f_potential_features on disk")
         self.seqs_info[seq_id]["cached_pf"] = cached_pf
-        
+        #print("cached_pf ", cached_pf)
+         
     def compute_f_potential(self, w, seq_id):
         cached_pf = self.seqs_info[seq_id]["cached_pf"]
         T = self.seqs_info[seq_id]['T']
@@ -541,7 +571,8 @@ class HOCRF(object):
         Z_codebook = self.model.Z_codebook
         pky_codebok = self.model.pky_codebook
         f_potential = numpy.zeros((T+1, len(pky_codebook)))
-
+        #print("pky_codebook ", pky_codebok)
+        #print("Z_codebook ", Z_codebook)
         for pi in f_transition:
             start_pos = pi_lendict[pi]
             for j in range(start_pos, T+1):
@@ -557,6 +588,7 @@ class HOCRF(object):
                                 cached_comp[j, z_patt_c] = numpy.inner(w[w_indx], f_val)
                             potential += cached_comp[j, z_patt_c]
                     f_potential[j, pky_c] = potential
+        #print("cached_comp ", cached_comp)
         return(f_potential)
     
     def compute_forward_vec(self, seq_id):
@@ -807,6 +839,7 @@ class HOCRF(object):
             # using/modifying the copied seqs_info
             seqs_info = self.seqs_info
             seqs_id = list(seqs_info.keys())
+            N = len(seqs_id)
             # get any seq_id
             seq_id = seqs_id[0]
             # check if f_info is already on disk -- case of decoding training data
@@ -822,6 +855,7 @@ class HOCRF(object):
             seqs = kwargs["seqs"]           
             seqs_dict = {i+1:seqs[i] for i in range(len(seqs))}
             seqs_id = list(seqs_dict.keys())
+            N = len(seqs_id)
             seqs_info = self.seqs_representer.prepare_seqs(seqs_dict, "processed_seqs", out_dir, unique_id = True)
             self.seqs_representer.scale_attributes(seqs_id, seqs_info)
             self.seqs_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, self.model, "processed_seqs")
@@ -829,6 +863,7 @@ class HOCRF(object):
 
         seqs_pred = {}
         seqs_info = self.seqs_info
+        counter = 0
         for seq_id in seqs_info:
             Y_pred = decoder(w, seq_id)
             seq = ReaderWriter.read_data(os.path.join(seqs_info[seq_id]["globalfeatures_dir"], "sequence"))
@@ -836,6 +871,8 @@ class HOCRF(object):
             seqs_pred[seq_id] = {'seq': seq,'Y_pred': Y_pred}
             # clear added info per sequence
             self.clear_cached_info([seq_id])
+            counter += 1
+            print("sequence decoded -- {} sequences are left".format(N-counter))
         
         # clear seqs_info
         self.seqs_info.clear()
@@ -867,10 +904,14 @@ class HOCRF(object):
         l = ("activefeatures_by_position", "f_potential")
         self.check_cached_info(w, seq_id, l)
         f_potential = self.seqs_info[seq_id]["f_potential"]
+        #print("f_potential ", f_potential)
         pky_codebook_rev = self.model.pky_codebook_rev
         pi_pky_codebook = self.model.pi_pky_codebook
+        
         f_transition = self.model.f_transition
         P_codebook = self.model.P_codebook
+        #print("f_transition ", f_transition)
+        #print("P_codebook ", P_codebook)
         T = self.seqs_info[seq_id]["T"]
         # records max score at every time step
         delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
@@ -883,13 +924,17 @@ class HOCRF(object):
             for pi in pi_pky_codebook:
                 if(j >= pi_lendict[pi]):
                     vec = f_potential[j, pi_pky_codebook[pi][0]] + delta[j-1, pi_pky_codebook[pi][1]]
+                    #print("pi ", pi)
+                    #print("vec ", vec)
                     delta[j, P_codebook[pi]] = numpy.max(vec)
+                    #print("max chosen ", delta[j, P_codebook[pi]])
                     argmax_ind = numpy.argmax(vec)
-                    pky = pi_pky_codebook[pi][0][argmax_ind]
-                    pky_dec = pky_codebook_rev[pky]
-                    back_track[j, P_codebook[pi]] = (f_transition[pi][pky_dec][0], f_transition[pi][pky_dec][1])
+                    #print("argmax chosen ", argmax_ind)
+                    pky_c = pi_pky_codebook[pi][0][argmax_ind]
+                    pky = pky_codebook_rev[pky_c]
+                    # extracting (pk, y) tuple 
+                    back_track[j, P_codebook[pi]] = (f_transition[pi][pky][0], f_transition[pi][pky][1])
 
-        
         # decoding the sequence
         p_T_code = numpy.argmax(delta[T,:])
         p_T, y_T = back_track[T, p_T_code]

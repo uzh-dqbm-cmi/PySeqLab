@@ -1006,8 +1006,8 @@ class Evaluator(object):
             perf_measure = accuracy
         
         with open(output_file, mode = 'w') as f:
-            f.write("The performance of the model based on the {} measure is {}".format(metric, perf_measure))
-        
+            f.write("The performance of the model based on the {} measure is {}\n".format(metric, perf_measure))
+            f.write('Confusion matrix: tp:{} fp:{} fn:{} tn:{}\n'.format(tp, fp, fn, tn))
         return(perf_measure)
         
     def map_states_to_num(self, Y, Y_codebook, M):
@@ -1018,14 +1018,15 @@ class Evaluator(object):
     def compute_tags_confusionmatrix(self, Y_ref, Y_pred, Y_codebook_rev, M):
         # compute confusion matrix on the level of the tag/state
 #         print("Y_codebook {}".format(Y_codebook_rev))
-        detected_statescode = set(Y_ref).union(set(Y_pred))
-#         print("detected_statescode {}".format(detected_statescode))
-        valid_statescode = [statecode for statecode in detected_statescode if statecode in Y_codebook_rev]
+#         detected_statescode = set(Y_ref).union(set(Y_pred))
+# #         print("detected_statescode {}".format(detected_statescode))
+#         valid_statescode = [statecode for statecode in detected_statescode if statecode in Y_codebook_rev]
 #         print("valid_statescode {}".format(valid_statescode))
+        detected_statescode = set(Y_ref)
+        valid_statescode = [statecode for statecode in detected_statescode if statecode in Y_codebook_rev]
         Y_ref = numpy.asarray(Y_ref)
         Y_pred = numpy.asarray(Y_pred)
 #         print("Y_ref as numpy array {}".format(Y_ref))
-#         print("detected states code \n {}".format(detected_statescode))
         tagslevel_performance = numpy.zeros((M, 2,2))
         
         for statecode in valid_statescode:
