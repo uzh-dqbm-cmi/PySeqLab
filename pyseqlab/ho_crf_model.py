@@ -871,7 +871,7 @@ class HOCRF(object):
             self.write_decoded_seqs([seq], [Y_pred], out_file)
             seqs_pred[seq_id] = {'seq': seq,'Y_pred': Y_pred}
             # clear added info per sequence
-            self.clear_cached_info([seq_id])
+            self.clear_cached_info([seq_id], self.info_ondisk_fname)
             counter += 1
             print("sequence decoded -- {} sequences are left".format(N-counter))
         
