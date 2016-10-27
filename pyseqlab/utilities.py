@@ -155,12 +155,17 @@ class DataFileParser():
         self.seqs = []
         self.header = []
         
-    def read_file(self, file_path, header, seg_other_symbol = None, column_sep = " "):
+    def read_file(self, file_path, header, y_ref = True, seg_other_symbol = None, column_sep = " "):
         """ header: specifying how the header is reported in the file containing the sequences
                        'main' -> one header in the beginning of the file
                        'per_sequence' -> a header for every sequence
                        list of keywords as header (i.e. ['w', 'part_of_speech'])
         """
+        if(y_ref):
+            update_seq = self.update_XY
+        else:
+            update_seq = self.update_X
+            
         with open(file_path) as file_obj:
             counter = 0
             X = []
@@ -171,30 +176,42 @@ class DataFileParser():
 #                 print(line)
                 if line:
 #                     print(line)
-                    *x_arg, y = line.split(column_sep)
+                    if(y_ref):
+                        *x_arg, y = line.split(column_sep)
+                        self._xarg = x_arg
+                        self._y = y
+                    else:
+                        x_arg = line.split(column_sep)
+                        self._xarg = x_arg
+
 #                     print(x_arg)
                     # first line of a sequence
                     if(counter == 1):
                         if(header == "main"):
                             if(self.header):
-                                X.append(self.parse_line(x_arg))
-                                Y.append(y)
+                                update_seq(X, Y)
+#                                 X.append(self.parse_line(x_arg))
+#                                 Y.append(y)
                             else:
                                 self.parse_header(x_arg)
+                                
                         elif(header == "per_sequence"):
-                            if(self.header):
-                                continue
-                            else:
+                            if(not self.header):
                                 self.parse_header(x_arg)
-                                X.append(self.parse_line(x_arg))
-                                Y.append(y)
                         else:
-                            self.parse_header(header)
-                            X.append(self.parse_line(x_arg))
-                            Y.append(y)   
+                            if(self.header):
+                                update_seq(X, Y)
+#                                 X.append(self.parse_line(x_arg))
+#                                 Y.append(y)
+                            else:   
+                                self.parse_header(header)
+                                update_seq(X, Y)
+#                                 X.append(self.parse_line(x_arg))
+#                                 Y.append(y)
                     else:
-                        X.append(self.parse_line(x_arg))
-                        Y.append(y)
+                        update_seq(X, Y)
+#                         X.append(self.parse_line(x_arg))
+#                         Y.append(y)
 
                 else:
                     seq = SequenceStruct(X, Y, seg_other_symbol)
@@ -203,6 +220,9 @@ class DataFileParser():
                     counter = 0
                     X = []
                     Y = []
+                    self._xarg = None
+                    self._y = None
+                    
             if(X and Y):
                 seq = SequenceStruct(X, Y, seg_other_symbol)
                 self.seqs.append(seq)
@@ -210,7 +230,17 @@ class DataFileParser():
                 counter = 0
                 X = []
                 Y = []
-            
+                self._xarg = None
+                self._y = None
+        
+
+    def update_XY(self, X, Y):
+        X.append(self.parse_line(self._xarg))
+        Y.append(self._y)
+    
+    def update_X(self, X, Y):
+        X.append(self.parse_line(self._xarg))
+                
     def parse_line(self, x_arg):
         # fill the sequences X and Y with observations and tags respectively
         header = self.header
@@ -611,10 +641,15 @@ def nested_cv(seqs_id, outer_kfold, inner_kfold):
     return(cv_hierarchy)
 
 def get_conll00():
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    file_path = os.path.join(dir_path, "dataset","conll00","train_short.txt")
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    root_dir = os.path.dirname(current_dir)
     parser = DataFileParser()
+    file_path = os.path.join(root_dir, "tests", "dataset","conll00","train_short_main.txt")
     parser.read_file(file_path, header="main")
+    parser.print_seqs()
+    print("*"*40)
+    file_path = os.path.join(root_dir, "tests", "dataset","conll00","train_short_noref")
+    parser.read_file(file_path, header=('w','pos'), y_ref = False, column_sep="\t")
     parser.print_seqs()
     
 if __name__ == "__main__":
