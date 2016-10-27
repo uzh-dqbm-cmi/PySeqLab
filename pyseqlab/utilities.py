@@ -644,13 +644,19 @@ def get_conll00():
     current_dir = os.path.dirname(os.path.realpath(__file__))
     root_dir = os.path.dirname(current_dir)
     parser = DataFileParser()
-    file_path = os.path.join(root_dir, "tests", "dataset","conll00","train_short_main.txt")
-    parser.read_file(file_path, header="main")
-    parser.print_seqs()
-    print("*"*40)
-    file_path = os.path.join(root_dir, "tests", "dataset","conll00","train_short_noref")
-    parser.read_file(file_path, header=('w','pos'), y_ref = False, column_sep="\t")
-    parser.print_seqs()
+    files_info = {'train_short_main.txt':('main', True, " "), 
+                  'train_short_none.txt':(('w','pos'), True, " "),
+                  'train_short_per_sequence.txt':('per_sequence', True, " "),
+                  'train_short_noref.txt':(('w', 'pos'), False, "\t")
+                  }
+    for file_name in files_info:
+        file_path = os.path.join(root_dir, "tests", "dataset","conll00",file_name)
+        parser.read_file(file_path, header=files_info[file_name][0], y_ref = files_info[file_name][1], column_sep=files_info[file_name][2])
+        parser.print_seqs()
+        print("*"*40)
+        parser.seqs = []
+        parser.header = []
+
     
 if __name__ == "__main__":
     pass
