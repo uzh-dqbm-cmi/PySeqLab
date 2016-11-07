@@ -353,7 +353,9 @@ class TemplateGenerator(object):
             ngram_list.append(elem)
             
         return(ngram_list)
-
+    
+    def generate_combinations(self):
+        pass
     
 def filter_templates(ngram_template, condition, operator):
     f_ngram_template = {}
@@ -569,7 +571,7 @@ def split_data(seqs_id, options):
             current_test_seqs = test_seqs[indx[i]:indx[i+1]]
             data_split[i]["test"] = current_test_seqs
             data_split[i]["train"] = list(set(seqs_id)-set(current_test_seqs))
-#             print("t = {} -- evaluating y_t = {}\n".format(t, y_tminus1))
+
     elif(method == "random"):
         num_splits = options.get("num_splits")
         if(type(num_splits) != int):

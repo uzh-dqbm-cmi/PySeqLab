@@ -283,15 +283,21 @@ class HOFeatureExtractor(object):
         return(seg_features)
 
     def lookup_seq_modelactivefeatures(self, seq, model):
+        # segment length
         L = model.L
         T = seq.T
+        # maximum pattern length 
         max_patt_len = model.max_patt_len
-        active_features = {}
-        accum_active_states = {}
         # length of a unary label/state (i.e. pattern of length 1)
         state_len = 1
         patts_len = model.patts_len
         ypatt_features = model.ypatt_features
+        active_features = {}
+        accum_active_states = {}
+        
+        if(ypatt_features):
+            ypatt_activestates = model.find_activated_states(ypatt_features, patts_len)
+
 #         #print("patts_len ", patts_len)
 #         #print("ypatt_features ", ypatt_features)
         for j in range(1, T+1):
@@ -303,12 +309,13 @@ class HOFeatureExtractor(object):
                 # end boundary
                 v = j
                 boundary = (u, v)
+                
                 if(u < max_patt_len):
                     max_len = u
                 else:
                     max_len = max_patt_len
                     
-                allowed_z_len = [z_len for z_len in patts_len if z_len <= max_len]
+                allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
                 #print("allowed_z_len ", allowed_z_len)
 
                 seg_features = self.lookup_features_X(seq, boundary)
@@ -319,7 +326,8 @@ class HOFeatureExtractor(object):
                 #print("activated_states ", activated_states)
                 #print("ypatt_feature ", ypatt_features)
                 if(ypatt_features):
-                    ypatt_activated_states = model.find_activated_states(ypatt_features, allowed_z_len)
+                    ypatt_activated_states = {z_len:ypatt_activestates[z_len] for z_len in allowed_z_len if z_len in ypatt_activestates}
+
                     #print("ypatt_activated_states ", ypatt_activated_states)        
     #                 #print("ypatt_activated_states ", ypatt_activated_states)
                     # combine activated_states and ypatt_activated states
@@ -333,15 +341,19 @@ class HOFeatureExtractor(object):
 #                 #print('u', u)
 #                 #print("max_len ", max_len)
                 #print("accum_active_states ", accum_active_states)
+                
+                # update accumulated active states by the current detected states of length 1 
                 if(activated_states):
-                    if(v not in accum_active_states):
-                        accum_active_states[v] = activated_states[state_len]
-                    else:
+                    if(v in accum_active_states):
                         accum_active_states[v].update(activated_states[state_len])
+                    else:
+                        accum_active_states[v] = set(activated_states[state_len])
                     
-                    filtered_states = model.filter_activated_states(activated_states, accum_active_states, u, allowed_z_len[1:])
+
+                    # keep valid active states
+                    filtered_states = model.filter_activated_states(activated_states, accum_active_states, u)
                     #print("filtered_states ", filtered_states)
-                    filtered_states[state_len] = activated_states[state_len]
+                    filtered_states[state_len] = set(activated_states[state_len])
                     #print("filtered_states ", filtered_states)
     #                 #print("filtered_states ", filtered_states)
                     active_features[boundary] = model.represent_activefeatures(filtered_states, seg_features)
@@ -367,7 +379,7 @@ class HOFeatureExtractor(object):
         feature_val = sum(attributes) 
         return({feature_name:feature_val})
     
-
+    #TO remove and only depend on ReaderWriter class to dump and read pickled objects
     def dump_features(self, seq_file, seq_features):
         """store the features of the current sequence"""
         print("pickling table: {}\n".format(seq_file))
@@ -779,6 +791,7 @@ class FOFeatureExtractor(object):
         feature_val = numpy.sum(attributes) 
         return({feature_name:feature_val})
 
+    #TO remove and only depend on ReaderWriter class to dump and read pickled objects
     def dump_features(self, seq_file, seq_features):
         """store the features of the current sequence"""
         #print("pickling table: {}\n".format(seq_file))

@@ -119,6 +119,7 @@ class HOCRFModelRepresentation(object):
         Z_lendict = self.Z_lendict
         inverted_segfeatures = {}
         ypatt_features = set()
+        
         for y_patt, featuresum in modelfeatures.items():
             z_len = Z_lendict[y_patt]
             # get features that are based only on y_patts
@@ -445,6 +446,7 @@ class HOCRFModelRepresentation(object):
 #                 print("z_patt ", z_patt)
                 windx_fval = {}
                 for seg_featurename in seg_features:
+                    # this condition might be omitted 
                     if(seg_featurename in modelfeatures[z_patt]):
     #                         print("seg_featurename {}".format(seg_featurename))
     #                         print("z_patt {}".format(z_patt))
@@ -467,8 +469,8 @@ class HOCRFModelRepresentation(object):
                 factivestates = modelfeatures_inverted[feature]  
                 #print("feature ", feature)
                 #print("factivestates ", factivestates)
-                for z_len in allowed_z_len:
-                    if(z_len in factivestates):
+                for z_len in factivestates:
+                    if(z_len in allowed_z_len):
                         if(z_len in active_states):
                             active_states[z_len].update(factivestates[z_len])
                         else:
@@ -476,19 +478,21 @@ class HOCRFModelRepresentation(object):
                 #print("active_states from func ", active_states)
         return(active_states)
 
-    def filter_activated_states(self, activated_states, accum_active_states, pos, allowed_z_len):
+    def filter_activated_states(self, activated_states, accum_active_states, pos):
         Z_elems = self.Z_elems
-        Z_lendict = self.Z_lendict
         #print("Z_lendict ", Z_lendict)
         filtered_activestates = {}
-        for z_len in allowed_z_len:
+        
+        for z_len in activated_states:
+            if(z_len == 1):
+                continue
             start_pos = pos - z_len + 1
-            if(z_len in activated_states and start_pos in accum_active_states):
+            if(start_pos in accum_active_states):
                 filtered_activestates[z_len] = set()
                 for z_patt in activated_states[z_len]:
                     check = True
                     zelems = Z_elems[z_patt]
-                    for i in range(Z_lendict[z_patt]):
+                    for i in range(z_len):
                         if(start_pos+i not in accum_active_states):
                             check = False
                             break
