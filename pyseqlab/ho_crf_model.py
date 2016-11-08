@@ -480,7 +480,6 @@ class HOCRFModelRepresentation(object):
 
     def filter_activated_states(self, activated_states, accum_active_states, pos):
         Z_elems = self.Z_elems
-        #print("Z_lendict ", Z_lendict)
         filtered_activestates = {}
         
         for z_len in activated_states:
