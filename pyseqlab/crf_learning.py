@@ -367,7 +367,15 @@ class Learner(object):
         ReaderWriter.log_progress(line, log_file)
         self._elapsed_time = datetime.now()
 
-
+    def _find_update_violation(self, w, seq_id):
+        crf_model = self.crf_model
+        seqs_info = self.seqs_info
+        y_imposter, early_viol_index = crf_model.viterbi(w, seq_id)
+        
+        if(early_viol_index):
+            crf_model.check_cached_info(w, seq_id, ('globalfeatures_per_boundary'))
+        # to continue
+                        
     # needs still some work and fixing....
     def _structured_perceptron(self, w, train_seqs_id):
         """ implements structured perceptron algorithm in particular the average perceptron that was
@@ -503,7 +511,7 @@ class Learner(object):
                         w[list(y_imposter_gfeatures.keys())] -= list(y_imposter_gfeatures.values())
                         
                         if(avg_scheme == "avg_error"):
-                            # consider/weigh more previous weights that have small average error per sequence
+                            # consider/emphasize more on previous weights that have small average error decoding per sequence
                             w_avg += (1-seq_err_count) * w
                         else:
                             w_avg += w

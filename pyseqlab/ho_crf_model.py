@@ -61,7 +61,7 @@ class HOCRFModelRepresentation(object):
         self.modelfeatures_inverted, self.ypatt_features = self.get_inverted_modelfeatures()
     
         self.P_codebook = self.get_forward_states()
-        self.pi_lendict, self.pi_numchar = self.get_len_pi()
+        self.pi_lendict, self.pi_elems, self.pi_numchar = self.get_pi_info()
         
         self.S_codebook = self.get_backward_states()
         self.si_lendict, self.si_numchar = self.get_len_si()
@@ -157,19 +157,22 @@ class HOCRFModelRepresentation(object):
         #print("P_codebook ", P_codebook)
         return(P_codebook) 
     
-    def get_len_pi(self): 
+    def get_pi_info(self): 
         P_codebook = self.P_codebook
         pi_lendict = {}
         pi_numchar = {}
+        pi_elems = {}
         
         for pi in P_codebook:
             if(pi == ""):
                 pi_lendict[pi] = 0
                 pi_numchar[pi] = 0
             else:
-                pi_lendict[pi] = len(pi.split("|"))
+                elems = pi.split("|")
+                pi_lendict[pi] = len(elems)
                 pi_numchar[pi] = len(pi)
-        return(pi_lendict, pi_numchar)
+                pi_elems[pi] = elems
+        return(pi_lendict, pi_elems, pi_numchar)
     
     
     def get_backward_states(self):
@@ -301,6 +304,33 @@ class HOCRFModelRepresentation(object):
                 b_transition[si] = {elmkey:sk}
         return(b_transition)    
         
+#     def map_pky_z(self):
+#         f_transition = self.f_transition
+#         Z_codebook = self.Z_codebook
+#         # given that we demand to have a unigram label features then Z set will always contain Y elems
+#         Z_numchar = self.Z_numchar
+#         pi_numchar = self.pi_numchar
+#         
+#         pky_z = {}
+#         for pi in f_transition:
+#             for pky, pk_y_tup in f_transition[pi].items():
+#                 pk, y = pk_y_tup
+#                 if(pk == ""):
+#                     len_pky =  Z_numchar[y]
+#                 else:
+#                     len_pky = pi_numchar[pk] + Z_numchar[y] + 1
+#                 l = []
+#                 for z in Z_codebook:
+#                     len_z = Z_numchar[z]
+#                     # check suffix relation
+#                     start_pos = len_pky - len_z
+#                     if(start_pos >= 0):
+#                         check = pky[start_pos:] == z
+#                         if(check):
+#                             l.append(z)
+#                 pky_z[pky] = l
+#         return(pky_z)
+ 
     def map_pky_z(self):
         f_transition = self.f_transition
         Z_codebook = self.Z_codebook
@@ -308,7 +338,7 @@ class HOCRFModelRepresentation(object):
         Z_numchar = self.Z_numchar
         pi_numchar = self.pi_numchar
         
-        pky_z = {}
+        z_pky = {}
         for pi in f_transition:
             for pky, pk_y_tup in f_transition[pi].items():
                 pk, y = pk_y_tup
@@ -316,7 +346,7 @@ class HOCRFModelRepresentation(object):
                     len_pky =  Z_numchar[y]
                 else:
                     len_pky = pi_numchar[pk] + Z_numchar[y] + 1
-                l = []
+                
                 for z in Z_codebook:
                     len_z = Z_numchar[z]
                     # check suffix relation
@@ -324,11 +354,13 @@ class HOCRFModelRepresentation(object):
                     if(start_pos >= 0):
                         check = pky[start_pos:] == z
                         if(check):
-                            l.append(z)
-                pky_z[pky] = l
-        return(pky_z)
+                            if(z in z_pky):
+                                z_pky[z].append(pky)
+                            else:
+                                z_pky[z] = [pky]
+        return(z_pky)    
     
-    
+    # to fix as the one in map_pky_z
     def map_sky_z(self):
         b_transition = self.b_transition
         Z_codebook = self.Z_codebook
@@ -594,20 +626,54 @@ class HOCRF(object):
         #print("cached_comp ", cached_comp)
         return(f_potential)
     
-    def compute_forward_vec(self, seq_id):
+    def compute_fpotential(self, w, seq_id, boundary, accum_activestates):
+        model = self.model
+        pky_codebook = model.pky_codebook
+        z_pky = model.pky_z
+        Z_lendict = model.Z_lendict
+        f_potential = numpy.zeros(len(pky_codebook))
+        # get activated states per boundary
+        activated_states = self.seqs_info[seq_id]['activated_states'][boundary]
+        seg_features = self.seqs_info[seq_id]['seg_features'][boundary]
+        u, v = boundary
+        filtered_states =  model.filter_activated_states(activated_states, accum_activestates, u)
+        active_features = model.represent_activefeatures(filtered_states, seg_features)
+
+        for z in active_features:
+            if(Z_lendict[z] == 1):
+                if(v in accum_activestates):
+                    accum_activestates[v].add(z)
+                else:
+                    s = set()
+                    s.add(z)
+                    accum_activestates[v] = s 
+            w_indx = list(active_features[z].keys())
+            f_val = list(active_features[z].values())
+            potential = numpy.inner(w[w_indx], f_val)
+            for pky in z_pky[z]:
+                pky_c = pky_codebook[pky]
+                f_potential[pky_c] += potential
+        return(f_potential)
+               
+        
+        
+    def compute_forward_vec(self, w, seq_id):
         pi_pky_codebook = self.model.pi_pky_codebook
         P_codebook = self.model.P_codebook
         pi_lendict = self.model.pi_lendict
         T = self.seqs_info[seq_id]["T"]
-        f_potential = self.seqs_info[seq_id]["f_potential"]
         alpha = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         alpha[0,P_codebook[""]] = 0
+        accum_activestates = {}
         
         for j in range(1, T+1):
             for pi in pi_pky_codebook:
                 if(j >= pi_lendict[pi]):
-                    vec = f_potential[j, pi_pky_codebook[pi][0]] + alpha[j-1, pi_pky_codebook[pi][1]]
-                    alpha[j, P_codebook[pi]] = vectorized_logsumexp(vec)           
+                    # compute f_potential
+                    boundary = (j, j)
+                    f_potential = self.compute_fpotential(w, seq_id, boundary, accum_activestates)
+                    vec = f_potential[pi_pky_codebook[pi][0]] + alpha[j-1, pi_pky_codebook[pi][1]]
+                    alpha[j, P_codebook[pi]] = vectorized_logsumexp(vec)
         return(alpha)
 
     def prepare_b_potentialfeatures(self, seq_id):
@@ -777,7 +843,14 @@ class HOCRF(object):
         seqs_representer = self.seqs_representer
         imposter_globalfeatures = seqs_representer.get_imposterseq_globalfeatures(seq_id, self.seqs_info, self.model, y_imposter, seg_other_symbol)
         return(imposter_globalfeatures)
+    
+    def aggregate_globalfeatures(self, gfeatures_per_boundary, boundaries):
+        # get sequence global features
+        seqs_representer = self.seqs_representer
+        aggregate_gfeatures = seqs_representer.aggregate_globalfeatures(gfeatures_per_boundary, boundaries)
         
+        return(aggregate_gfeatures)  
+    
     def _load_seq(self, seq_id, target = "seq"):
         seqs_representer = self.seqs_representer
         seq = seqs_representer.load_seq(seq_id, self.seqs_info)
@@ -902,7 +975,89 @@ class HOCRF(object):
             line += "\n"
             ReaderWriter.log_progress(line,out_file)  
             
+    def prune_states(self, j, delta, beam_size):
+        P_codebook_rev = self.model.P_codebook_rev
+        pi_elems = self.model.pi_elems
+        pi_lendict = self.model.pi_lendict
 
+        # sort the pi in descending order of their score
+        indx_sorted_pi = numpy.argsort(delta[j,:])[::-1]
+        # identify states falling out of the beam
+        indx_falling_pi = indx_sorted_pi[beam_size:]
+        # identify top-k states/pi
+        indx_topk_pi = indx_sorted_pi[:beam_size]
+        # remove the effect of states/pi falling out of the beam
+        delta[j, indx_falling_pi] = -numpy.inf
+        
+        # remove falling states
+        topk_pi = {P_codebook_rev[indx] for indx in indx_topk_pi}
+        topk_states = set()
+        for pi in topk_pi:
+            if(pi_lendict[pi] > 1):
+                topk_states.add(pi_elems[pi][-1])
+            else:
+                topk_states.add(pi)
+        return(topk_states)
+    
+
+    def viterbi_learn(self, w, seq_id, beam_size, y_ref):
+        pky_codebook_rev = self.model.pky_codebook_rev
+        pi_pky_codebook = self.model.pi_pky_codebook
+        f_transition = self.model.f_transition
+        P_codebook = self.model.P_codebook
+        T = self.seqs_info[seq_id]["T"]
+        # records max score at every time step
+        delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
+        # the score for the empty sequence at time 0 is 1
+        delta[0, P_codebook[""]] = 0
+        back_track = {}
+        pi_lendict = self.model.pi_lendict
+        accum_activestates = {}
+        # records where violation occurs -- it is 1-based indexing 
+        early_viol_index = None
+        
+        for j in range(1, T+1):
+            boundary = (j, j)
+            f_potential = self.compute_fpotential(w, seq_id, boundary, accum_activestates)
+            for pi in pi_pky_codebook:
+                if(j >= pi_lendict[pi]):
+                    vec = f_potential[pi_pky_codebook[pi][0]] + delta[j-1, pi_pky_codebook[pi][1]]
+                    #print("pi ", pi)
+                    #print("vec ", vec)
+                    delta[j, P_codebook[pi]] = numpy.max(vec)
+                    #print("max chosen ", delta[j, P_codebook[pi]])
+                    argmax_ind = numpy.argmax(vec)
+                    #print("argmax chosen ", argmax_ind)
+                    pky_c = pi_pky_codebook[pi][0][argmax_ind]
+                    pky = pky_codebook_rev[pky_c]
+                    # extracting (pk, y) tuple 
+                    back_track[j, P_codebook[pi]] = (f_transition[pi][pky][0], f_transition[pi][pky][1])
+            # apply the beam
+            topk_states = self.prune_states(j, delta, beam_size)
+            if(y_ref and not early_viol_index):
+                if(y_ref[j-1] not in topk_states):
+                    early_viol_index = j
+            # update tracked active states -- to consider renaming it
+            accum_activestates[j] = topk_states
+
+        # decoding the sequence
+        p_T_code = numpy.argmax(delta[T,:])
+        p_T, y_T = back_track[T, p_T_code]
+        Y_decoded = []
+      
+        Y_decoded.append((p_T,y_T))
+        t = T - 1
+        while t>0:
+            p_tplus1 = Y_decoded[-1][0]
+            p_t, y_t = back_track[(t, P_codebook[p_tplus1])]
+            Y_decoded.append((p_t, y_t))
+            t -= 1
+        Y_decoded.reverse()
+
+        Y_decoded = [yt for (pt,yt) in Y_decoded]
+        #print("Y_decoded {}".format(Y_decoded))
+        return(Y_decoded, early_viol_index)
+    
     def viterbi(self, w, seq_id):
         l = ("activefeatures_by_position", "f_potential")
         self.check_cached_info(w, seq_id, l)

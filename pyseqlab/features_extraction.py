@@ -83,7 +83,7 @@ class HOFeatureExtractor(object):
         return(check)
                     
                 
-    def extract_seq_features(self, seq):
+    def extract_seq_features_per_boundary(self, seq):
         # this method is used to extract features from sequences in the training dataset 
         # (i.e. we know the labels and boundaries)
         Y = seq.Y
@@ -105,18 +105,28 @@ class HOFeatureExtractor(object):
 #             #print("features {}".format(features[boundary]))
 #             #print("*"*40)
                 
+        return(features)
+    
+    def agggregate_features(self, features, boundaries):
         # summing up all detected features across all boundaries
         seq_features = {}
-        for boundary, xy_features in features.items():
-            for y_patt in xy_features:
-                if(y_patt in seq_features):
-                    seq_features[y_patt].update(xy_features[y_patt])
-                else:
-                    seq_features[y_patt] = xy_features[y_patt]
-#                 #print("seq_features {}".format(seq_features))
-        ##print("features sum {}".format(seq_features))
+        for boundary in boundaries:
+            for xy_features in features[boundary]:
+                for y_patt in xy_features:
+                    if(y_patt in seq_features):
+                        seq_features[y_patt].update(xy_features[y_patt])
+                    else:
+                        seq_features[y_patt] = xy_features[y_patt]
         return(seq_features)
-                  
+    
+    def extract_seq_features(self, seq, boundaries=None):
+        features_per_boundary = self.extract_seq_features_per_boundary(seq)
+        if(not boundaries):
+            boundaries = seq.Y.keys()
+        seq_features = self.agggregate_features(features_per_boundary, boundaries)
+        
+        return(seq_features)
+    
     def extract_features_Y(self, seq, boundary, templateY):
         """ template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
                        = {Y: tuple(y_offsets)}        
@@ -400,7 +410,7 @@ class HOFeatureExtractor(object):
                 if(ypatt_features):
                     ypatt_activated_states = {z_len:ypatt_activestates[z_len] for z_len in allowed_z_len if z_len in ypatt_activestates}
                     for zlen, ypatts in ypatt_activated_states.items():
-                        if(zlen in activated_states):
+                        if(zlen in activated_states[boundary]):
                             activated_states[boundary][zlen].update(ypatts)
                         else:
                             activated_states[boundary][zlen] = ypatts 
@@ -1093,61 +1103,6 @@ class SeqsRepresentation(object):
         line += "\n \n"
         ReaderWriter.log_progress(line, log_file)
     
-#     def _parallel_activefeatures_extraction(self, seq_id):
-#         # lookup active features for the current sequence and store them on disk
-#         #print("looking for model active features for seq {}".format(seq_id))
-#         seqs_info = self.seqs_info
-#         model = self.model
-#         L = model.L
-#         output_dir = self.out_dir
-#          
-#         f_extractor = self.feature_extractor
-#         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-#         seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
-#         if(L > 1):
-#             self._lookup_seq_attributes(seq, L)
-#             ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-#         active_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
-#         activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
-#         seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
-#         # dump model active features data
-#         ReaderWriter.dump_data(active_features, os.path.join(activefeatures_dir, "activefeatures"))
-# #         #print("seq_id ", seq_id)
-# #         #print("seqs_info[{}] = {}".format(seq_id, seqs_info[seq_id]))
-#         return((seq_id, activefeatures_dir))
-# #         return({seq_id:{'activefeatures_dir':activefeatures_dir}})
-#          
-#     def extract_seqs_modelactivefeatures(self, seqs_id, seqs_info, model, output_foldername):
-#         # get the root_dir
-#         seq_id = seqs_id[0]
-#         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-#         root_dir = os.path.dirname(os.path.dirname(seq_dir))
-#         output_dir = create_directory("model_activefeatures_{}".format(output_foldername), root_dir)
-# #         L = model.L
-# #         f_extractor = self.feature_extractor
-#         self.seqs_info = seqs_info
-#         self.model = model
-#         self.out_dir = output_dir
-#          
-#         start_time = datetime.now()
-#         activefeatures_dirs = Parallel(n_jobs=-1, backend='threading')(delayed(self._parallel_activefeatures_extraction)(seq_id) for seq_id in seqs_id)
-#         for elem_tup in activefeatures_dirs:
-#             seq_id, activefeatures_dir = elem_tup
-#             seqs_info[seq_id]['activefeatures_dir'] = activefeatures_dir
-#         end_time = datetime.now()
-#         
-#         # clear vars
-#         for var in (self.seqs_info, self.model, self.out_dir):
-#             var = None
-#             del var
-#              
-#         log_file = os.path.join(output_dir, "log.txt")
-#         line = "---Finding sequences' model active-features--- starting time: {} \n".format(start_time)
-#         line += "Total number of parsed sequences: {} \n".format(len(seqs_id))
-#         line += "---Finding sequences' model active-features--- end time: {} \n".format(end_time)
-#         line += "\n \n"
-#         ReaderWriter.log_progress(line, log_file)
-    
     def _lookup_seq_attributes(self, seq, L):
         # generate the missing attributes if the segment length is greater than 1
         attr_extractor = self.attr_extractor
@@ -1186,6 +1141,12 @@ class SeqsRepresentation(object):
             
         return(seqs_globalfeatures)
 
+    def aggregate_globalfeatures(self, gfeatures_per_boundary, boundaries):
+        feature_extractor = self.feature_extractor
+        seq_features = feature_extractor.aggregate_features(gfeatures_per_boundary, boundaries)
+        windx_fval = self.model.represent_globalfeatures(seq_features)
+        return(windx_fval)
+            
     def get_imposterseq_globalfeatures(self, seq_id, seqs_info, model, y_imposter, seg_other_symbol = None):
         """to be used for processing a sequence, generating global features and return back without storing on disk
             Function that parses a sequence and generates global feature  F_j(X,Y)
