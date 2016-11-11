@@ -83,7 +83,7 @@ class HOFeatureExtractor(object):
         return(check)
                     
                 
-    def extract_seq_features_per_boundary(self, seq):
+    def extract_seq_features_perboundary(self, seq):
         # this method is used to extract features from sequences in the training dataset 
         # (i.e. we know the labels and boundaries)
         Y = seq.Y
@@ -120,7 +120,7 @@ class HOFeatureExtractor(object):
         return(seq_features)
     
     def extract_seq_features(self, seq):
-        features_per_boundary = self.extract_seq_features_per_boundary(seq)
+        features_per_boundary = self.extract_seq_features_perboundary(seq)
         seq_features = self.agggregate_features(features_per_boundary, boundaries=seq.Y)
         return(seq_features)
     
@@ -989,10 +989,10 @@ class SeqsRepresentation(object):
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb")
             ###### extract the sequence features #####
             # seq_features has this format {'Y_patt':Counter(features)}
-            seq_featuresum = feature_extractor.extract_seq_features(seq)    
-                    
+            gfeatures_perboundary = feature_extractor.extract_seq_features_perboundary(seq)                    
             # store the features' sum (i.e. F_j(X,Y) for every sequence on disk)
-            feature_extractor.dump_features(os.path.join(seq_dir, "globalfeatures"), seq_featuresum)
+            ReaderWriter.dump_data(gfeatures_perboundary, os.path.join(seq_dir, "globalfeatures_per_boundary"))
+
         end_time = datetime.now()
         
         # any sequence would lead to the parent directory of prepared/parsed sequences
@@ -1020,16 +1020,19 @@ class SeqsRepresentation(object):
         modelfeatures = {}
         # length of longest entity in a segment
         L = 1
+        feature_extractor = self.feature_extractor
         
         start_time = datetime.now()
         for seq_id in seqs_id:
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-            seq_featuresum = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures"))
+            gfeatures_perboundary = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures_per_boundary"))
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
+            y_boundaries = seq.get_y_boundaries()
+            gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, y_boundaries)
             # get the largest length of an entity in the segment
             if(seq.L > L):
                 L = seq.L
-            for y_patt, featuresum in seq_featuresum.items():
+            for y_patt, featuresum in gfeatures.items():
                 if(y_patt in modelfeatures):
                     modelfeatures[y_patt].update(featuresum)
                 else:
@@ -1083,9 +1086,10 @@ class SeqsRepresentation(object):
                 self._lookup_seq_attributes(seq, L)
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
             activated_states, seg_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
+
+            # dump model active features data
             activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
             seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
-            # dump model active features data
             ReaderWriter.dump_data(activated_states, os.path.join(activefeatures_dir, "activated_states"))
             ReaderWriter.dump_data(seg_features, os.path.join(activefeatures_dir, "seg_features"))
 
@@ -1114,37 +1118,33 @@ class SeqsRepresentation(object):
                     # this will update the value of the seg_attr of the sequence 
                     attr_extractor.generate_attributes(seq, [boundary])
                     attr_scaler.scale_real_attributes(seq, [boundary])
-                
-    @staticmethod      
-    def get_seqs_modelactivefeatures(seqs_id, seqs_info):
-        seqs_activefeatures = {}
-        for seq_id in seqs_id:
-            seq_dir = seqs_info[seq_id]["activefeatures_dir"]
-            active_features = ReaderWriter.read_data(os.path.join(seq_dir,"activefeatures"))
-            seqs_activefeatures[seq_id] = active_features
-        
-        return(seqs_activefeatures)
+            
     
-    # to change it into static method
-    def get_seqs_globalfeatures(self, seqs_id, seqs_info, model):
+    def get_seq_activatedstates(self, seq_id, seqs_info):
+        seq_dir = seqs_info[seq_id]["activefeatures_dir"]
+        activated_states = ReaderWriter.read_data(os.path.join(seq_dir,"activated_states"))
+        return(activated_states)
+    
+    def get_seq_segfeatures(self, seq_id, seqs_info):
+        seq_dir = seqs_info[seq_id]["activefeatures_dir"]
+        seg_features = ReaderWriter.read_data(os.path.join(seq_dir, "seg_features"))
+        return(seg_features)
+    
+    def get_seq_globalfeatures_perboundary(self, seq_id, seqs_info):
         """it retrieves the features available for the current sequence (i.e. F(X,Y) for all j \in [1...J] 
         """
-        seqs_globalfeatures = {}
-        for seq_id in seqs_id:
-            seq_dir = seqs_info[seq_id]['globalfeatures_dir']
-            seq_featuresum = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures"))
-            windx_fval = model.represent_globalfeatures(seq_featuresum)
-            seqs_globalfeatures[seq_id] = windx_fval
-            
-        return(seqs_globalfeatures)
-
-    def aggregate_globalfeatures(self, gfeatures_per_boundary, boundaries):
+        seq_dir = seqs_info[seq_id]['globalfeatures_dir']
+        gfeatures_perboundary = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures_per_boundary"))
+        return(gfeatures_perboundary)
+    
+    def represent_gfeatures(self, gfeatures_perboundary, boundaries, model):
         feature_extractor = self.feature_extractor
-        seq_features = feature_extractor.aggregate_features(gfeatures_per_boundary, boundaries)
-        windx_fval = self.model.represent_globalfeatures(seq_features)
+        gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, boundaries)
+        windx_fval = self.model.represent_globalfeatures(gfeatures)
         return(windx_fval)
+
             
-    def get_imposterseq_globalfeatures(self, seq_id, seqs_info, model, y_imposter, seg_other_symbol = None):
+    def get_imposterseq_globalfeatures(self, seq_id, seqs_info, y_imposter, seg_other_symbol = None):
         """to be used for processing a sequence, generating global features and return back without storing on disk
             Function that parses a sequence and generates global feature  F_j(X,Y)
             without saving intermediary results on disk
@@ -1156,31 +1156,25 @@ class SeqsRepresentation(object):
         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
         ##print("seq_dir {}".format(seq_dir))
         seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb")
-        ##print("original seq.Y {}".format(seq.Y))
-        ##print("original y boundaries {}".format(seq.get_y_boundaries()))
-        ##print("len {}".format(len(seq.Y)))
         
-        y_original = list(seq.flat_y)
+        y_ref = list(seq.flat_y)        
+        # update seq.Y with the imposter Y
         seq.Y = (y_imposter, seg_other_symbol)
-        y_boundaries = seq.get_y_boundaries()
-        ##print("imposter seq.Y {}".format(seq.Y))
-        ##print("imposter y boundaries {}".format(seq.get_y_boundaries()))
-        ##print("len {}".format(len(seq.Y)))
-        
-        ##print("seq.seg_attr {}".format(seq.seg_attr))
-        ##print("len(seq")
+        y_imposter_boundaries = seq.get_y_boundaries()
         # this will update the value of the seg_attr of the sequence 
-        new_y_boundaries = attr_extractor.generate_attributes(seq, y_boundaries)
-        if(new_y_boundaries):
-            attr_scaler.scale_real_attributes(seq, new_y_boundaries)
-            ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "rb")
+        new_boundaries = attr_extractor.generate_attributes(seq, y_imposter_boundaries)
+        if(new_boundaries):
+            attr_scaler.scale_real_attributes(seq, new_boundaries)
             
-        seq_imposter_featuresum = feature_extractor.extract_seq_features(seq)  
-        windx_fval = model.represent_globalfeatures(seq_imposter_featuresum)
+        imposter_gfeatures = feature_extractor.extract_seq_features_per_boundary(seq)
+        # put back the original Y
+        seq.Y = (y_ref, seg_other_symbol) 
+        if(new_boundaries):
+            # write back the sequence on disk given the segment attributes have been updated
+            ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "rb")
         
-        seq.Y = (y_original, seg_other_symbol)
+        return(imposter_gfeatures, y_imposter_boundaries)
 
-        return(windx_fval)
     
     @staticmethod
     def load_seq(seq_id, seqs_info):

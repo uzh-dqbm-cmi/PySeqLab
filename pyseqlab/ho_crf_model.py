@@ -546,9 +546,10 @@ class HOCRF(object):
                          "beta": self._load_beta,
                          "f_potential": self._load_fpotential,
                          "b_potential": self._load_bpotential,
-                         "activefeatures_by_position": self.load_activefeatures,
+                         "activated_states": self.load_activatedstates,
+                         "seg_features": self.load_segfeatures,
                          "globalfeatures": self.load_globalfeatures,
-                         "flat_y":self._load_flaty}
+                         "Y":self._load_Y}
         
         self.info_ondisk_fname = ["cached_pf", "activefeatures_by_position", "globalfeatures"]
         self.cached_entites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp"]
@@ -643,7 +644,8 @@ class HOCRF(object):
             filtered_states = activated_states
         accum_activestates[v] = filtered_states[state_len] 
         active_features = model.represent_activefeatures(filtered_states, seg_features)
-
+        
+        # to consider caching the w_indx and fval as in cached_pf
         for z in active_features:
             w_indx = list(active_features[z].keys())
             f_val = list(active_features[z].values())
@@ -818,37 +820,47 @@ class HOCRF(object):
         seq_info["b_potential"] = self.compute_b_potential(w, seq_id)
         #print("... Computing b_potential ...")
 
-    def _load_flaty(self, w, seq_id):
+    def _load_Y(self, w, seq_id):
         seq = self._load_seq(seq_id, target="seq")
-        self.seqs_info[seq_id]['flat_y'] = seq.flat_y
-        #print("loading flaty")
+        self.seqs_info[seq_id]['Y'] = {'flat_y':seq.flat_y,
+                                       'boundaries':seq.get_y_boundaries()}
+        #print("loading Y")
 
-    def load_activefeatures(self, w, seq_id):
-        # get the sequence model active features
+    def load_activatedstates(self, w, seq_id):
+        # get the sequence activated states
+        seqs_info = self.seqs_info
         seqs_representer = self.seqs_representer
-        seqs_activefeatures = seqs_representer.get_seqs_modelactivefeatures([seq_id], self.seqs_info)
-        self.seqs_info[seq_id]["activefeatures_by_position"] = seqs_activefeatures[seq_id]
-        #print("loading activefeatures")
-        
+        activated_states = seqs_representer.get_seq_activatedstates(seq_id, seqs_info)
+        seqs_info[seq_id]["activated_states"] = activated_states
+        #print("loading activated states")
+    
+    def load_segfeatures(self, w, seq_id):
+        # get the sequence segment features
+        seqs_info = self.seqs_info
+        seqs_representer = self.seqs_representer
+        seg_features = seqs_representer.get_seq_segfeatures(seq_id, seqs_info)
+        self.seqs_info[seq_id]["seg_features"] = seg_features
+        #print("loading segment features")
+    
     def load_globalfeatures(self, w, seq_id):
         # get sequence global features
         seqs_representer = self.seqs_representer
-        seqs_globalfeatures = seqs_representer.get_seqs_globalfeatures([seq_id], self.seqs_info, self.model)
-        self.seqs_info[seq_id]["globalfeatures"] = seqs_globalfeatures[seq_id]
+        gfeatures_perboundary = seqs_representer.get_seq_globalfeatures_perboundary(seq_id, self.seqs_info)
+        self.seqs_info[seq_id]["globalfeatures_per_boundary"] = gfeatures_perboundary
         #print("loading globalfeatures")
         
     def load_imposter_globalfeatures(self, seq_id, y_imposter, seg_other_symbol):
         # get sequence global features
         seqs_representer = self.seqs_representer
-        imposter_globalfeatures = seqs_representer.get_imposterseq_globalfeatures(seq_id, self.seqs_info, self.model, y_imposter, seg_other_symbol)
-        return(imposter_globalfeatures)
+        imposter_gfeatures_perboundary, y_imposter_boundaries = seqs_representer.get_imposterseq_globalfeatures(seq_id, self.seqs_info, y_imposter, seg_other_symbol)
+        return(imposter_gfeatures_perboundary, y_imposter_boundaries)
     
-    def aggregate_globalfeatures(self, gfeatures_per_boundary, boundaries):
+    def represent_globalfeature(self, gfeatures_perboundary, boundaries):
         # get sequence global features
         seqs_representer = self.seqs_representer
-        aggregate_gfeatures = seqs_representer.aggregate_globalfeatures(gfeatures_per_boundary, boundaries)
-        
-        return(aggregate_gfeatures)  
+        windx_fval = seqs_representer.represent_gfeatures(gfeatures_perboundary, boundaries, self.model)        
+        return(windx_fval)  
+    
     
     def _load_seq(self, seq_id, target = "seq"):
         seqs_representer = self.seqs_representer
@@ -999,7 +1011,9 @@ class HOCRF(object):
         return(topk_states)
     
 
-    def viterbi_learn(self, w, seq_id, beam_size, y_ref):
+    def viterbi(self, w, seq_id, beam_size, y_ref):
+        l = ("activated_states", "seg_features")
+        self.check_cached_info(w, seq_id, l)
         pky_codebook_rev = self.model.pky_codebook_rev
         pi_pky_codebook = self.model.pi_pky_codebook
         f_transition = self.model.f_transition
@@ -1058,58 +1072,58 @@ class HOCRF(object):
         #print("Y_decoded {}".format(Y_decoded))
         return(Y_decoded, viol_index)
     
-    def viterbi(self, w, seq_id):
-        l = ("activefeatures_by_position", "f_potential")
-        self.check_cached_info(w, seq_id, l)
-        f_potential = self.seqs_info[seq_id]["f_potential"]
-        #print("f_potential ", f_potential)
-        pky_codebook_rev = self.model.pky_codebook_rev
-        pi_pky_codebook = self.model.pi_pky_codebook
-        
-        f_transition = self.model.f_transition
-        P_codebook = self.model.P_codebook
-        #print("f_transition ", f_transition)
-        #print("P_codebook ", P_codebook)
-        T = self.seqs_info[seq_id]["T"]
-        # records max score at every time step
-        delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
-        # the score for the empty sequence at time 0 is 1
-        delta[0, P_codebook[""]] = 0
-        back_track = {}
-        pi_lendict = self.model.pi_lendict
-        
-        for j in range(1, T+1):
-            for pi in pi_pky_codebook:
-                if(j >= pi_lendict[pi]):
-                    vec = f_potential[j, pi_pky_codebook[pi][0]] + delta[j-1, pi_pky_codebook[pi][1]]
-                    #print("pi ", pi)
-                    #print("vec ", vec)
-                    delta[j, P_codebook[pi]] = numpy.max(vec)
-                    #print("max chosen ", delta[j, P_codebook[pi]])
-                    argmax_ind = numpy.argmax(vec)
-                    #print("argmax chosen ", argmax_ind)
-                    pky_c = pi_pky_codebook[pi][0][argmax_ind]
-                    pky = pky_codebook_rev[pky_c]
-                    # extracting (pk, y) tuple 
-                    back_track[j, P_codebook[pi]] = (f_transition[pi][pky][0], f_transition[pi][pky][1])
-
-        # decoding the sequence
-        p_T_code = numpy.argmax(delta[T,:])
-        p_T, y_T = back_track[T, p_T_code]
-        Y_decoded = []
-      
-        Y_decoded.append((p_T,y_T))
-        t = T - 1
-        while t>0:
-            p_tplus1 = Y_decoded[-1][0]
-            p_t, y_t = back_track[(t, P_codebook[p_tplus1])]
-            Y_decoded.append((p_t, y_t))
-            t -= 1
-        Y_decoded.reverse()
-
-        Y_decoded = [yt for (pt,yt) in Y_decoded]
-        #print("Y_decoded {}".format(Y_decoded))
-        return(Y_decoded)
+#     def viterbi(self, w, seq_id):
+#         l = ("activefeatures_by_position", "f_potential")
+#         self.check_cached_info(w, seq_id, l)
+#         f_potential = self.seqs_info[seq_id]["f_potential"]
+#         #print("f_potential ", f_potential)
+#         pky_codebook_rev = self.model.pky_codebook_rev
+#         pi_pky_codebook = self.model.pi_pky_codebook
+#         
+#         f_transition = self.model.f_transition
+#         P_codebook = self.model.P_codebook
+#         #print("f_transition ", f_transition)
+#         #print("P_codebook ", P_codebook)
+#         T = self.seqs_info[seq_id]["T"]
+#         # records max score at every time step
+#         delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
+#         # the score for the empty sequence at time 0 is 1
+#         delta[0, P_codebook[""]] = 0
+#         back_track = {}
+#         pi_lendict = self.model.pi_lendict
+#         
+#         for j in range(1, T+1):
+#             for pi in pi_pky_codebook:
+#                 if(j >= pi_lendict[pi]):
+#                     vec = f_potential[j, pi_pky_codebook[pi][0]] + delta[j-1, pi_pky_codebook[pi][1]]
+#                     #print("pi ", pi)
+#                     #print("vec ", vec)
+#                     delta[j, P_codebook[pi]] = numpy.max(vec)
+#                     #print("max chosen ", delta[j, P_codebook[pi]])
+#                     argmax_ind = numpy.argmax(vec)
+#                     #print("argmax chosen ", argmax_ind)
+#                     pky_c = pi_pky_codebook[pi][0][argmax_ind]
+#                     pky = pky_codebook_rev[pky_c]
+#                     # extracting (pk, y) tuple 
+#                     back_track[j, P_codebook[pi]] = (f_transition[pi][pky][0], f_transition[pi][pky][1])
+# 
+#         # decoding the sequence
+#         p_T_code = numpy.argmax(delta[T,:])
+#         p_T, y_T = back_track[T, p_T_code]
+#         Y_decoded = []
+#       
+#         Y_decoded.append((p_T,y_T))
+#         t = T - 1
+#         while t>0:
+#             p_tplus1 = Y_decoded[-1][0]
+#             p_t, y_t = back_track[(t, P_codebook[p_tplus1])]
+#             Y_decoded.append((p_t, y_t))
+#             t -= 1
+#         Y_decoded.reverse()
+# 
+#         Y_decoded = [yt for (pt,yt) in Y_decoded]
+#         #print("Y_decoded {}".format(Y_decoded))
+#         return(Y_decoded)
         
  
     def validate_forward_backward_pass(self, w, seq_id):
