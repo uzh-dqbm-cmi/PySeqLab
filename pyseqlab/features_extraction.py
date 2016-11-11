@@ -107,7 +107,7 @@ class HOFeatureExtractor(object):
                 
         return(features)
     
-    def agggregate_features(self, features, boundaries):
+    def agggregate_seq_features(self, features, boundaries):
         # summing up all detected features across all boundaries
         seq_features = {}
         for boundary in boundaries:
@@ -119,12 +119,9 @@ class HOFeatureExtractor(object):
                         seq_features[y_patt] = xy_features[y_patt]
         return(seq_features)
     
-    def extract_seq_features(self, seq, boundaries=None):
+    def extract_seq_features(self, seq):
         features_per_boundary = self.extract_seq_features_per_boundary(seq)
-        if(not boundaries):
-            boundaries = seq.Y.keys()
-        seq_features = self.agggregate_features(features_per_boundary, boundaries)
-        
+        seq_features = self.agggregate_features(features_per_boundary, boundaries=seq.Y)
         return(seq_features)
     
     def extract_features_Y(self, seq, boundary, templateY):

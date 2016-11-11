@@ -628,28 +628,27 @@ class HOCRF(object):
     
     def compute_fpotential(self, w, seq_id, boundary, accum_activestates):
         model = self.model
+        state_len = 1
         pky_codebook = model.pky_codebook
         z_pky = model.pky_z
-        Z_lendict = model.Z_lendict
         f_potential = numpy.zeros(len(pky_codebook))
         # get activated states per boundary
         activated_states = self.seqs_info[seq_id]['activated_states'][boundary]
         seg_features = self.seqs_info[seq_id]['seg_features'][boundary]
         u, v = boundary
-        filtered_states =  model.filter_activated_states(activated_states, accum_activestates, u)
+        # initial point
+        if(boundary != (1,1)):
+            filtered_states =  model.filter_activated_states(activated_states, accum_activestates, u)
+        else:
+            filtered_states = activated_states
+        accum_activestates[v] = filtered_states[state_len] 
         active_features = model.represent_activefeatures(filtered_states, seg_features)
 
         for z in active_features:
-            if(Z_lendict[z] == 1):
-                if(v in accum_activestates):
-                    accum_activestates[v].add(z)
-                else:
-                    s = set()
-                    s.add(z)
-                    accum_activestates[v] = s 
             w_indx = list(active_features[z].keys())
             f_val = list(active_features[z].values())
             potential = numpy.inner(w[w_indx], f_val)
+            # to consider save the code of the pky in z_pky directly
             for pky in z_pky[z]:
                 pky_c = pky_codebook[pky]
                 f_potential[pky_c] += potential
@@ -989,7 +988,7 @@ class HOCRF(object):
         # remove the effect of states/pi falling out of the beam
         delta[j, indx_falling_pi] = -numpy.inf
         
-        # remove falling states
+        # get topk states
         topk_pi = {P_codebook_rev[indx] for indx in indx_topk_pi}
         topk_states = set()
         for pi in topk_pi:
@@ -1014,10 +1013,11 @@ class HOCRF(object):
         pi_lendict = self.model.pi_lendict
         accum_activestates = {}
         # records where violation occurs -- it is 1-based indexing 
-        early_viol_index = None
+        viol_index = []
         
         for j in range(1, T+1):
             boundary = (j, j)
+            # vector of size len(pky)
             f_potential = self.compute_fpotential(w, seq_id, boundary, accum_activestates)
             for pi in pi_pky_codebook:
                 if(j >= pi_lendict[pi]):
@@ -1034,9 +1034,9 @@ class HOCRF(object):
                     back_track[j, P_codebook[pi]] = (f_transition[pi][pky][0], f_transition[pi][pky][1])
             # apply the beam
             topk_states = self.prune_states(j, delta, beam_size)
-            if(y_ref and not early_viol_index):
+            if(y_ref):
                 if(y_ref[j-1] not in topk_states):
-                    early_viol_index = j
+                    viol_index.append(j)
             # update tracked active states -- to consider renaming it
             accum_activestates[j] = topk_states
 
@@ -1056,7 +1056,7 @@ class HOCRF(object):
 
         Y_decoded = [yt for (pt,yt) in Y_decoded]
         #print("Y_decoded {}".format(Y_decoded))
-        return(Y_decoded, early_viol_index)
+        return(Y_decoded, viol_index)
     
     def viterbi(self, w, seq_id):
         l = ("activefeatures_by_position", "f_potential")

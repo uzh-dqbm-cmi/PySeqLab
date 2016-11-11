@@ -367,14 +367,62 @@ class Learner(object):
         ReaderWriter.log_progress(line, log_file)
         self._elapsed_time = datetime.now()
 
-    def _find_update_violation(self, w, seq_id):
-        crf_model = self.crf_model
+    def _find_update_violation(self, w, seq_id, beam_size, update_type):
         seqs_info = self.seqs_info
-        y_imposter, early_viol_index = crf_model.viterbi(w, seq_id)
-        
-        if(early_viol_index):
-            crf_model.check_cached_info(w, seq_id, ('globalfeatures_per_boundary'))
-        # to continue
+        crf_model = self.crf_model
+        crf_model.check_cached_info(w, seq_id, ("flat_y",))
+        y_original = seqs_info[seq_id]['flat_y']
+        y_imposter, viol_indx = crf_model.viterbi_learn(w, seq_id, beam_size, y_original)
+        seg_other_symbol = self.training_description['seg_other_symbol']
+        if(not viol_indx):
+            # we can perform full update
+            T = self.seqs_info['T']
+            missmatch = [i for i in range(T) if y_original[i] != y_imposter[i]]
+            len_diff = len(missmatch)
+            # range of error is [0-1]
+            seq_err_count = len_diff/T
+            if(len_diff):                    
+                crf_model.check_cached_info(w, seq_id, ("globalfeatures",))
+                y_original_gfeatures = seqs_info[seq_id]['globalfeatures']
+                # generate global features for the current imposter 
+                y_imposter_gfeatures = crf_model.load_imposter_globalfeatures(seq_id, y_imposter, seg_other_symbol)                     
+#                         print("y_imposter gfeatures {}".format(y_imposter_gfeatures))
+#                         print("y_original_gfeatures {}".format(y_original_gfeatures))
+
+                # the contribution of global features when using the correct label sequence
+                w[list(y_original_gfeatures.keys())] += list(y_original_gfeatures.values())
+                
+                # the contribution of global features when using the imposter label sequence
+                w[list(y_imposter_gfeatures.keys())] -= list(y_imposter_gfeatures.values())
+             
+            return(seq_err_count)
+        else:
+            if(update_type == "early"):
+                # viol_index is 1-based indexing
+                early_viol_indx = viol_indx[0]
+                T = len(y_original[:early_viol_indx])
+                missmatch = [i for i in range(T) if y_original[i] != y_imposter[i]]
+                len_diff = len(missmatch)
+                # range of error is [0-1]
+                seq_err_count = len_diff/T
+                crf_model.check_cached_info(w, seq_id, ("globalfeatures",))
+                y_original_gfeatures = seqs_info[seq_id]['globalfeatures']
+                # generate global features for the current imposter 
+                y_imposter_gfeatures = crf_model.load_imposter_globalfeatures(seq_id, y_imposter, seg_other_symbol)                     
+#                         print("y_imposter gfeatures {}".format(y_imposter_gfeatures))
+#                         print("y_original_gfeatures {}".format(y_original_gfeatures))
+
+                # the contribution of global features when using the correct label sequence
+                w[list(y_original_gfeatures.keys())] += list(y_original_gfeatures.values())
+                
+                # the contribution of global features when using the imposter label sequence
+                w[list(y_imposter_gfeatures.keys())] -= list(y_imposter_gfeatures.values())
+                return(y_original[:early_viol_indx], y_imposter[:early_viol_indx])
+            elif(update_type == "max"):
+                pass
+            elif(update_type == "latest"):
+                pass
+                
                         
     # needs still some work and fixing....
     def _structured_perceptron(self, w, train_seqs_id):
@@ -392,6 +440,8 @@ class Learner(object):
 #         C = self.training_description['regularization_value']
         seg_other_symbol = self.training_description['seg_other_symbol']
         avg_scheme = self.training_description["avg_scheme"]
+        beam_size = self.training_description['beam_size']
+        update_type = self.training_description['update_type']
         model_dir = self.training_description["model_dir"]
         log_file = os.path.join(model_dir, "crf_training_log.txt")
 
@@ -415,16 +465,11 @@ class Learner(object):
                 numpy.random.shuffle(train_seqs_id)
                 for seq_id in train_seqs_id:
                     print("sequences left {}".format(seq_left))
-                    y_imposter = crf_model.viterbi(w, seq_id)
-
-                    if(k == 0):
-                        crf_model.check_cached_info(w, seq_id, ("flat_y",))
-                    
-                    y_original = seqs_info[seq_id]['flat_y']
-                    T = seqs_info[seq_id]['T']
+                    y_original, y_imposter = self._find_update_violation(w, seq_id, beam_size, update_type)
+                    seq_len = len(y_original)
 #                     print("y original {}".format(y_original))
 #                     print("y imposter {}".format(y_imposter))
-                    missmatch = [i for i in range(T) if y_original[i] != y_imposter[i]]
+                    missmatch = [i for i in range(seq_len) if y_original[i] != y_imposter[i]]
                     len_diff = len(missmatch)
                     if(len_diff):
 #                         print("miss match with seq_id {}".format(seq_id))
@@ -432,7 +477,7 @@ class Learner(object):
                             w_avg += survival_len * w
                             total_survival += survival_len
                         survival_len = 0
-                        error_count += len_diff/T
+                        error_count += len_diff/seq_len
                         crf_model.check_cached_info(w, seq_id, ("globalfeatures",))
                         y_original_gfeatures = seqs_info[seq_id]['globalfeatures']
                         # generate global features for the current imposter 
