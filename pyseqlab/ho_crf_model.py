@@ -25,6 +25,7 @@ class HOCRFModelRepresentation(object):
         self.modelfeatures_inverted = None
         self.ypatt_features = None
         self.P_codebook = None
+        self.P_codebook_rev = None
         self.pi_lendict = None
         self.S_codebook = None
         self.si_lendict = None
@@ -61,6 +62,7 @@ class HOCRFModelRepresentation(object):
         self.modelfeatures_inverted, self.ypatt_features = self.get_inverted_modelfeatures()
     
         self.P_codebook = self.get_forward_states()
+        self.P_codebook_rev = self.get_P_codebook_rev()
         self.pi_lendict, self.pi_elems, self.pi_numchar = self.get_pi_info()
         
         self.S_codebook = self.get_backward_states()
@@ -156,6 +158,10 @@ class HOCRFModelRepresentation(object):
         P_codebook = {s:i for (i, s) in enumerate(P)}
         #print("P_codebook ", P_codebook)
         return(P_codebook) 
+    def get_P_codebook_rev(self):
+        P_codebook = self.P_codebook
+        P_codebook_rev = {code:pi for pi, code in P_codebook.items()}
+        return(P_codebook_rev)
     
     def get_pi_info(self): 
         P_codebook = self.P_codebook
@@ -489,7 +495,9 @@ class HOCRFModelRepresentation(object):
                     windx_fval[modelfeatures_codebook[fkey]] = 1
                     
                 if(windx_fval):
-                    activefeatures[Z_codebook[z_patt]] = windx_fval
+#                     activefeatures[Z_codebook[z_patt]] = windx_fval
+                    activefeatures[z_patt] = windx_fval
+
 #         print("activefeatures {}".format(activefeatures))         
         return(activefeatures)
     
@@ -498,9 +506,7 @@ class HOCRFModelRepresentation(object):
         active_states = {}
         for feature in seg_features:
             if(feature in modelfeatures_inverted):
-                factivestates = modelfeatures_inverted[feature]  
-                #print("feature ", feature)
-                #print("factivestates ", factivestates)
+                factivestates = modelfeatures_inverted[feature]
                 for z_len in factivestates:
                     if(z_len in allowed_z_len):
                         if(z_len in active_states):
@@ -548,7 +554,7 @@ class HOCRF(object):
                          "b_potential": self._load_bpotential,
                          "activated_states": self.load_activatedstates,
                          "seg_features": self.load_segfeatures,
-                         "globalfeatures": self.load_globalfeatures,
+                         "globalfeatures_per_boundary": self.load_globalfeatures,
                          "Y":self._load_Y}
         
         self.info_ondisk_fname = ["cached_pf", "activefeatures_by_position", "globalfeatures"]
@@ -627,6 +633,7 @@ class HOCRF(object):
         #print("cached_comp ", cached_comp)
         return(f_potential)
     
+    
     def compute_fpotential(self, w, seq_id, boundary, accum_activestates):
         model = self.model
         state_len = 1
@@ -636,13 +643,22 @@ class HOCRF(object):
         # get activated states per boundary
         activated_states = self.seqs_info[seq_id]['activated_states'][boundary]
         seg_features = self.seqs_info[seq_id]['seg_features'][boundary]
+        print("boundary ", boundary)
+        print('seg_features ', seg_features)
+        print('activated_states ', activated_states)
+        print("accum_activestates ", accum_activestates)
         u, v = boundary
         # initial point
         if(boundary != (1,1)):
+            accum_activestates[v] = set(activated_states[state_len])
             filtered_states =  model.filter_activated_states(activated_states, accum_activestates, u)
+            filtered_states[state_len] = set(activated_states[state_len])
+
         else:
             filtered_states = activated_states
+        print("filtered_states ", filtered_states)
         accum_activestates[v] = filtered_states[state_len] 
+        
         active_features = model.represent_activefeatures(filtered_states, seg_features)
         
         # to consider caching the w_indx and fval as in cached_pf
@@ -1028,11 +1044,12 @@ class HOCRF(object):
         accum_activestates = {}
         # records where violation occurs -- it is 1-based indexing 
         viol_index = []
-        
+        print("pky_codebook_rev ", pky_codebook_rev)
         for j in range(1, T+1):
             boundary = (j, j)
             # vector of size len(pky)
             f_potential = self.compute_fpotential(w, seq_id, boundary, accum_activestates)
+            print("f_potential ", f_potential)
             for pi in pi_pky_codebook:
                 if(j >= pi_lendict[pi]):
                     vec = f_potential[pi_pky_codebook[pi][0]] + delta[j-1, pi_pky_codebook[pi][1]]
@@ -1046,13 +1063,17 @@ class HOCRF(object):
                     pky = pky_codebook_rev[pky_c]
                     # extracting (pk, y) tuple 
                     back_track[j, P_codebook[pi]] = (f_transition[pi][pky][0], f_transition[pi][pky][1])
+            print('delta[{},:] = {} '.format(j, delta[j,:]))
             # apply the beam
             topk_states = self.prune_states(j, delta, beam_size)
+            print('delta[{},:] = {} '.format(j, delta[j,:]))
+            print("topk_states ", topk_states)
             if(y_ref):
                 if(y_ref[j-1] not in topk_states):
                     viol_index.append(j)
-            # update tracked active states -- to consider renaming it
-            accum_activestates[j] = topk_states
+            # update tracked active states -- to consider renaming it          
+            accum_activestates[j] = accum_activestates[j].intersection(topk_states)
+            print("accum_activestates[{}] = {}".format(j, accum_activestates[j]))
 
         # decoding the sequence
         p_T_code = numpy.argmax(delta[T,:])

@@ -107,16 +107,16 @@ class HOFeatureExtractor(object):
                 
         return(features)
     
-    def agggregate_seq_features(self, features, boundaries):
+    def aggregate_seq_features(self, features, boundaries):
         # summing up all detected features across all boundaries
         seq_features = {}
         for boundary in boundaries:
-            for xy_features in features[boundary]:
-                for y_patt in xy_features:
-                    if(y_patt in seq_features):
-                        seq_features[y_patt].update(xy_features[y_patt])
-                    else:
-                        seq_features[y_patt] = xy_features[y_patt]
+            xy_features = features[boundary]
+            for y_patt in xy_features:
+                if(y_patt in seq_features):
+                    seq_features[y_patt].update(xy_features[y_patt])
+                else:
+                    seq_features[y_patt] = xy_features[y_patt]
         return(seq_features)
     
     def extract_seq_features(self, seq):
@@ -384,7 +384,8 @@ class HOFeatureExtractor(object):
         
         if(ypatt_features):
             ypatt_activestates = model.find_activated_states(ypatt_features, patts_len)
-
+            print("ypatt_features ", ypatt_features)
+            print("ypatt_activestates ", ypatt_activestates)
         for j in range(1, T+1):
             for d in range(L):
                 if(j-d <= 0):
@@ -402,16 +403,21 @@ class HOFeatureExtractor(object):
                     
                 allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
                 seg_features[boundary] = self.lookup_features_X(seq, boundary)
-                activated_states[boundary] = model.find_activated_states(seg_features, allowed_z_len)
-
+                activated_states[boundary] = model.find_activated_states(seg_features[boundary], allowed_z_len)
+                print("allowed_z_len ", allowed_z_len)
+                print("seg_features ", seg_features)
+                print("activated_states ", activated_states)
                 if(ypatt_features):
                     ypatt_activated_states = {z_len:ypatt_activestates[z_len] for z_len in allowed_z_len if z_len in ypatt_activestates}
+                    print("ypatt_activated_states ", ypatt_activated_states)
                     for zlen, ypatts in ypatt_activated_states.items():
                         if(zlen in activated_states[boundary]):
                             activated_states[boundary][zlen].update(ypatts)
                         else:
                             activated_states[boundary][zlen] = ypatts 
-
+                print("activated_states ", activated_states)
+        print("activated_states from feature_extractor ", activated_states)
+        print("seg_features from feature_extractor ", seg_features)
         return(activated_states, seg_features)
     
     
@@ -1026,9 +1032,12 @@ class SeqsRepresentation(object):
         for seq_id in seqs_id:
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
             gfeatures_perboundary = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures_per_boundary"))
+            print("gfeatures_perboundary ", gfeatures_perboundary)
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
             y_boundaries = seq.get_y_boundaries()
+            print("y_boundaries ", y_boundaries)
             gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, y_boundaries)
+            print("gfeatures aggregated ", gfeatures)
             # get the largest length of an entity in the segment
             if(seq.L > L):
                 L = seq.L
@@ -1046,6 +1055,7 @@ class SeqsRepresentation(object):
         if(filter_obj):
             # this will trim unwanted features from modelfeatures dictionary
             modelfeatures = filter_obj.apply_filter(modelfeatures)
+            print("modelfeatures ", modelfeatures)
             
         # create model representation
         model = model_repr_class()
@@ -1140,7 +1150,7 @@ class SeqsRepresentation(object):
     def represent_gfeatures(self, gfeatures_perboundary, boundaries, model):
         feature_extractor = self.feature_extractor
         gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, boundaries)
-        windx_fval = self.model.represent_globalfeatures(gfeatures)
+        windx_fval = model.represent_globalfeatures(gfeatures)
         return(windx_fval)
 
             
@@ -1166,7 +1176,7 @@ class SeqsRepresentation(object):
         if(new_boundaries):
             attr_scaler.scale_real_attributes(seq, new_boundaries)
             
-        imposter_gfeatures = feature_extractor.extract_seq_features_per_boundary(seq)
+        imposter_gfeatures = feature_extractor.extract_seq_features_perboundary(seq)
         # put back the original Y
         seq.Y = (y_ref, seg_other_symbol) 
         if(new_boundaries):
@@ -1240,6 +1250,7 @@ class FeatureFilter(object):
             relation = filter_info['filter_relation']
             # filter based on specific patterns
             for z in featuresum_dict:
+                print("z ", z)
                 rel_func[relation](z, filter_pattern, filtered_dict)
 #                 if(relation == "="):
 #                     # delete any z that matches any of the provided filter patterns
@@ -1252,6 +1263,7 @@ class FeatureFilter(object):
 #                         #print("deleting z {}".format(z))
 # 
 #                         del filtered_dict[z]
+        print("filtered_dict ", filtered_dict)
         return(filtered_dict)
     
     @staticmethod
@@ -1276,10 +1288,13 @@ class FeatureFilter(object):
 
     @staticmethod
     def _in_rel(x, y, z):
-        if(x in y): del z[x]
+        if(x in y): del z
     @staticmethod
     def _notin_rel(x, y, z):
-        if(x not in y): del z[x]
+        if(x not in y): 
+            print("{} not in {}".format(x, y))
+            print("deleting ", z[x])
+            del z[x]
         
 def main():
     

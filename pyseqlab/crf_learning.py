@@ -397,7 +397,9 @@ class Learner(object):
         
         if(not viol_indx):
             # we can perform full update
-            T = self.seqs_info['T']
+            T = seqs_info[seq_id]['T']
+            print("y_ref ", y_ref)
+            print("y_imposter ", y_imposter)
             missmatch = [i for i in range(T) if y_ref[i] != y_imposter[i]]
             len_diff = len(missmatch)
             # range of error is [0-1]
@@ -492,8 +494,8 @@ class Learner(object):
                 self._track_perceptron_optimizer(w, k, avg_error_list)
                 print("average error : {}".format(avg_error_list))
                 print("self._exitloop {}".format(self._exitloop))
-                if(self._exitloop):
-                    break
+#                 if(self._exitloop):
+#                     break
                 self._elapsed_time = datetime.now()
             w_avg /= num_upd
             

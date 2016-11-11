@@ -234,7 +234,7 @@ def run_suppl_example():
     # filter templates to keep at least one unigram feature (it is a MUST)
     f_y = filter_templates(y, '3-gram', "=")
     f_xy = filter_templates(xy, '1-gram:1-gram', "=")
-    filter_info = {"filter_type":"pattern", "filter_val": ['P','O', 'L', 'L|O|L'], "filter_relation": "not in"}
+    filter_info = {"filter_type":"pattern", "filter_val": {'P','O', 'L', 'L|O|L'}, "filter_relation": "not in"}
     filter_obj = FeatureFilter(filter_info)
     return(seqs, f_y, f_xy, filter_obj)
 
@@ -273,14 +273,15 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config):
     
     seqs, f_y, f_xy, filter_obj = run_config()
     crf_tester = TestCRFModel(f_y, f_xy, crf_model, model_repr, fextractor, scaling_method, optimization_options, filter_obj)
-    wrong_temp = crf_tester.find_wrong_templates(seqs)
+#     wrong_temp = crf_tester.find_wrong_templates(seqs)
+    wrong_temp = {}
     if(wrong_temp):
         raise("ill-formed template..")
     else:
-#         mv = crf_tester.test_crf_learning(seqs)
+        mv = crf_tester.test_crf_learning(seqs)
 #         crf_tester.test_model_validity()
-        fb = crf_tester.test_crf_forwardbackward(seqs)
-        print("fb {}".format(fb))
+#         fb = crf_tester.test_crf_forwardbackward(seqs)
+#         print("fb {}".format(fb))
 #         gc = crf_tester.test_crf_grad(seqs[0:1])
 #         print("gc {}".format(gc))
     return(crf_tester._crf_model)
