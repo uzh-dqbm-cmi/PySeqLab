@@ -497,7 +497,8 @@ class Learner(object):
 #                 if(self._exitloop):
 #                     break
                 self._elapsed_time = datetime.now()
-            w_avg /= num_upd
+            if(num_upd):
+                w_avg /= num_upd
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)

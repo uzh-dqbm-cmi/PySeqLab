@@ -123,7 +123,7 @@ class TestCRFModel(object):
         seqs_info = self._seqs_info
 
         learner = Learner(crf_model)
-        learner.train_model(numpy.zeros(len(crf_model.weights)), seqs_id, optimization_options, working_dir)
+        learner.train_model(numpy.ones(len(crf_model.weights)), seqs_id, optimization_options, working_dir)
         if(optimization_options["method"] != "COLLINS-PERCEPTRON"):
             crf_model.seqs_info = seqs_info
             avg_fexp_diff = crf_model.validate_expected_featuresum(crf_model.weights, seqs_id)
