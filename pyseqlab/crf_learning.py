@@ -139,13 +139,22 @@ class Learner(object):
                 # if segmentation problem the non-entity symbol is specified using this option else it is None
                 seg_other_symbol = optimization_options.get("seg_other_symbol")
                 optimization_config['seg_other_symbol'] = seg_other_symbol
+                # getting averaging scheme
                 avg_scheme = optimization_options.get("avg_scheme")
                 if(avg_scheme not in ("avg_uniform", "avg_error", "survival")):
                     avg_scheme = "avg_error"
                 optimization_config["avg_scheme"] = avg_scheme
+                
+                # setting beam size
                 beam_size = optimization_options.get("beam_size")
-                # need to add check on beam size min and max value
+                # default beam size is 1 -- gready search
+                if(type(beam_size) != int):
+                    beam_size = 1
+                elif(beam_size < 0):
+                    beam_size = 1
                 optimization_config["beam_size"] = beam_size
+                
+                # setting update type 
                 update_type = optimization_options.get("update_type")
                 if(update_type not in ('early', 'latest', 'max')):
                     update_type = 'early'
@@ -217,6 +226,7 @@ class Learner(object):
         w_hat = estimate_weights(w0, seqs_id)
         # update model weights to w_hat
         self.crf_model.weights = w_hat
+        self.crf_model.beam_size = beam_size
         
         if(save_model):
             # pickle the model

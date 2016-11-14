@@ -63,7 +63,9 @@ class HOCRFModelRepresentation(object):
     
         self.P_codebook = self.get_forward_states()
         self.P_codebook_rev = self.get_P_codebook_rev()
+        self.P_len = len(self.P_codebook)
         self.pi_lendict, self.pi_elems, self.pi_numchar = self.get_pi_info()
+        
         
         self.S_codebook = self.get_backward_states()
         self.si_lendict, self.si_numchar = self.get_len_si()
@@ -536,8 +538,10 @@ class HOCRF(object):
                          "globalfeatures_per_boundary": self.load_globalfeatures,
                          "Y":self._load_Y}
         
-        self.info_ondisk_fname = ["cached_pf", "activefeatures_by_position", "globalfeatures"]
+        self.info_ondisk_fname = ["cached_pf", "seg_features", "activated_states", "globalfeatures_per_boundary", "Y"]
         self.cached_entites = ["f_potential", "alpha", "Z", "b_potential", "beta", "cached_comp"]
+        # default beam size covers all the prefix values (i.e. pi)
+        self.beam_size = len(self.model.P_codebook)
 
     @property
     def seqs_info(self):
@@ -627,30 +631,34 @@ class HOCRF(object):
         print('activated_states ', activated_states)
         print("accum_activestates ", accum_activestates)
         u, v = boundary
-        if(boundary != (1,1)):
-            accum_activestates[v] = set(activated_states[state_len])
-            filtered_states =  model.filter_activated_states(activated_states, accum_activestates, u)
-            filtered_states[state_len] = set(activated_states[state_len])
-        # initial point t0
-        else:
-            filtered_states = activated_states
-        print("filtered_states ", filtered_states)
-        accum_activestates[v] = filtered_states[state_len] 
-        
-        active_features = model.represent_activefeatures(filtered_states, seg_features)
-        
-        # to consider caching the w_indx and fval as in cached_pf
-        for z in active_features:
-            w_indx = list(active_features[z].keys())
-            f_val = list(active_features[z].values())
-            potential = numpy.inner(w[w_indx], f_val)
-            # get all pky's in coded format where z maintains a suffix relation with them
-            pky_c_list = z_pky[z]
-            f_potential[pky_c_list] += potential
 
-#             for pky in z_pky[z]:
-#                 pky_c = pky_codebook[pky]
-#                 f_potential[pky_c] += potential
+        if(state_len in activated_states):
+            accum_activestates[v] = set(activated_states[state_len])
+            
+            if(boundary != (1,1)):
+                filtered_states =  model.filter_activated_states(activated_states, accum_activestates, u)
+                filtered_states[state_len] = set(activated_states[state_len])
+            # initial point t0
+            else:
+                filtered_states = activated_states
+            
+            print("filtered_states ", filtered_states)
+        
+            active_features = model.represent_activefeatures(filtered_states, seg_features)
+            # to consider caching the w_indx and fval as in cached_pf
+            for z in active_features:
+                w_indx = list(active_features[z].keys())
+                f_val = list(active_features[z].values())
+                potential = numpy.inner(w[w_indx], f_val)
+                # get all pky's in coded format where z maintains a suffix relation with them
+                pky_c_list = z_pky[z]
+                f_potential[pky_c_list] += potential
+        else:
+            accum_activestates[v] = set()
+    
+    #             for pky in z_pky[z]:
+    #                 pky_c = pky_codebook[pky]
+    #                 f_potential[pky_c] += potential
         return(f_potential)
                
         
@@ -950,7 +958,7 @@ class HOCRF(object):
         seqs_info = self.seqs_info
         counter = 0
         for seq_id in seqs_info:
-            Y_pred = decoder(w, seq_id)
+            Y_pred, __ = decoder(w, seq_id, self.beam_size)
             seq = ReaderWriter.read_data(os.path.join(seqs_info[seq_id]["globalfeatures_dir"], "sequence"))
             self.write_decoded_seqs([seq], [Y_pred], out_file)
             seqs_pred[seq_id] = {'seq': seq,'Y_pred': Y_pred}
@@ -1015,6 +1023,7 @@ class HOCRF(object):
         pi_pky_codebook = self.model.pi_pky_codebook
         f_transition = self.model.f_transition
         P_codebook = self.model.P_codebook
+        P_len = self.model.P_len
         T = self.seqs_info[seq_id]["T"]
         # records max score at every time step
         delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
@@ -1046,9 +1055,10 @@ class HOCRF(object):
                     back_track[j, P_codebook[pi]] = (f_transition[pi][pky][0], f_transition[pi][pky][1])
             print('delta[{},:] = {} '.format(j, delta[j,:]))
             # apply the beam
-            topk_states = self.prune_states(j, delta, beam_size)
-            print('delta[{},:] = {} '.format(j, delta[j,:]))
-            print("topk_states ", topk_states)
+            if(beam_size < P_len):
+                topk_states = self.prune_states(j, delta, beam_size)
+                print('delta[{},:] = {} '.format(j, delta[j,:]))
+                print("topk_states ", topk_states)
             if(y_ref):
                 if(y_ref[j-1] not in topk_states):
                     viol_index.append(j)
