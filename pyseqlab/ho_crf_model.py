@@ -309,48 +309,34 @@ class HOCRFModelRepresentation(object):
             else:
                 b_transition[si] = {elmkey:sk}
         return(b_transition)    
-        
-#     def map_pky_z(self):
-#         f_transition = self.f_transition
-#         Z_codebook = self.Z_codebook
-#         # given that we demand to have a unigram label features then Z set will always contain Y elems
-#         Z_numchar = self.Z_numchar
-#         pi_numchar = self.pi_numchar
-#         
-#         pky_z = {}
-#         for pi in f_transition:
-#             for pky, pk_y_tup in f_transition[pi].items():
-#                 pk, y = pk_y_tup
-#                 if(pk == ""):
-#                     len_pky =  Z_numchar[y]
-#                 else:
-#                     len_pky = pi_numchar[pk] + Z_numchar[y] + 1
-#                 l = []
-#                 for z in Z_codebook:
-#                     len_z = Z_numchar[z]
-#                     # check suffix relation
-#                     start_pos = len_pky - len_z
-#                     if(start_pos >= 0):
-#                         check = pky[start_pos:] == z
-#                         if(check):
-#                             l.append(z)
-#                 pky_z[pky] = l
-#         return(pky_z)
- 
+    
+    def get_pky_codebook(self):
+        f_transition = self.f_transition
+        pky_codebook = {}
+        counter = 0
+        for pi in f_transition:
+            for pky in f_transition[pi]:
+                pky_codebook[pky] = counter
+                counter += 1
+        return(pky_codebook)
+    
     def map_pky_z(self):
         f_transition = self.f_transition
         Z_codebook = self.Z_codebook
         # given that we demand to have a unigram label features then Z set will always contain Y elems
         Z_numchar = self.Z_numchar
         pi_numchar = self.pi_numchar
+        pky_codebook = self.pky_codebook
         
         z_pky = {}
         for pi in f_transition:
             for pky, pk_y_tup in f_transition[pi].items():
                 pk, y = pk_y_tup
+                # get number of characters in the pky 
                 if(pk == ""):
                     len_pky =  Z_numchar[y]
                 else:
+                    # +1 is for the separator '|'
                     len_pky = pi_numchar[pk] + Z_numchar[y] + 1
                 
                 for z in Z_codebook:
@@ -360,10 +346,11 @@ class HOCRFModelRepresentation(object):
                     if(start_pos >= 0):
                         check = pky[start_pos:] == z
                         if(check):
+                            pky_c = pky_codebook[pky]
                             if(z in z_pky):
-                                z_pky[z].append(pky)
+                                z_pky[z].append(pky_c)
                             else:
-                                z_pky[z] = [pky]
+                                z_pky[z] = [pky_c]
         return(z_pky)    
     
     # to fix as the one in map_pky_z
@@ -386,15 +373,7 @@ class HOCRFModelRepresentation(object):
         #print("si_ysk_z {}".format(si_ysk_z))
         return(ysk_z)  
     
-    def get_pky_codebook(self):
-        f_transition = self.f_transition
-        pky_codebook = {}
-        counter = 0
-        for pi in f_transition:
-            for pky in f_transition[pi]:
-                pky_codebook[pky] = counter
-                counter += 1
-        return(pky_codebook)
+
     
     def get_ysk_codebook(self):
         b_transition = self.b_transition
@@ -648,12 +627,11 @@ class HOCRF(object):
         print('activated_states ', activated_states)
         print("accum_activestates ", accum_activestates)
         u, v = boundary
-        # initial point
         if(boundary != (1,1)):
             accum_activestates[v] = set(activated_states[state_len])
             filtered_states =  model.filter_activated_states(activated_states, accum_activestates, u)
             filtered_states[state_len] = set(activated_states[state_len])
-
+        # initial point t0
         else:
             filtered_states = activated_states
         print("filtered_states ", filtered_states)
@@ -666,10 +644,13 @@ class HOCRF(object):
             w_indx = list(active_features[z].keys())
             f_val = list(active_features[z].values())
             potential = numpy.inner(w[w_indx], f_val)
-            # to consider save the code of the pky in z_pky directly
-            for pky in z_pky[z]:
-                pky_c = pky_codebook[pky]
-                f_potential[pky_c] += potential
+            # get all pky's in coded format where z maintains a suffix relation with them
+            pky_c_list = z_pky[z]
+            f_potential[pky_c_list] += potential
+
+#             for pky in z_pky[z]:
+#                 pky_c = pky_codebook[pky]
+#                 f_potential[pky_c] += potential
         return(f_potential)
                
         
@@ -1027,7 +1008,7 @@ class HOCRF(object):
         return(topk_states)
     
 
-    def viterbi(self, w, seq_id, beam_size, y_ref):
+    def viterbi(self, w, seq_id, beam_size, y_ref=[]):
         l = ("activated_states", "seg_features")
         self.check_cached_info(w, seq_id, l)
         pky_codebook_rev = self.model.pky_codebook_rev

@@ -394,12 +394,13 @@ class Learner(object):
         seq_err_count = None
         y_ref_windxfval = None
         y_imposter_windxfval = None
-        
+        print("y_ref ", y_ref)
+        print("y_imposter ", y_imposter)
         if(not viol_indx):
             # we can perform full update
             T = seqs_info[seq_id]['T']
-            print("y_ref ", y_ref)
-            print("y_imposter ", y_imposter)
+            print("in full update routine")
+
             missmatch = [i for i in range(T) if y_ref[i] != y_imposter[i]]
             len_diff = len(missmatch)
             # range of error is [0-1]
@@ -413,8 +414,11 @@ class Learner(object):
                 y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
         else:
             if(update_type == "early"):
+                print("in early update routine")
                 # viol_index is 1-based indexing
                 early_viol_indx = viol_indx[0]
+                print("viol_indx ", viol_indx)
+                print("early_viol_indx ", early_viol_indx)
                 counter = 0
                 for boundary in y_ref_boundaries:
                     __, v = boundary
