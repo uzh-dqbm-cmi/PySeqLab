@@ -1072,6 +1072,7 @@ class SeqsRepresentation(object):
     def represent_gfeatures(self, gfeatures_perboundary, boundaries, model):
         feature_extractor = self.feature_extractor
         gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, boundaries)
+        #^print("gfeatures ", gfeatures)
         windx_fval = model.represent_globalfeatures(gfeatures)
         return(windx_fval)
 
@@ -1093,12 +1094,15 @@ class SeqsRepresentation(object):
         # update seq.Y with the imposter Y
         seq.Y = (y_imposter, seg_other_symbol)
         y_imposter_boundaries = seq.get_y_boundaries()
+        #^print("y_imposter_boundaries ", y_imposter_boundaries)
         # this will update the value of the seg_attr of the sequence 
         new_boundaries = attr_extractor.generate_attributes(seq, y_imposter_boundaries)
+        #^print("new_boundaries ", new_boundaries)
         if(new_boundaries):
             attr_scaler.scale_real_attributes(seq, new_boundaries)
             
         imposter_gfeatures = feature_extractor.extract_seq_features_perboundary(seq)
+        #^print("imposter_gfeatures ", imposter_gfeatures)
         # put back the original Y
         seq.Y = (y_ref, seg_other_symbol) 
         if(new_boundaries):

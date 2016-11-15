@@ -511,6 +511,8 @@ class Learner(object):
                     print("sequences left {}".format(seq_left))
                     y_ref_windxfval, y_imposter_windxfval, seq_err_count = self._find_update_violation(w, seq_id)
                     # if decoding errors with the current weight occurs
+                    #^print("seq_err_count ", seq_err_count)
+                    #^print("y_ref_windxfval ", y_ref_windxfval)
                     if(seq_err_count):
                         error_count += seq_err_count
                         if(avg_scheme == "avg_error"):
