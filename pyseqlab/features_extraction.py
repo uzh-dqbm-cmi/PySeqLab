@@ -289,86 +289,6 @@ class HOFeatureExtractor(object):
 #         #print("seg_features lookup {}".format(seg_features))
         return(seg_features)
 
-#     def lookup_seq_modelactivefeatures(self, seq, model):
-#         # segment length
-#         L = model.L
-#         T = seq.T
-#         # maximum pattern length 
-#         max_patt_len = model.max_patt_len
-#         # length of a unary label/state (i.e. pattern of length 1)
-#         state_len = 1
-#         patts_len = model.patts_len
-#         ypatt_features = model.ypatt_features
-#         active_features = {}
-#         accum_active_states = {}
-#         
-#         if(ypatt_features):
-#             ypatt_activestates = model.find_activated_states(ypatt_features, patts_len)
-# 
-# #         #print("patts_len ", patts_len)
-# #         #print("ypatt_features ", ypatt_features)
-#         for j in range(1, T+1):
-#             for d in range(L):
-#                 if(j-d <= 0):
-#                     break
-#                 # start boundary
-#                 u = j-d
-#                 # end boundary
-#                 v = j
-#                 boundary = (u, v)
-#                 
-#                 if(u < max_patt_len):
-#                     max_len = u
-#                 else:
-#                     max_len = max_patt_len
-#                     
-#                 allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
-#                 #print("allowed_z_len ", allowed_z_len)
-# 
-#                 seg_features = self.lookup_features_X(seq, boundary)
-#                 #print("seg_features ", seg_features)
-# #                 #print("seg_features ", seg_features)
-#                 activated_states = model.find_activated_states(seg_features, allowed_z_len)
-#                 #print("j ", j)
-#                 #print("activated_states ", activated_states)
-#                 #print("ypatt_feature ", ypatt_features)
-#                 if(ypatt_features):
-#                     ypatt_activated_states = {z_len:ypatt_activestates[z_len] for z_len in allowed_z_len if z_len in ypatt_activestates}
-# 
-#                     #print("ypatt_activated_states ", ypatt_activated_states)        
-#     #                 #print("ypatt_activated_states ", ypatt_activated_states)
-#                     # combine activated_states and ypatt_activated states
-#                     for zlen, ypatts in ypatt_activated_states.items():
-#                         if(zlen in activated_states):
-#                             activated_states[zlen].update(ypatts)
-#                         else:
-#                             activated_states[zlen] = ypatts 
-#             
-# #                 #print("activated states", activated_states)
-# #                 #print('u', u)
-# #                 #print("max_len ", max_len)
-#                 #print("accum_active_states ", accum_active_states)
-#                 
-#                 # update accumulated active states by the current detected states of length 1 
-#                 if(activated_states):
-#                     if(v in accum_active_states):
-#                         accum_active_states[v].update(activated_states[state_len])
-#                     else:
-#                         accum_active_states[v] = set(activated_states[state_len])
-#                     
-# 
-#                     # keep valid active states
-#                     filtered_states = model.filter_activated_states(activated_states, accum_active_states, u)
-#                     #print("filtered_states ", filtered_states)
-#                     filtered_states[state_len] = set(activated_states[state_len])
-#                     #print("filtered_states ", filtered_states)
-#     #                 #print("filtered_states ", filtered_states)
-#                     active_features[boundary] = model.represent_activefeatures(filtered_states, seg_features)
-#                 else:
-#                     active_features[boundary] = {}
-#                 #print("accum_active_states ", accum_active_states)
-#                 #print("active_features[{}]={}".format(j, active_features[boundary]))
-#         return(active_features)
 
     def lookup_seq_modelactivefeatures(self, seq, model):
         # segment length
@@ -384,8 +304,9 @@ class HOFeatureExtractor(object):
         
         if(ypatt_features):
             ypatt_activestates = model.find_activated_states(ypatt_features, patts_len)
-            print("ypatt_features ", ypatt_features)
-            print("ypatt_activestates ", ypatt_activestates)
+            #^print("ypatt_features ", ypatt_features)
+            #^print("ypatt_activestates ", ypatt_activestates)
+            
         for j in range(1, T+1):
             for d in range(L):
                 if(j-d <= 0):
@@ -404,20 +325,20 @@ class HOFeatureExtractor(object):
                 allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
                 seg_features[boundary] = self.lookup_features_X(seq, boundary)
                 activated_states[boundary] = model.find_activated_states(seg_features[boundary], allowed_z_len)
-                print("allowed_z_len ", allowed_z_len)
-                print("seg_features ", seg_features)
-                print("activated_states ", activated_states)
+                #^print("allowed_z_len ", allowed_z_len)
+                #^print("seg_features ", seg_features)
+                #^print("activated_states ", activated_states)
                 if(ypatt_features):
                     ypatt_activated_states = {z_len:ypatt_activestates[z_len] for z_len in allowed_z_len if z_len in ypatt_activestates}
-                    print("ypatt_activated_states ", ypatt_activated_states)
+                    #^print("ypatt_activated_states ", ypatt_activated_states)
                     for zlen, ypatts in ypatt_activated_states.items():
                         if(zlen in activated_states[boundary]):
                             activated_states[boundary][zlen].update(ypatts)
                         else:
                             activated_states[boundary][zlen] = ypatts 
-                print("activated_states ", activated_states)
-        print("activated_states from feature_extractor ", activated_states)
-        print("seg_features from feature_extractor ", seg_features)
+                #^print("activated_states ", activated_states)
+        #^print("activated_states from feature_extractor ", activated_states)
+        #^print("seg_features from feature_extractor ", seg_features)
         return(activated_states, seg_features)
     
     
@@ -998,6 +919,7 @@ class SeqsRepresentation(object):
             gfeatures_perboundary = feature_extractor.extract_seq_features_perboundary(seq)                    
             # store the features' sum (i.e. F_j(X,Y) for every sequence on disk)
             ReaderWriter.dump_data(gfeatures_perboundary, os.path.join(seq_dir, "globalfeatures_per_boundary"))
+            print("dumping seq with id ", seq_id)
 
         end_time = datetime.now()
         
@@ -1032,12 +954,12 @@ class SeqsRepresentation(object):
         for seq_id in seqs_id:
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
             gfeatures_perboundary = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures_per_boundary"))
-            print("gfeatures_perboundary ", gfeatures_perboundary)
+            #^print("gfeatures_perboundary ", gfeatures_perboundary)
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
             y_boundaries = seq.get_y_boundaries()
-            print("y_boundaries ", y_boundaries)
+            #^print("y_boundaries ", y_boundaries)
             gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, y_boundaries)
-            print("gfeatures aggregated ", gfeatures)
+            #^print("gfeatures aggregated ", gfeatures)
             # get the largest length of an entity in the segment
             if(seq.L > L):
                 L = seq.L
@@ -1055,7 +977,7 @@ class SeqsRepresentation(object):
         if(filter_obj):
             # this will trim unwanted features from modelfeatures dictionary
             modelfeatures = filter_obj.apply_filter(modelfeatures)
-            print("modelfeatures ", modelfeatures)
+            #^print("modelfeatures ", modelfeatures)
             
         # create model representation
         model = model_repr_class()
@@ -1250,7 +1172,7 @@ class FeatureFilter(object):
             relation = filter_info['filter_relation']
             # filter based on specific patterns
             for z in featuresum_dict:
-                print("z ", z)
+                #^print("z ", z)
                 rel_func[relation](z, filter_pattern, filtered_dict)
 #                 if(relation == "="):
 #                     # delete any z that matches any of the provided filter patterns
@@ -1263,7 +1185,7 @@ class FeatureFilter(object):
 #                         #print("deleting z {}".format(z))
 # 
 #                         del filtered_dict[z]
-        print("filtered_dict ", filtered_dict)
+        #^print("filtered_dict ", filtered_dict)
         return(filtered_dict)
     
     @staticmethod
@@ -1292,8 +1214,8 @@ class FeatureFilter(object):
     @staticmethod
     def _notin_rel(x, y, z):
         if(x not in y): 
-            print("{} not in {}".format(x, y))
-            print("deleting ", z[x])
+            #^print("{} not in {}".format(x, y))
+            #^print("deleting ", z[x])
             del z[x]
         
 def main():

@@ -75,10 +75,10 @@ class Learner(object):
         
         lambda_type = optimization_options.get("regularization_type")
         pop_keys.add("regularization_type")
-        if(lambda_type not in ('l1', 'l2')):
+        if(lambda_type not in {'l1', 'l2'}):
             # default regularization type is l2
             lambda_type = 'l2'
-            print("regularization by default is l2")
+            #^print("regularization by default is l2")
 
         # get the regularization parameter value
         lambda_val = optimization_options.get("regularization_value")
@@ -95,11 +95,11 @@ class Learner(object):
 #         w0 = numpy.zeros(len(self.weights))
         method = optimization_options.get("method")
         pop_keys.add("method")
-        if(method not in ("L-BFGS-B", "BFGS", "SGA","SGA-ADADELTA","SVRG","COLLINS-PERCEPTRON")):
+        if(method not in {"L-BFGS-B", "BFGS", "SGA","SGA-ADADELTA","SVRG","COLLINS-PERCEPTRON"}):
             # default weight learning/optimization method
             method = "SGA-ADADELTA"
             
-        if(method in ("L-BFGS-B", "BFGS")):
+        if(method in {"L-BFGS-B", "BFGS"}):
             # initialize the new optimization options
             option_keys = set(optimization_options.keys()) - pop_keys
             options = {elmkey:optimization_options[elmkey] for elmkey in option_keys}
@@ -111,7 +111,7 @@ class Learner(object):
             estimate_weights = self._optimize_scipy
 
             
-        elif(method in ("SGA", "SGA-ADADELTA", "SVRG", "COLLINS-PERCEPTRON")):
+        elif(method in {"SGA", "SGA-ADADELTA", "SVRG", "COLLINS-PERCEPTRON"}):
             num_epochs = optimization_options.get("num_epochs")
             if(type(num_epochs) != int):
                 # default number of epochs if not specified
@@ -147,25 +147,32 @@ class Learner(object):
                 
                 # setting beam size
                 beam_size = optimization_options.get("beam_size")
-                # default beam size is 1 -- gready search
+                # default beam size
+                default_beam = self.crf_model.beam_size
                 if(type(beam_size) != int):
-                    beam_size = 1
-                elif(beam_size < 0):
-                    beam_size = 1
+                    beam_size = default_beam
+                elif(beam_size < 0 or beam_size > default_beam):
+                    beam_size = default_beam
                 optimization_config["beam_size"] = beam_size
                 
                 # setting update type 
                 update_type = optimization_options.get("update_type")
-                if(update_type not in ('early', 'latest', 'max')):
+                if(update_type not in {'early', 'latest', 'max'}):
                     update_type = 'early'
                 optimization_config["update_type"] = update_type
+                
+                # setting shuffle_seq
+                shuffle_seq = optimization_options.get("shuffle_seq")
+                if(type(shuffle_seq) != bool):
+                    shuffle_seq = False
+                optimization_config["shuffle_seq"] = shuffle_seq
 
 
-            elif(method in ("SGA", "SVRG")):
+            elif(method in {"SGA", "SVRG"}):
             
                 # get the other parameters to be tuned such as t0 and alpha
                 learning_rate_schedule = optimization_options.get("learning_rate_schedule")
-                if(learning_rate_schedule not in ("bottu", "exponential_decay", "t_inverse", "constant")):
+                if(learning_rate_schedule not in {"bottu", "exponential_decay", "t_inverse", "constant"}):
                     # default learning rate schedule
                     learning_rate_schedule = "t_inverse"
                 optimization_config["learning_rate_schedule"] = learning_rate_schedule
@@ -178,7 +185,7 @@ class Learner(object):
                     t0 = 0.1
                 optimization_config['t0'] = t0
     
-                if(learning_rate_schedule in ("t_inverse", "exponential_decay")):
+                if(learning_rate_schedule in {"t_inverse", "exponential_decay"}):
                     # get the alpha parameter
                     a = optimization_options.get("a")
                     if(a == None):
@@ -285,7 +292,9 @@ class Learner(object):
             else:
                 self._exitloop = False 
         else:
-            self._exitloop = True
+            # consider updating this..
+            if(y <= tolerance):
+                self._exitloop = True
             
         #############################
         # optimize using scipy optimize function
@@ -400,12 +409,12 @@ class Learner(object):
         crf_model.check_cached_info(w, seq_id, ("Y"))
         y_ref = seqs_info[seq_id]['Y']['flat_y']
         y_ref_boundaries = seqs_info[seq_id]['Y']['boundaries']
-        y_imposter, viol_indx = crf_model.viterbi(w, seq_id, beam_size, y_ref)
+        y_imposter, viol_indx = crf_model.viterbi(w, seq_id, beam_size, True, y_ref)
         seq_err_count = None
         y_ref_windxfval = None
         y_imposter_windxfval = None
-        print("y_ref ", y_ref)
-        print("y_imposter ", y_imposter)
+        #^print("y_ref ", y_ref)
+        #^print("y_imposter ", y_imposter)
         if(not viol_indx):
             # we can perform full update
             T = seqs_info[seq_id]['T']
@@ -418,17 +427,21 @@ class Learner(object):
             if(len_diff):                    
                 crf_model.check_cached_info(w, seq_id, ("globalfeatures_per_boundary",))
                 ref_gfeatures_perboundary = seqs_info[seq_id]["globalfeatures_per_boundary"]
+                #^print("ref_gfeatures_perboundary ", ref_gfeatures_perboundary)
+                #^print("y_ref_boundaries ", y_ref_boundaries)
                 y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures_perboundary, y_ref_boundaries)
                 # generate global features for the current imposter 
                 imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter, seg_other_symbol)                     
+                #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
+                #^print("imposter y_boundaries ", y_imposter_boundaries)
                 y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
         else:
             if(update_type == "early"):
                 print("in early update routine")
                 # viol_index is 1-based indexing
                 early_viol_indx = viol_indx[0]
-                print("viol_indx ", viol_indx)
-                print("early_viol_indx ", early_viol_indx)
+                #^print("viol_indx ", viol_indx)
+                #^print("early_viol_indx ", early_viol_indx)
                 counter = 0
                 for boundary in y_ref_boundaries:
                     __, v = boundary
@@ -438,17 +451,23 @@ class Learner(object):
                     counter+= 1
                 
                 T = len(y_ref[:viol_pos])
+                #^print("T ", T)
+                #^print("viol_pos ", viol_pos)
                 missmatch = [i for i in range(T) if y_ref[i] != y_imposter[i]]
                 len_diff = len(missmatch)
                 # range of error is [0-1]
                 seq_err_count = float(len_diff/T)
+                #^print("seq_error_count ", seq_err_count)
                 crf_model.check_cached_info(w, seq_id, ("globalfeatures_per_boundary",))
                 ref_gfeatures_perboundary = seqs_info[seq_id]["globalfeatures_per_boundary"]
                 y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures_perboundary, y_ref_boundaries[:counter+1])
+                #^print("ref_gfeatures_perboundary ", ref_gfeatures_perboundary)
+                #^print("y_ref_boundaries ", y_ref_boundaries[:counter+1])
                 # generate global features for the current imposter 
                 imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter[:viol_pos], seg_other_symbol)                     
                 y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
-                
+                #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
+                #^print("imposter y_boundaries ", y_imposter_boundaries)
             elif(update_type == "max"):
                 pass
             elif(update_type == "latest"):
@@ -468,6 +487,7 @@ class Learner(object):
         self._report_training()
         num_epochs = self.training_description["num_epochs"]
         avg_scheme = self.training_description["avg_scheme"]
+        shuffle_seq = self.training_description["shuffle_seq"]
         model_dir = self.training_description["model_dir"]
         log_file = os.path.join(model_dir, "crf_training_log.txt")
 
@@ -477,7 +497,7 @@ class Learner(object):
         self._elapsed_time = datetime.now()
         self._exitloop = False
         
-        if(avg_scheme in ("avg_error", "avg_uniform")):
+        if(avg_scheme in {"avg_error", "avg_uniform"}):
             # accumulated sum of estimated weights
             w_avg = numpy.zeros(len(w), dtype = "longdouble")
             avg_error_list = [0]
@@ -485,7 +505,8 @@ class Learner(object):
             for k in range(num_epochs):
                 seq_left = N
                 error_count = 0
-                numpy.random.shuffle(train_seqs_id)
+                if(shuffle_seq):
+                    numpy.random.shuffle(train_seqs_id)
                 for seq_id in train_seqs_id:
                     print("sequences left {}".format(seq_left))
                     y_ref_windxfval, y_imposter_windxfval, seq_err_count = self._find_update_violation(w, seq_id)
@@ -508,8 +529,8 @@ class Learner(object):
                 self._track_perceptron_optimizer(w, k, avg_error_list)
                 print("average error : {}".format(avg_error_list))
                 print("self._exitloop {}".format(self._exitloop))
-#                 if(self._exitloop):
-#                     break
+                if(self._exitloop):
+                    break
                 self._elapsed_time = datetime.now()
             if(num_upd):
                 w_avg /= num_upd
@@ -949,26 +970,61 @@ class Evaluator(object):
         (i.e. any instance of model class ending with ModelRepresentation such as HOSemiCRFModelRepresentation)"""
         self.model_repr = model_repr
         
-    def compute_model_performance(self, Y_seqs_dict, metric, output_file):
+    def transform_codebook(self, Y_codebook, prefixes):
+        state_mapper = {}
+        for state in Y_codebook:
+            if(state != "O"):
+                for prefix in prefixes:
+                    elems = state.split(prefix)
+                    if(len(elems)>1):
+                        new_state = elems[-1]
+                        state_mapper[state] = new_state
+                        break
+            else:
+                state_mapper[state] = state
+        return(state_mapper)
+                    
+    def compute_model_performance(self, Y_seqs_dict, metric, output_file, states_notation):
         """ tags that did not show up in the training data can not be counted in this process
             In other words, the model cannot predict a tag that did not exist in the training data
             hence we give one unique index for tags that did not occur in the training data such as len(Y_codebook)
         """
         Y_codebook = self.model_repr.Y_codebook
-        Y_codebook_rev = {code:state for state, code in Y_codebook.items()}
-        M = self.model_repr.num_states
-        model_taglevel_performance = numpy.zeros((M, 2, 2))
+
+        if(states_notation == "BIO"):
+            prefixes = ("B-", "I-")
+            state_mapper = self.transform_codebook(Y_codebook, prefixes)
+            transformed_codebook = {}
+            counter = 0
+            for new_state in state_mapper.values():
+                if(new_state not in transformed_codebook):
+                    transformed_codebook[new_state] = counter
+                    counter += 1
+        else:
+            state_mapper = {state:state for state in Y_codebook}
+            transformed_codebook = Y_codebook
+        
+        transformed_codebook_rev = {code:state for state, code in transformed_codebook.items()}
+        #^print("original Y_codebook ", Y_codebook)
+        #^print("state_mapper ", state_mapper)
+        #^print("transformed_codebook ", transformed_codebook)
+        M = len(transformed_codebook)
+        # add another state in case unseen states occur in the test data
+        model_taglevel_performance = numpy.zeros((M + 1, 2, 2))
 
         for seq_id in Y_seqs_dict:
             Y_pred = Y_seqs_dict[seq_id]['Y_pred']
             Y_ref = Y_seqs_dict[seq_id]['Y_ref']
-            taglevel_performance = self.compute_tags_confusionmatrix(self.map_states_to_num(Y_ref, Y_codebook, M),
-                                                                     self.map_states_to_num(Y_pred, Y_codebook, M),
-                                                                     Y_codebook_rev,
+            #^print("Y_pred ", Y_pred)
+            #^print("Y_ref ", Y_ref)
+            taglevel_performance = self.compute_tags_confusionmatrix(self.map_states_to_num(Y_ref, state_mapper, transformed_codebook, M),
+                                                                     self.map_states_to_num(Y_pred, state_mapper,transformed_codebook, M),
+                                                                     transformed_codebook_rev,
                                                                      M)
 #             print("taglevel_performance {}".format(taglevel_performance))
 #             print("tagging performance \n {}".format(taglevel_performance))
             model_taglevel_performance += taglevel_performance
+            #^print("model_taglevel_performance ", model_taglevel_performance)
 
         # perform sum across all layers to get micro-average
         collapsed_performance = model_taglevel_performance.sum(axis = 0)
@@ -1003,26 +1059,29 @@ class Evaluator(object):
             f.write('Confusion matrix: tp:{} fp:{} fn:{} tn:{}\n'.format(tp, fp, fn, tn))
         return(perf_measure)
         
-    def map_states_to_num(self, Y, Y_codebook, M):
-        Y_coded = [Y_codebook[state] if state in Y_codebook else M for state in Y]
+    def map_states_to_num(self, Y, state_mapper, transformed_codebook, M):
+#         Y_coded = []
+#         for state in Y:
+#             mapped_state = state_mapper[state]
+#             if(mapped_state in transformed_codebook):
+#                 Y_coded.append(transformed_codebook[mapped_state])
+#             else:
+#                 Y_coded.append(M)
+        Y_coded = [transformed_codebook[state_mapper[state]] if state_mapper[state] in transformed_codebook else M for state in Y]
 #         print("Y_coded {}".format(Y_coded))
         return(Y_coded)
         
-    def compute_tags_confusionmatrix(self, Y_ref, Y_pred, Y_codebook_rev, M):
+    def compute_tags_confusionmatrix(self, Y_ref, Y_pred, transformed_codebook_rev, M):
         # compute confusion matrix on the level of the tag/state
-#         print("Y_codebook {}".format(Y_codebook_rev))
-#         detected_statescode = set(Y_ref).union(set(Y_pred))
-# #         print("detected_statescode {}".format(detected_statescode))
-#         valid_statescode = [statecode for statecode in detected_statescode if statecode in Y_codebook_rev]
-#         print("valid_statescode {}".format(valid_statescode))
+        #^print("Y_ref coded ", Y_ref)
+        #^print("Y_pred coded ", Y_pred)
         detected_statescode = set(Y_ref)
-        valid_statescode = [statecode for statecode in detected_statescode if statecode in Y_codebook_rev]
         Y_ref = numpy.asarray(Y_ref)
         Y_pred = numpy.asarray(Y_pred)
 #         print("Y_ref as numpy array {}".format(Y_ref))
-        tagslevel_performance = numpy.zeros((M, 2,2))
+        tagslevel_performance = numpy.zeros((M + 1, 2, 2))
         
-        for statecode in valid_statescode:
+        for statecode in detected_statescode:
             # get all indices of the target tag (gold-standard)
             tag_indx_origin = numpy.where(Y_ref == statecode)[0]
             # get all indices of the target tag (predicted)
