@@ -180,7 +180,7 @@ def run_suppl_example():
     filter_info = {"filter_type":"pattern", "filter_val": {'P','O', 'L', 'L|O|L'}, "filter_relation": "not in"}
     filter_obj = FeatureFilter(filter_info)
     seq = load_predined_seq()
-    return(seq, templateXY, templateY, filter_obj)
+    return(seq, templateY, templateXY, filter_obj)
 
 def run_loaded_conll00_seqs():
     data_file_path = os.path.join(root_dir, "dataset/conll00/train.txt")
@@ -216,6 +216,7 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config):
 #     crf_tester.test_model_validity()
 #     crf_tester.test_crf_learning_forwardbackward(seqs)
 #     crf_tester.test_crf_grad(seqs[0:1])
+    return(crf_tester._crf_model)
 
 if __name__ == "__main__":
     pass

@@ -396,10 +396,17 @@ class Learner(object):
 
     def _update_weights(self, w, y_ref_windxfval, y_imposter_windxfval):
         # the contribution of global features when using the correct label sequence
+        print("before ref contribution ", w[list(y_ref_windxfval.keys())])
+        print("to add ref values ", list(y_ref_windxfval.values()))
         w[list(y_ref_windxfval.keys())] += list(y_ref_windxfval.values())
+        print("after ref contribution ", w[list(y_ref_windxfval.keys())])
         # the contribution of global features when using the imposter label sequence
+        print("imposter windx ", y_imposter_windxfval.keys())
+        print("before imposter contribution ", w[list(y_imposter_windxfval.keys())])
+        print("to subtract imposter values ", list(y_imposter_windxfval.values()))
         w[list(y_imposter_windxfval.keys())] -= list(y_imposter_windxfval.values())
-        
+        print("after imposter contribution ", w[list(y_imposter_windxfval.keys())])
+
     def _find_update_violation(self, w, seq_id):
         seg_other_symbol = self.training_description['seg_other_symbol']
         beam_size = self.training_description['beam_size']
@@ -429,6 +436,7 @@ class Learner(object):
                 ref_gfeatures_perboundary = seqs_info[seq_id]["globalfeatures_per_boundary"]
                 #^print("ref_gfeatures_perboundary ", ref_gfeatures_perboundary)
                 #^print("y_ref_boundaries ", y_ref_boundaries)
+                print("ref gfeatures aggregated:")
                 y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures_perboundary, y_ref_boundaries)
                 # generate global features for the current imposter 
                 imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter, seg_other_symbol)                     
