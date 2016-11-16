@@ -625,6 +625,7 @@ class HOCRF(object):
                     vec = f_potential[pi_pky_codebook[pi][0]] + alpha[j-1, pi_pky_codebook[pi][1]]
                     alpha[j, P_codebook[pi]] = vectorized_logsumexp(vec)
         self.seqs_info[seq_id]['activefeatures_per_boundary'] = activefeatures_perboundary
+        print("activefeatures ", activefeatures_perboundary)
         return(alpha)
    
     
