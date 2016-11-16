@@ -186,7 +186,7 @@ def run_loaded_conll00_seqs():
     template_generator = TemplateGenerator()
     templateXY = {}
     # generating template for attr_name = w
-    template_generator.generate_template_XY('w', ('1-gram', range(-2, 3)), '1-gram:2-gram:3-gram', templateXY)
+    template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram:3-gram', templateXY)
     templateY = template_generator.generate_template_Y('1-gram:2-gram:3-gram')
     filter_obj = None
     return(seqs[0:1], templateY, templateXY, filter_obj)

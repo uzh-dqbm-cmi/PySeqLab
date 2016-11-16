@@ -471,13 +471,15 @@ class HOCRFModelRepresentation(object):
     #                         print("seg_featurename {}".format(seg_featurename))
     #                         print("z_patt {}".format(z_patt))
                         fkey = z_patt + "&&" + seg_featurename
+                        #print(fkey)
                         windx_fval[modelfeatures_codebook[fkey]] = seg_features[seg_featurename]     
                 if(z_patt in modelfeatures[z_patt]):
                     fkey = z_patt + "&&" + z_patt
                     windx_fval[modelfeatures_codebook[fkey]] = 1
+                    #print(fkey)
                     
                 if(windx_fval):
-#                     activefeatures[Z_codebook[z_patt]] = windx_fval
+                    #activefeatures[Z_codebook[z_patt]] = windx_fval
                     activefeatures[z_patt] = windx_fval
 
 #         print("activefeatures {}".format(activefeatures))         
@@ -573,8 +575,8 @@ class HOCRF(object):
             else:
                 filtered_states = activated_states
             
-            #^print("filtered_states ", filtered_states)
-        
+            #print("filtered_states ", filtered_states)
+            #print("seg_features ", seg_features)        
             active_features = model.represent_activefeatures(filtered_states, seg_features)
 
         else:
@@ -614,14 +616,14 @@ class HOCRF(object):
         activefeatures_perboundary = {}
         
         for j in range(1, T+1):
+            boundary = (j, j)
+            # identify active features
+            active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
+            activefeatures_perboundary[boundary] = active_features
+            # compute f_potential
+            f_potential = self.compute_fpotential(w, active_features)
             for pi in pi_pky_codebook:
                 if(j >= pi_lendict[pi]):
-                    boundary = (j, j)
-                    # identify active features
-                    active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
-                    activefeatures_perboundary[boundary] = active_features
-                    # compute f_potential
-                    f_potential = self.compute_fpotential(w, active_features)
                     vec = f_potential[pi_pky_codebook[pi][0]] + alpha[j-1, pi_pky_codebook[pi][1]]
                     alpha[j, P_codebook[pi]] = vectorized_logsumexp(vec)
         self.seqs_info[seq_id]['activefeatures_per_boundary'] = activefeatures_perboundary
@@ -910,9 +912,11 @@ class HOCRF(object):
         # records where violation occurs -- it is 1-based indexing 
         viol_index = []
         #^print("pky_codebook_rev ", pky_codebook_rev)
+        activefeatures_perboundary = {}
         for j in range(1, T+1):
             boundary = (j, j)
             active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
+            activefeatures_perboundary[boundary] = active_features
             # vector of size len(pky)
             f_potential = self.compute_fpotential(w, active_features)
             #^print("f_potential ", f_potential)
@@ -949,7 +953,8 @@ class HOCRF(object):
                 if(viol_index and stop_off_beam):
                     T = j
                     break
-
+        print('seq_id ', seq_id)
+        print("activefeatures_perboundary ", activefeatures_perboundary)
         # decoding the sequence
         p_T_code = numpy.argmax(delta[T,:])
         p_T, y_T = back_track[T, p_T_code]
