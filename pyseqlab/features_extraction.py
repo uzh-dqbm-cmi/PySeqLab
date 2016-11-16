@@ -111,7 +111,7 @@ class HOFeatureExtractor(object):
         # summing up all detected features across all boundaries
         seq_features = {}
         for boundary in boundaries:
-            xy_features = features[boundary]
+            xy_features = deepcopy(features[boundary])
             for y_patt in xy_features:
                 if(y_patt in seq_features):
                     seq_features[y_patt].update(xy_features[y_patt])
@@ -1072,7 +1072,7 @@ class SeqsRepresentation(object):
     def represent_gfeatures(self, gfeatures_perboundary, boundaries, model):
         feature_extractor = self.feature_extractor
         gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, boundaries)
-        print("gfeatures ", gfeatures)
+        #^print("gfeatures ", gfeatures)
         windx_fval = model.represent_globalfeatures(gfeatures)
         return(windx_fval)
 

@@ -912,11 +912,11 @@ class HOCRF(object):
         # records where violation occurs -- it is 1-based indexing 
         viol_index = []
         #^print("pky_codebook_rev ", pky_codebook_rev)
-        activefeatures_perboundary = {}
+        #activefeatures_perboundary = {}
         for j in range(1, T+1):
             boundary = (j, j)
             active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
-            activefeatures_perboundary[boundary] = active_features
+            #activefeatures_perboundary[boundary] = active_features
             # vector of size len(pky)
             f_potential = self.compute_fpotential(w, active_features)
             #^print("f_potential ", f_potential)
@@ -953,8 +953,8 @@ class HOCRF(object):
                 if(viol_index and stop_off_beam):
                     T = j
                     break
-        print('seq_id ', seq_id)
-        print("activefeatures_perboundary ", activefeatures_perboundary)
+        #^print('seq_id ', seq_id)
+        #^print("activefeatures_perboundary ", activefeatures_perboundary)
         # decoding the sequence
         p_T_code = numpy.argmax(delta[T,:])
         p_T, y_T = back_track[T, p_T_code]
