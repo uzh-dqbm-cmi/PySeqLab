@@ -191,7 +191,7 @@ def run_loaded_conll00_seqs():
     template_generator.generate_template_XY('w', ('1-gram', range(-2, 3)), '1-gram:2-gram:3-gram', templateXY)
     templateY = template_generator.generate_template_Y('1-gram:2-gram:3-gram')
     filter_obj = None
-    return(seqs[0:2], templateY, templateXY, filter_obj)
+    return(seqs[0:20], templateY, templateXY, filter_obj)
     
     
 def test_crfs(model_type, scaling_method, optimization_options, run_config):
