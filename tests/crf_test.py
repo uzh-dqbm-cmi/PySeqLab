@@ -69,14 +69,12 @@ class TestCRFModel(object):
     def test_forward_backward_computation(self):
         crf_model = self._crf_model
         seqs_id = self._seqs_id
-        lines = self._lines
-        working_dir = self._working_dir
+        lines = ""
         raw_diff, rel_diff = crf_model.validate_forward_backward_pass(numpy.ones(len(crf_model.weights)), seqs_id[0])
         lines += "raw_diff {}\n".format(raw_diff)
         lines += "rel_diff {}\n".format(rel_diff)
         lines += "#"*40 + "\n"
-        ReaderWriter.log_progress(lines, os.path.join(working_dir, "test_forward_backward_computation.txt"))
-        lines = ""
+        print(lines)
 
     def test_grad_computation(self):
         lines = ""
@@ -191,7 +189,7 @@ def run_loaded_conll00_seqs():
     template_generator.generate_template_XY('w', ('1-gram', range(-2, 3)), '1-gram:2-gram:3-gram', templateXY)
     templateY = template_generator.generate_template_Y('1-gram:2-gram:3-gram')
     filter_obj = None
-    return(seqs[0:20], templateY, templateXY, filter_obj)
+    return(seqs[0:2], templateY, templateXY, filter_obj)
     
     
 def test_crfs(model_type, scaling_method, optimization_options, run_config):
@@ -212,9 +210,9 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config):
     crf_tester = TestCRFModel(f_y, f_xy, crf_model, model_repr, fextractor, scaling_method, optimization_options, filter_obj)
 #     crf_tester.find_wrong_templates(seqs)
     
-    crf_tester.test_crf_learning(seqs)
+#     crf_tester.test_crf_learning(seqs)
 #     crf_tester.test_model_validity()
-#     crf_tester.test_crf_learning_forwardbackward(seqs)
+    crf_tester.test_crf_forwardbackward(seqs)
 #     crf_tester.test_crf_grad(seqs[0:1])
     return(crf_tester._crf_model)
 
