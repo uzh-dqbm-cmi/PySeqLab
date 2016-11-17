@@ -863,7 +863,7 @@ class HOCRF(object):
                 for field_name in ref_seq.X[t]:
                     line += ref_seq.X[t][field_name] + sep
                 if(ref_seq.flat_y):
-                    line += sep + ref_seq.flat_y[t-1] + "\n"
+                    line += ref_seq.flat_y[t-1] + sep
                 line += Y_pred_seq[t-1]
                 line += "\n" 
             line += "\n"
