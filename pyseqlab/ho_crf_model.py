@@ -805,19 +805,18 @@ class HOCRF(object):
                 seqs_info: dictionary containing the info about the sequences to parse
         """
         corpus_name = "decoding_seqs"
-        out_file = os.path.join(create_directory(corpus_name, out_dir), "decoded.txt")
         w = self.weights
-        # keep a copy
-        loadfromdisk = self.load_info_fromdisk
-        # this will not write the potential features on disk
-        self.load_info_fromdisk = 0
-        
         # supporting only viterbi for now
         if(decoding_method == "viterbi"):
             decoder = self.viterbi
         else:
             decoder = self.viterbi
             
+        file_name = kwargs.get('file_name')
+        if(not file_name):
+            file_name = "decoded.txt"
+        out_file = os.path.join(create_directory(corpus_name, out_dir), file_name)
+    
         if(kwargs.get("seqs_info")):
             self.seqs_info = kwargs["seqs_info"]
             N = len(self.seqs_info)
@@ -830,6 +829,11 @@ class HOCRF(object):
             self.seqs_representer.scale_attributes(seqs_id, seqs_info)
             self.seqs_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, self.model, "processed_seqs")
             self.seqs_info = seqs_info
+            
+        if(kwargs.get("sep")):
+            sep = kwargs['sep']
+        else:
+            sep = "\t"
 
         seqs_pred = {}
         seqs_info = self.seqs_info
@@ -837,7 +841,7 @@ class HOCRF(object):
         for seq_id in seqs_info:
             Y_pred, __ = decoder(w, seq_id, self.beam_size)
             seq = ReaderWriter.read_data(os.path.join(seqs_info[seq_id]["globalfeatures_dir"], "sequence"))
-            self.write_decoded_seqs([seq], [Y_pred], out_file)
+            self.write_decoded_seqs([seq], [Y_pred], out_file, sep)
             seqs_pred[seq_id] = {'seq': seq,'Y_pred': Y_pred}
             # clear added info per sequence
             self.clear_cached_info([seq_id], self.info_ondisk_fname)
@@ -846,8 +850,6 @@ class HOCRF(object):
         
         # clear seqs_info
         self.seqs_info.clear()
-        # set back the original setting
-        self.load_info_fromdisk = loadfromdisk
         return(seqs_pred)
 
             
@@ -860,11 +862,10 @@ class HOCRF(object):
             for t in range(1, T+1):
                 for field_name in ref_seq.X[t]:
                     line += ref_seq.X[t][field_name] + sep
-                line += Y_pred_seq[t-1]
                 if(ref_seq.flat_y):
                     line += sep + ref_seq.flat_y[t-1] + "\n"
-                else:
-                    line += "\n" 
+                line += Y_pred_seq[t-1]
+                line += "\n" 
             line += "\n"
             ReaderWriter.log_progress(line,out_file)  
             

@@ -560,7 +560,7 @@ class Learner(object):
         line += "Number of seconds spent: {} \n".format(delta_time.total_seconds())
         ReaderWriter.log_progress(line, log_file)
         # dump the learned weights for every pass
-#         self.dump_file(w, os.path.join(model_dir, "model_weights_epoch_{}".format(k+1)))
+        self.dump_file(w, os.path.join(model_dir, "model_weights_epoch_{}".format(k+1)))
 
         
     def _sga_adadelta(self, w, train_seqs_id):
