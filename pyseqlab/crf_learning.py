@@ -1077,7 +1077,7 @@ class Evaluator(object):
 #                 Y_coded.append(transformed_codebook[mapped_state])
 #             else:
 #                 Y_coded.append(M)
-        Y_coded = [transformed_codebook[state_mapper[state]] if state_mapper[state] in transformed_codebook else M for state in Y]
+        Y_coded = [transformed_codebook[state_mapper[state]] if state_mapper.get(state) in transformed_codebook else M for state in Y]
 #         print("Y_coded {}".format(Y_coded))
         return(Y_coded)
         
