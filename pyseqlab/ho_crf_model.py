@@ -816,7 +816,11 @@ class HOCRF(object):
         if(not file_name):
             file_name = "decoded.txt"
         out_file = os.path.join(create_directory(corpus_name, out_dir), file_name)
-    
+        
+        beam_size = kwargs.get('beam_size')
+        if(not beam_size):
+            beam_size = self.beam_size
+            
         if(kwargs.get("seqs_info")):
             self.seqs_info = kwargs["seqs_info"]
             N = len(self.seqs_info)
@@ -839,7 +843,7 @@ class HOCRF(object):
         seqs_info = self.seqs_info
         counter = 0
         for seq_id in seqs_info:
-            Y_pred, __ = decoder(w, seq_id, self.beam_size)
+            Y_pred, __ = decoder(w, seq_id, beam_size)
             seq = ReaderWriter.read_data(os.path.join(seqs_info[seq_id]["globalfeatures_dir"], "sequence"))
             self.write_decoded_seqs([seq], [Y_pred], out_file, sep)
             seqs_pred[seq_id] = {'seq': seq,'Y_pred': Y_pred}
