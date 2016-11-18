@@ -537,6 +537,7 @@ class Learner(object):
 #                 print("error count {}".format(error_count))
                 avg_error_list.append(float(error_count/N))
                 self._track_perceptron_optimizer(w, k, avg_error_list)
+                ReaderWriter.dump_data(w_avg, os.path.join(model_dir, "model_avgweights_epoch_{}".format(k+1)))
                 print("average error : {}".format(avg_error_list))
                 print("self._exitloop {}".format(self._exitloop))
                 if(self._exitloop):
