@@ -97,7 +97,7 @@ class TestCRFModel(object):
 
         learner = Learner(crf_model)
         learner.train_model(numpy.zeros(len(crf_model.weights)), seqs_id, optimization_options, working_dir)
-        if(optimization_options["method"] != "COLLINS-PERCEPTRON"):
+        if(optimization_options["method"] not in {"COLLINS-PERCEPTRON", "SAPO"}):
             crf_model.seqs_info = seqs_info
             avg_fexp_diff = crf_model.validate_expected_featuresum(crf_model.weights, seqs_id)
             lines += "avg_fexp_diff {}\n".format(avg_fexp_diff)
@@ -210,7 +210,7 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config):
     crf_tester = TestCRFModel(f_y, f_xy, crf_model, model_repr, fextractor, scaling_method, optimization_options, filter_obj)
 #     crf_tester.find_wrong_templates(seqs)
     
-#     crf_tester.test_crf_learning(seqs)
+    crf_tester.test_crf_learning(seqs)
 #     crf_tester.test_model_validity()
     crf_tester.test_crf_forwardbackward(seqs)
 #     crf_tester.test_crf_grad(seqs[0:1])

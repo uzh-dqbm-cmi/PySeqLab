@@ -723,32 +723,7 @@ class HOSemiCRF(object):
         # clear seq_id info
         self.clear_cached_info([seq_id])
         return(avg_diff)
-        
-#     def validate_forward_backward_pass(self, w, seq_id):
-#         self.clear_cached_info([seq_id])
-#         # this will compute alpha and beta matrices and save them in seqs_info dict
-#         l = ("activefeatures_by_position", "f_potential", "alpha", "b_potential", "beta")
-#         self.check_cached_info(w, seq_id, l)
-#         states_code = [code for code in self.model.Y_codebook.values()]
-#         alpha = self.seqs_info[seq_id]["alpha"]
-#         beta = self.seqs_info[seq_id]["beta"]
-#         Z_alpha = vectorized_logsumexp(alpha[-1,:])
-#         raw_diff = numpy.abs(Z_alpha - beta[1, :])
-#         print("alpha[-1,:] = {}".format(alpha[-1,:]))
-#         print("beta[1,:] = {}".format(beta[1,:]))
-#         print("Z_alpha : {}".format(Z_alpha))
-#         print("beta of states {}".format(beta[1, states_code]))
-#         print("Z_aplha - beta [1,:] {}".format(raw_diff))
-# 
-#         min_raw_diff = numpy.min(raw_diff)
-#         print("min_raw_diff  {}".format(min_raw_diff))
-#         argmin_raw_diff = numpy.argmin(raw_diff)
-#         print("argmin_raw_diff  {}".format(argmin_raw_diff))
-#         rel_diff = min_raw_diff/(Z_alpha + beta[1, argmin_raw_diff])
-#         print("rel_diff : {}".format(rel_diff))
-#         self.clear_cached_info([seq_id])
-#         
-#         return((min_raw_diff, rel_diff))
+
     
     def validate_expected_featuresum(self, w, seqs_id):
         self.clear_cached_info(seqs_id)

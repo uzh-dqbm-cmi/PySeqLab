@@ -6,7 +6,7 @@
 import os
 from copy import deepcopy
 import numpy
-from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
+from .utilities import AStarSearcher, ReaderWriter, create_directory, vectorized_logsumexp
 
 class HOCRFModelRepresentation(object):
     def __init__(self):
@@ -172,14 +172,15 @@ class HOCRFModelRepresentation(object):
         pi_elems = {}
         
         for pi in P_codebook:
+            elems = pi.split("|")
+            pi_elems[pi] = elems 
             if(pi == ""):
                 pi_lendict[pi] = 0
                 pi_numchar[pi] = 0
+                
             else:
-                elems = pi.split("|")
                 pi_lendict[pi] = len(elems)
                 pi_numchar[pi] = len(pi)
-                pi_elems[pi] = elems
         return(pi_lendict, pi_elems, pi_numchar)
     
     
@@ -544,6 +545,7 @@ class HOCRF(object):
         # default beam size covers all the prefix values (i.e. pi)
         self.beam_size = len(self.model.P_codebook)
 
+
     @property
     def seqs_info(self):
         return self._seqs_info
@@ -676,8 +678,7 @@ class HOCRF(object):
         return(beta)
         
 
-    
-    def compute_seq_loglikelihood(self, w, seq_id):
+    def compute_seq_loglikelihood(self, w, seq_id, normalized = True):
         """computes the conditional log-likelihood of a sequence (i.e. p(Y|X;w)) 
            it is used as a cost function for the single sequence when trying to estimate parameters w
         """
@@ -696,8 +697,11 @@ class HOCRF(object):
         f_val = list(globalfeatures.values())
 
         # log(p(Y|X;w))
-        loglikelihood = numpy.dot(w[w_indx], f_val) - Z 
-        self.seqs_info[seq_id]["loglikelihood"] = loglikelihood
+        if(normalized):
+            loglikelihood = numpy.dot(w[w_indx], f_val) - Z 
+            self.seqs_info[seq_id]["loglikelihood"] = loglikelihood
+        else:
+            loglikelihood = numpy.dot(w[w_indx], f_val)
         return(loglikelihood)
     
     def compute_seqs_loglikelihood(self, w, seqs_id):
@@ -878,15 +882,23 @@ class HOCRF(object):
         pi_elems = self.model.pi_elems
         pi_lendict = self.model.pi_lendict
 
-        # sort the pi in descending order of their score
-        indx_sorted_pi = numpy.argsort(delta[j,:])[::-1]
-        # identify states falling out of the beam
-        indx_falling_pi = indx_sorted_pi[beam_size:]
+#         # sort the pi in descending order of their score
+#         indx_sorted_pi = numpy.argsort(delta[j,:])[::-1]
+#         # identify states falling out of the beam
+#         indx_falling_pi = indx_sorted_pi[beam_size:]
+#         # identify top-k states/pi
+#         indx_topk_pi = indx_sorted_pi[:beam_size]
+#         # remove the effect of states/pi falling out of the beam
+#         delta[j, indx_falling_pi] = -numpy.inf
+
+        # using argpartition as better alternative to argsort
+        indx_partitioned_pi = numpy.argpartition(-delta[j, :], beam_size)
         # identify top-k states/pi
-        indx_topk_pi = indx_sorted_pi[:beam_size]
+        indx_topk_pi = indx_partitioned_pi[:beam_size]
+        # identify states falling out of the beam
+        indx_falling_pi = indx_partitioned_pi[beam_size:]
         # remove the effect of states/pi falling out of the beam
         delta[j, indx_falling_pi] = -numpy.inf
-        
         # get topk states
         topk_pi = {P_codebook_rev[indx] for indx in indx_topk_pi}
         topk_states = set()
@@ -898,13 +910,14 @@ class HOCRF(object):
         return(topk_states)
     
 
-    def viterbi(self, w, seq_id, beam_size, stop_off_beam = False, y_ref=[]):
+    def viterbi(self, w, seq_id, beam_size, stop_off_beam = False, y_ref=[], K=1):
         l = ("activated_states", "seg_features")
         self.check_cached_info(w, seq_id, l)
-        pky_codebook_rev = self.model.pky_codebook_rev
+        pi_elems = self.model.pi_elems
         pi_pky_codebook = self.model.pi_pky_codebook
         f_transition = self.model.f_transition
         P_codebook = self.model.P_codebook
+        P_codebook_rev = self.model.P_codebook_rev
         P_len = self.model.P_len
         T = self.seqs_info[seq_id]["T"]
         # records max score at every time step
@@ -918,6 +931,7 @@ class HOCRF(object):
         viol_index = []
         #^print("pky_codebook_rev ", pky_codebook_rev)
         #activefeatures_perboundary = {}
+        print('pi_elems ', pi_elems)
         for j in range(1, T+1):
             boundary = (j, j)
             active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
@@ -934,11 +948,10 @@ class HOCRF(object):
                     #print("max chosen ", delta[j, P_codebook[pi]])
                     argmax_ind = numpy.argmax(vec)
                     #print("argmax chosen ", argmax_ind)
-                    pky_c = pi_pky_codebook[pi][0][argmax_ind]
-                    pky = pky_codebook_rev[pky_c]
-                    # extracting (pk, y) tuple 
-                    pk = f_transition[pi][pky][0]
-                    y = f_transition[pi][pky][1]
+                    pk_c = pi_pky_codebook[pi][1][argmax_ind]
+                    print('pk_c ', pk_c)
+                    pk = P_codebook_rev[pk_c]
+                    y = pi_elems[pk][-1]
                     back_track[j, P_codebook[pi]] = (pk, y)
                     
             #^print('delta[{},:] = {} '.format(j, delta[j,:]))
@@ -960,23 +973,35 @@ class HOCRF(object):
                     break
         #^print('seq_id ', seq_id)
         #^print("activefeatures_perboundary ", activefeatures_perboundary)
-        # decoding the sequence
-        p_T_code = numpy.argmax(delta[T,:])
-        p_T, y_T = back_track[T, p_T_code]
-        Y_decoded = []
-      
-        Y_decoded.append((p_T,y_T))
-        t = T - 1
-        while t>0:
-            p_tplus1 = Y_decoded[-1][0]
-            p_t, y_t = back_track[(t, P_codebook[p_tplus1])]
-            Y_decoded.append((p_t, y_t))
-            t -= 1
-        Y_decoded.reverse()
+        if(K == 1):
+            # decoding the sequence
+            Y_decoded = []
+            p_T_code = numpy.argmax(delta[T,:])
+            p_T = self.model.P_codebook_rev[p_T_code]
+            y_T = pi_elems[p_T][-1]
+            Y_decoded.append((p_T,y_T))
+            #print("t={}, p_T_code={}, p_T={}, y_T ={}".format(T, p_T_code, p_T, y_T))
+            t = T - 1
+            while t>0:
+                p_tplus1 = Y_decoded[-1][0]
+                p_t, y_t = back_track[(t+1, P_codebook[p_tplus1])]
+                #print("t={}, (t+1, p_t_code)=({}, {})->({},{})".format(t, t+1, P_codebook[p_tplus1], p_t, y_t))
+                Y_decoded.append((p_t, y_t))
+                t -= 1
+            Y_decoded.reverse()
+     
+            Y_decoded = [yt for (pt,yt) in Y_decoded]
+            print("Y_decoded {}".format(Y_decoded))
+            print('delta ', delta)
+            print('backtrack ', back_track)
+            print("P_codebook ", P_codebook)
+            return(Y_decoded, viol_index)
+        else:
+            asearcher = AStarSearcher(P_codebook, pi_elems)
+            topK = asearcher.search(delta, back_track, T, K)
+            print('topk ', topK)
+            return(topK, viol_index)
 
-        Y_decoded = [yt for (pt,yt) in Y_decoded]
-        #print("Y_decoded {}".format(Y_decoded))
-        return(Y_decoded, viol_index)
         
  
     def validate_forward_backward_pass(self, w, seq_id):

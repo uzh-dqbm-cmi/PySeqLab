@@ -280,7 +280,142 @@ class ReaderWriter(object):
     def log_progress(line, outfile, mode="a"):
         with open(outfile, mode) as f:
             f.write(line)
+
+import heapq
+
+class AStarNode(object):
+    def __init__(self, cost, position, pi_c, label, frwdlink):
+        self.cost = cost
+        self.position = position
+        self.pi_c = pi_c
+        self.label = label
+        self.frwdlink = frwdlink
+        
+    def print_node(self):
+        statement = "cost: {}, position: {}, label: {}, ".format(self.cost, self.position, self.label)
+        if(self.frwdlink):
+            statement += "forward_link: {}".format(self.frwdlink)
+        else:
+            statement += "forward_link: None"
+        print(statement)
+
+##########################
+# A* searcher to be used with viterbi algorithm to generate k-decoded list
+########################
+class AStarAgenda(object):
+    def __init__(self):
+        self.qagenda = []
+        self.entry_count = 0
+
+    def push(self, astar_node, cost):
+        heapq.heappush(self.qagenda, (-cost, self.entry_count, astar_node))
+        self.entry_count += 1
+
+    def pop(self):
+        astar_node = heapq.heappop(self.qagenda)[-1]
+        return(astar_node)
+    
+class AStarSearcher(object):
+    def __init__(self, P_codebook, pi_elems):
+        self.P_codebook = P_codebook
+        self.P_codebook_rev = {code:state for state, code in P_codebook.items()}
+        self.pi_elems = pi_elems
+        
+    def get_node_label(self, pi_code):
+        pi = self.P_codebook_rev[pi_code]
+        y =  self.pi_elems[pi][-1]
+        return(y)
+
+    def infer_labels(self, top_node, back_track):
+        P_codebook = self.P_codebook
+        P_codebook_rev = self.P_codebook_rev
+        # decoding the sequence
+        print("we are decoding")
+        top_node.print_node()
+        y = top_node.label
+        pi_c = top_node.pi_c
+        pos = top_node.position
+        Y_decoded = []
+        Y_decoded.append((P_codebook_rev[pi_c], y))
+        #print("t={}, p_T_code={}, p_T={}, y_T ={}".format(T, p_T_code, p_T, y_T))
+        t = pos - 1
+        while t>0:
+            p_tplus1 = Y_decoded[-1][0]
+            p_t, y_t = back_track[(t+1, P_codebook[p_tplus1])]
+            #print("t={}, (t+1, p_t_code)=({}, {})->({},{})".format(t, t+1, P_codebook[p_tplus1], p_t, y_t))
+            Y_decoded.append((p_t, y_t))
+            t -= 1
+        Y_decoded.reverse()
+        
+        while(top_node.frwdlink):
+            pi_c = top_node.frwdlink.pi_c
+            y = top_node.frwdlink.label
+            Y_decoded.append((P_codebook_rev[pi_c], y))
+            top_node = top_node.frwdlink
+#         print(Y_decoded)
+        return([y for (pi, y) in Y_decoded])
+    
+    def search(self, alpha, back_track, T, K):
+        # push the best astar nodes to the queue (i.e. the pi's at time T)
+        q = AStarAgenda()
+        r = set()
+        c = 0
+        P_codebook_rev = self.P_codebook_rev
+        P_codebook = self.P_codebook
+        # create nodes from the pi's at time T
+        for pi_c in P_codebook_rev:
+            cost = alpha[T, pi_c]
+            pos = T
+            frwdlink = None
+            label = self.get_node_label(pi_c)
+            node = AStarNode(cost, pos, pi_c, label, frwdlink)
+#             node.print_node()
+            q.push(node, cost)
             
+        track = []
+        topk_list = []
+        try:
+            while c < K:
+                #print("heap size ", len(q.qagenda))
+                top_node = q.pop()
+                track.append(top_node)
+        
+#                 for n in q.qagenda:
+#                     print(n)
+            
+                for i in reversed(range(2, top_node.position+1)):
+                    prev_pi, y = back_track[i, top_node.pi_c]
+                    prev_pi_c = P_codebook[prev_pi]
+                    pos = i - 1
+                    for curr_pi_c in P_codebook_rev:
+                        # create a new astar node
+                        if(curr_pi_c != prev_pi_c):
+                            label = self.get_node_label(curr_pi_c)
+                            cost = alpha[pos, curr_pi_c]
+                            s = AStarNode(cost, pos, curr_pi_c, label, top_node)
+                            q.push(s, cost)
+                    # create the backlink of the top_node 
+                    cost = alpha[pos, prev_pi_c]
+                    top_node = AStarNode(cost, pos, prev_pi_c, y, top_node)
+                    
+                # decode and check if it is not saved already in topk list
+                y_labels = self.infer_labels(track[-1], back_track)
+#                 print(y_labels)
+                sig = "".join(y_labels)
+                if(sig not in r):
+                    r.add(sig)
+                    topk_list.append(y_labels)
+                    c += 1
+                    track.pop()
+        except (KeyError, IndexError) as e:
+            # consider logging the error
+            print(e)
+    
+        finally:
+            print('r ', r)
+            print('topk ', topk_list)
+            return(topk_list)
+
 #######################
 # template generating utility functions
 #######################

@@ -5,7 +5,7 @@
 import os
 from datetime import datetime
 import numpy
-from .utilities import ReaderWriter, create_directory, generate_datetime_str
+from .utilities import ReaderWriter, create_directory, generate_datetime_str, vectorized_logsumexp
 
 class Learner(object):
     def __init__(self, crf_model):
@@ -95,7 +95,7 @@ class Learner(object):
 #         w0 = numpy.zeros(len(self.weights))
         method = optimization_options.get("method")
         pop_keys.add("method")
-        if(method not in {"L-BFGS-B", "BFGS", "SGA","SGA-ADADELTA","SVRG","COLLINS-PERCEPTRON"}):
+        if(method not in {"L-BFGS-B", "BFGS", "SGA","SGA-ADADELTA","SVRG","COLLINS-PERCEPTRON", "SAPO"}):
             # default weight learning/optimization method
             method = "SGA-ADADELTA"
             
@@ -111,7 +111,7 @@ class Learner(object):
             estimate_weights = self._optimize_scipy
 
             
-        elif(method in {"SGA", "SGA-ADADELTA", "SVRG", "COLLINS-PERCEPTRON"}):
+        elif(method in {"SGA", "SGA-ADADELTA", "SVRG", "COLLINS-PERCEPTRON", "SAPO"}):
             num_epochs = optimization_options.get("num_epochs")
             if(type(num_epochs) != int):
                 # default number of epochs if not specified
@@ -134,17 +134,11 @@ class Learner(object):
                                    'tolerance': tolerance
                                    }
             
-            if(method == "COLLINS-PERCEPTRON"):
-                estimate_weights = self._structured_perceptron
+            if(method in {"COLLINS-PERCEPTRON", "SAPO"}):
+
                 # if segmentation problem the non-entity symbol is specified using this option else it is None
                 seg_other_symbol = optimization_options.get("seg_other_symbol")
-                optimization_config['seg_other_symbol'] = seg_other_symbol
-                # getting averaging scheme
-                avg_scheme = optimization_options.get("avg_scheme")
-                if(avg_scheme not in ("avg_uniform", "avg_error", "survival")):
-                    avg_scheme = "avg_error"
-                optimization_config["avg_scheme"] = avg_scheme
-                
+                optimization_config['seg_other_symbol'] = seg_other_symbol    
                 # setting beam size
                 beam_size = optimization_options.get("beam_size")
                 # default beam size
@@ -154,7 +148,6 @@ class Learner(object):
                 elif(beam_size < 0 or beam_size > default_beam):
                     beam_size = default_beam
                 optimization_config["beam_size"] = beam_size
-                
                 # setting update type 
                 update_type = optimization_options.get("update_type")
                 if(update_type not in {'early', 'latest', 'max'}):
@@ -166,6 +159,31 @@ class Learner(object):
                 if(type(shuffle_seq) != bool):
                     shuffle_seq = False
                 optimization_config["shuffle_seq"] = shuffle_seq
+                if(method == "COLLINS-PERCEPTRON"):
+                    # getting averaging scheme
+                    avg_scheme = optimization_options.get("avg_scheme")
+                    if(avg_scheme not in ("avg_uniform", "avg_error", "survival")):
+                        avg_scheme = "avg_error"
+                    optimization_config["avg_scheme"] = avg_scheme
+                    estimate_weights = self._structured_perceptron
+                else:
+                    # getting gamma (i.e. learning rate)
+                    gamma = optimization_options.get("gamma")
+                    if(gamma == None):
+                        # use default value
+                        gamma = 1
+                    elif(gamma < 0):
+                        gamma = 1
+                    optimization_config['gamma'] = gamma
+                    # getting topK (i.e. top-K decoded sequences)
+                    topK = optimization_options.get("topK")
+                    if(topK == None):
+                        # use default value
+                        topK = 5
+                    elif(topK < 0):
+                        topK = 5
+                    optimization_config['topK'] = topK
+                    estimate_weights = self._sapo
 
 
             elif(method in {"SGA", "SVRG"}):
@@ -395,17 +413,8 @@ class Learner(object):
         self._elapsed_time = datetime.now()
 
     def _update_weights(self, w, y_ref_windxfval, y_imposter_windxfval):
-        # the contribution of global features when using the correct label sequence
-        #^print("before ref contribution ", w[list(y_ref_windxfval.keys())])
-        #^print("to add ref values ", list(y_ref_windxfval.values()))
         w[list(y_ref_windxfval.keys())] += list(y_ref_windxfval.values())
-        #^print("after ref contribution ", w[list(y_ref_windxfval.keys())])
-        # the contribution of global features when using the imposter label sequence
-        #^print("imposter windx ", y_imposter_windxfval.keys())
-        #^print("before imposter contribution ", w[list(y_imposter_windxfval.keys())])
-        #^print("to subtract imposter values ", list(y_imposter_windxfval.values()))
         w[list(y_imposter_windxfval.keys())] -= list(y_imposter_windxfval.values())
-        #^print("after imposter contribution ", w[list(y_imposter_windxfval.keys())])
 
     def _find_update_violation(self, w, seq_id):
         seg_other_symbol = self.training_description['seg_other_symbol']
@@ -481,16 +490,180 @@ class Learner(object):
             elif(update_type == "latest"):
                 pass
         return(y_ref_windxfval, y_imposter_windxfval, seq_err_count)
+    
+    def _update_violation_sapo(self, w, seq_id):
+        seg_other_symbol = self.training_description['seg_other_symbol']
+        beam_size = self.training_description['beam_size']
+        update_type = self.training_description['update_type']
+        topK = self.training_description['topK']
+        gamma = self.training_description['gamma']
+        crf_model = self.crf_model
+        seqs_info = crf_model.seqs_info
+        crf_model.check_cached_info(w, seq_id, ("Y"))
+        y_ref = seqs_info[seq_id]['Y']['flat_y']
+        y_ref_boundaries = seqs_info[seq_id]['Y']['boundaries']
+        y_imposters, viol_indx = crf_model.viterbi(w, seq_id, beam_size, True, y_ref, topK)
+
+        #^print("y_ref ", y_ref)
+        #^print("y_imposter ", y_imposter)
+        if(not viol_indx):
+            print('y_ref ', y_ref)
+            print('y_imposters ', y_imposters)
+            # we can perform full update
+            T = seqs_info[seq_id]['T']
+            top_imposter = y_imposters[0]
+            missmatch = [i for i in range(T) if y_ref[i] != top_imposter[i]]
+            len_diff = len(missmatch)
+            # range of error is [0-1]
+            seq_err_count = float(len_diff/T)
+            print(seq_err_count)
+            print("in full update routine")
+            crf_model.check_cached_info(w, seq_id, ("globalfeatures_per_boundary",))
+            ref_gfeatures_perboundary = seqs_info[seq_id]["globalfeatures_per_boundary"]
+            #^print("ref_gfeatures_perboundary ", ref_gfeatures_perboundary)
+            #^print("y_ref_boundaries ", y_ref_boundaries)
+            #^print("ref gfeatures aggregated:")
+            y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures_perboundary, y_ref_boundaries)
+
+            ll_vec = []
+            gfeatures_list = []
+            for y_imposter in y_imposters:
+                # generate global features for the current imposter 
+                imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter, seg_other_symbol)                     
+                #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
+                #^print("imposter y_boundaries ", y_imposter_boundaries)
+                y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
+                w_indx = list(y_imposter_windxfval.keys())
+                f_val = list(y_imposter_windxfval.values())
+                ll_vec.append(numpy.dot(w[w_indx], f_val))
+                gfeatures_list.append((w_indx, f_val))
+            # normalize
+            ll_vec = numpy.asarray(ll_vec)
+            Z = vectorized_logsumexp(ll_vec)
+            prob_vec = numpy.exp(ll_vec - Z)
+            
+            counter = 0
+            for w_indx, f_val in gfeatures_list:
+                w[w_indx] -= (gamma*prob_vec[counter]) * numpy.asarray(f_val)
+                counter +=1
                 
-                        
+            w[list(y_ref_windxfval.keys())] += list(y_ref_windxfval.values())
+
+
+        else:
+            if(update_type == "early"):
+                print("in early update routine")
+                # viol_index is 1-based indexing
+                early_viol_indx = viol_indx[0]
+                #^print("viol_indx ", viol_indx)
+                #^print("early_viol_indx ", early_viol_indx)
+                counter = 0
+                for boundary in y_ref_boundaries:
+                    __, v = boundary
+                    if(v >= early_viol_indx):
+                        viol_pos = v
+                        break
+                    counter+= 1
+                
+                T = len(y_ref[:viol_pos])
+                #^print("T ", T)
+                #^print("viol_pos ", viol_pos)
+                top_imposter = y_imposters[0]
+                missmatch = [i for i in range(T) if y_ref[i] != top_imposter[i]]
+                len_diff = len(missmatch)
+                # range of error is [0-1]
+                seq_err_count = float(len_diff/T)
+                crf_model.check_cached_info(w, seq_id, ("globalfeatures_per_boundary",))
+                ref_gfeatures_perboundary = seqs_info[seq_id]["globalfeatures_per_boundary"]
+                y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures_perboundary, y_ref_boundaries[:counter+1])
+                #^print("ref_gfeatures_perboundary ", ref_gfeatures_perboundary)
+                #^print("y_ref_boundaries ", y_ref_boundaries[:counter+1])
+                # generate global features for the current imposter 
+                ll_vec = []
+                gfeatures_list = []
+                for y_imposter in y_imposters:
+                    # generate global features for the current imposter 
+                    imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter[:viol_pos], seg_other_symbol)                     
+                    #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
+                    #^print("imposter y_boundaries ", y_imposter_boundaries)
+                    y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
+                    w_indx = list(y_imposter_windxfval.keys())
+                    f_val = list(y_imposter_windxfval.values())
+                    ll_vec.append(numpy.dot(w[w_indx], f_val))
+                    gfeatures_list.append((w_indx, f_val))
+                # normalize
+                ll_vec = numpy.asarray(ll_vec)
+                Z = vectorized_logsumexp(ll_vec)
+                prob_vec = numpy.exp(ll_vec - Z)
+                
+                counter = 0
+                for w_indx, f_val in gfeatures_list:
+                    w[w_indx] -= (gamma*prob_vec[counter]) * numpy.asarray(f_val)
+                    counter +=1
+                    
+                w[list(y_ref_windxfval.keys())] += list(y_ref_windxfval.values())
+
+            elif(update_type == "max"):
+                pass
+            elif(update_type == "latest"):
+                pass
+        return(seq_err_count)
+    
+    def _sapo(self, w, train_seqs_id):
+        """ implements Search-based Probabilistic Online Learning Algorithm (SAPO)
+            see original paper https://arxiv.org/pdf/1503.08381v1.pdf
+            this implementation adapts it to 'violation-fixing' framework (i.e. inexact search is supported)
+        """
+        self._report_training()
+        num_epochs = self.training_description["num_epochs"]
+        regularization_type = self.training_description["regularization_type"]
+        # regularization parameter lambda
+        C = self.training_description['regularization_value']
+        gamma = self.training_description['gamma']
+        shuffle_seq = self.training_description['shuffle_seq']
+        model_dir = self.training_description["model_dir"]
+        log_file = os.path.join(model_dir, "crf_training_log.txt")
+
+        N = len(train_seqs_id)
+        crf_model = self.crf_model
+        # instance variable to keep track of elapsed time between optimization iterations
+        self._elapsed_time = datetime.now()
+        self._exitloop = False
+        
+        avg_error_list = [0]
+        for k in range(num_epochs):
+            seq_left = N
+            error_count = 0
+            if(shuffle_seq):
+                numpy.random.shuffle(train_seqs_id)
+            for seq_id in train_seqs_id:
+                seq_err_count = self._update_violation_sapo(w, seq_id)
+                w -= (C/N)*gamma*w
+                crf_model.clear_cached_info([seq_id])
+                seq_left -= 1
+                print('seq_err_count ', seq_err_count)
+                if(seq_err_count):
+                    error_count += seq_err_count
+#                 print("error count {}".format(error_count))
+            avg_error_list.append(float(error_count/N))
+            self._track_perceptron_optimizer(w, k, avg_error_list)
+            print("average error : {}".format(avg_error_list))
+            print("self._exitloop {}".format(self._exitloop))
+            if(self._exitloop):
+                break
+            self._elapsed_time = datetime.now()
+            
+        line = "---Model training--- end time {} \n".format(datetime.now())
+        ReaderWriter.log_progress(line, log_file)
+                 
+        return(w)      
+ 
     # needs still some work and fixing....
     def _structured_perceptron(self, w, train_seqs_id):
         """ implements structured perceptron algorithm in particular the average perceptron that was
             introduced by Michael Collins in 2002 (see his paper xx)
             it also adds different averaging schemes for the learned weights 
-            
-            TODO 
-                possibly add support for regularization although the averaging is sort of regularization
+
         """
         self._report_training()
         num_epochs = self.training_description["num_epochs"]
