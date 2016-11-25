@@ -497,6 +497,7 @@ class Learner(object):
         update_type = self.training_description['update_type']
         topK = self.training_description['topK']
         gamma = self.training_description['gamma']
+        #print(self.training_description)
         crf_model = self.crf_model
         seqs_info = crf_model.seqs_info
         crf_model.check_cached_info(w, seq_id, ("Y"))
@@ -507,8 +508,8 @@ class Learner(object):
         #^print("y_ref ", y_ref)
         #^print("y_imposter ", y_imposter)
         if(not viol_indx):
-            print('y_ref ', y_ref)
-            print('y_imposters ', y_imposters)
+            #print('y_ref ', y_ref)
+            #print('y_imposters ', y_imposters)
             # we can perform full update
             T = seqs_info[seq_id]['T']
             top_imposter = y_imposters[0]
@@ -516,7 +517,7 @@ class Learner(object):
             len_diff = len(missmatch)
             # range of error is [0-1]
             seq_err_count = float(len_diff/T)
-            print(seq_err_count)
+            #print(seq_err_count)
             print("in full update routine")
             crf_model.check_cached_info(w, seq_id, ("globalfeatures_per_boundary",))
             ref_gfeatures_perboundary = seqs_info[seq_id]["globalfeatures_per_boundary"]
@@ -524,7 +525,6 @@ class Learner(object):
             #^print("y_ref_boundaries ", y_ref_boundaries)
             #^print("ref gfeatures aggregated:")
             y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures_perboundary, y_ref_boundaries)
-
             ll_vec = []
             gfeatures_list = []
             for y_imposter in y_imposters:
@@ -541,13 +541,13 @@ class Learner(object):
             ll_vec = numpy.asarray(ll_vec)
             Z = vectorized_logsumexp(ll_vec)
             prob_vec = numpy.exp(ll_vec - Z)
-            
+            #print(prob_vec)
             counter = 0
             for w_indx, f_val in gfeatures_list:
                 w[w_indx] -= (gamma*prob_vec[counter]) * numpy.asarray(f_val)
                 counter +=1
                 
-            w[list(y_ref_windxfval.keys())] += list(y_ref_windxfval.values())
+            w[list(y_ref_windxfval.keys())] += gamma * numpy.asarray(list(y_ref_windxfval.values()))
 
 
         else:
@@ -601,7 +601,8 @@ class Learner(object):
                     w[w_indx] -= (gamma*prob_vec[counter]) * numpy.asarray(f_val)
                     counter +=1
                     
-                w[list(y_ref_windxfval.keys())] += list(y_ref_windxfval.values())
+                w[list(y_ref_windxfval.keys())] += gamma * numpy.asarray(list(y_ref_windxfval.values()))
+                
 
             elif(update_type == "max"):
                 pass
@@ -613,6 +614,7 @@ class Learner(object):
         """ implements Search-based Probabilistic Online Learning Algorithm (SAPO)
             see original paper https://arxiv.org/pdf/1503.08381v1.pdf
             this implementation adapts it to 'violation-fixing' framework (i.e. inexact search is supported)
+            the regularization is based on averaging rather than l2 as it seems to be consistent during training while using exact or inexact search
         """
         self._report_training()
         num_epochs = self.training_description["num_epochs"]
@@ -631,6 +633,8 @@ class Learner(object):
         self._exitloop = False
         
         avg_error_list = [0]
+        w_avg = numpy.zeros(len(w), dtype='longdouble')
+
         for k in range(num_epochs):
             seq_left = N
             error_count = 0
@@ -638,15 +642,18 @@ class Learner(object):
                 numpy.random.shuffle(train_seqs_id)
             for seq_id in train_seqs_id:
                 seq_err_count = self._update_violation_sapo(w, seq_id)
-                w -= (C/N)*gamma*w
+                #w += -((C*gamma)/N)*w
+                w_avg += w
                 crf_model.clear_cached_info([seq_id])
                 seq_left -= 1
-                print('seq_err_count ', seq_err_count)
+                #print('seq_err_count ', seq_err_count)
                 if(seq_err_count):
                     error_count += seq_err_count
 #                 print("error count {}".format(error_count))
             avg_error_list.append(float(error_count/N))
             self._track_perceptron_optimizer(w, k, avg_error_list)
+            ReaderWriter.dump_data(w_avg/((k+1)*N), os.path.join(model_dir, "model_avgweights_epoch_{}".format(k+1)))
+
             print("average error : {}".format(avg_error_list))
             print("self._exitloop {}".format(self._exitloop))
             if(self._exitloop):
@@ -655,7 +662,7 @@ class Learner(object):
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
-                 
+        w = w_avg/(num_epochs*N) 
         return(w)      
  
     # needs still some work and fixing....
@@ -710,19 +717,19 @@ class Learner(object):
 #                 print("error count {}".format(error_count))
                 avg_error_list.append(float(error_count/N))
                 self._track_perceptron_optimizer(w, k, avg_error_list)
-                ReaderWriter.dump_data(w_avg, os.path.join(model_dir, "model_avgweights_epoch_{}".format(k+1)))
+                ReaderWriter.dump_data(w_avg/(num_upd), os.path.join(model_dir, "model_avgweights_epoch_{}".format(k+1)))
                 print("average error : {}".format(avg_error_list))
                 print("self._exitloop {}".format(self._exitloop))
                 if(self._exitloop):
                     break
                 self._elapsed_time = datetime.now()
             if(num_upd):
-                w_avg /= num_upd
+                w = w_avg/num_upd
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
                  
-        return(w_avg)      
+        return(w)      
 
     def _track_perceptron_optimizer(self, w, k, avg_error_list):
         delta_time = datetime.now() - self._elapsed_time 

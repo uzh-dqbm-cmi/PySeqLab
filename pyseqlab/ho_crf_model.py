@@ -931,7 +931,7 @@ class HOCRF(object):
         viol_index = []
         #^print("pky_codebook_rev ", pky_codebook_rev)
         #activefeatures_perboundary = {}
-        print('pi_elems ', pi_elems)
+        #print('pi_elems ', pi_elems)
         for j in range(1, T+1):
             boundary = (j, j)
             active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
@@ -949,7 +949,7 @@ class HOCRF(object):
                     argmax_ind = numpy.argmax(vec)
                     #print("argmax chosen ", argmax_ind)
                     pk_c = pi_pky_codebook[pi][1][argmax_ind]
-                    print('pk_c ', pk_c)
+                    #print('pk_c ', pk_c)
                     pk = P_codebook_rev[pk_c]
                     y = pi_elems[pk][-1]
                     back_track[j, P_codebook[pi]] = (pk, y)
@@ -991,15 +991,15 @@ class HOCRF(object):
             Y_decoded.reverse()
      
             Y_decoded = [yt for (pt,yt) in Y_decoded]
-            print("Y_decoded {}".format(Y_decoded))
-            print('delta ', delta)
-            print('backtrack ', back_track)
-            print("P_codebook ", P_codebook)
+#             print("Y_decoded {}".format(Y_decoded))
+#             print('delta ', delta)
+#             print('backtrack ', back_track)
+#             print("P_codebook ", P_codebook)
             return(Y_decoded, viol_index)
         else:
             asearcher = AStarSearcher(P_codebook, pi_elems)
             topK = asearcher.search(delta, back_track, T, K)
-            print('topk ', topK)
+#             print('topk ', topK)
             return(topK, viol_index)
 
         

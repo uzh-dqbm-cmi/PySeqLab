@@ -281,6 +281,11 @@ class ReaderWriter(object):
         with open(outfile, mode) as f:
             f.write(line)
 
+
+
+##########################
+# A* searcher to be used with viterbi algorithm to generate k-decoded list
+########################
 import heapq
 
 class AStarNode(object):
@@ -298,10 +303,7 @@ class AStarNode(object):
         else:
             statement += "forward_link: None"
         print(statement)
-
-##########################
-# A* searcher to be used with viterbi algorithm to generate k-decoded list
-########################
+        
 class AStarAgenda(object):
     def __init__(self):
         self.qagenda = []
@@ -330,8 +332,8 @@ class AStarSearcher(object):
         P_codebook = self.P_codebook
         P_codebook_rev = self.P_codebook_rev
         # decoding the sequence
-        print("we are decoding")
-        top_node.print_node()
+        #print("we are decoding")
+        #top_node.print_node()
         y = top_node.label
         pi_c = top_node.pi_c
         pos = top_node.position
@@ -412,8 +414,8 @@ class AStarSearcher(object):
             print(e)
     
         finally:
-            print('r ', r)
-            print('topk ', topk_list)
+            #print('r ', r)
+            #print('topk ', topk_list)
             return(topk_list)
 
 #######################
