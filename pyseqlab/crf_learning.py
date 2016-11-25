@@ -302,18 +302,17 @@ class Learner(object):
         
     def _check_reldiff(self, x, y):
         tolerance = self.training_description["tolerance"]
-        if(x != y):            
-            reldiff = numpy.abs(x - y) / (numpy.abs(x) + numpy.abs(y))
-            print("reldiff = {}".format(reldiff))
-            if(reldiff <= tolerance):
-                self._exitloop = True
-            else:
-                self._exitloop = False 
+        if(y<=tolerance):
+            self._exitloop = True
         else:
-            # consider updating this..
-            if(y <= tolerance):
-                self._exitloop = True
-            
+            if(x != y):            
+                reldiff = numpy.abs(x - y) / (numpy.abs(x) + numpy.abs(y))
+                print("reldiff = {}".format(reldiff))
+                if(reldiff <= tolerance):
+                    self._exitloop = True
+                else:
+                    self._exitloop = False 
+
         #############################
         # optimize using scipy optimize function
         #############################
@@ -650,6 +649,7 @@ class Learner(object):
                 if(seq_err_count):
                     error_count += seq_err_count
 #                 print("error count {}".format(error_count))
+                print("sequences left {}".format(seq_left))
             avg_error_list.append(float(error_count/N))
             self._track_perceptron_optimizer(w, k, avg_error_list)
             ReaderWriter.dump_data(w_avg/((k+1)*N), os.path.join(model_dir, "model_avgweights_epoch_{}".format(k+1)))
