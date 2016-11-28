@@ -318,9 +318,9 @@ class AStarAgenda(object):
         return(astar_node)
     
 class AStarSearcher(object):
-    def __init__(self, P_codebook, pi_elems):
+    def __init__(self, P_codebook, P_codebook_rev, pi_elems):
         self.P_codebook = P_codebook
-        self.P_codebook_rev = {code:state for state, code in P_codebook.items()}
+        self.P_codebook_rev = P_codebook_rev
         self.pi_elems = pi_elems
         
     def get_node_label(self, pi_code):

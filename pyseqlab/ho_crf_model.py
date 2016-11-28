@@ -997,7 +997,7 @@ class HOCRF(object):
 #             print("P_codebook ", P_codebook)
             return(Y_decoded, viol_index)
         else:
-            asearcher = AStarSearcher(P_codebook, pi_elems)
+            asearcher = AStarSearcher(P_codebook, P_codebook_rev, pi_elems)
             topK = asearcher.search(delta, back_track, T, K)
 #             print('topk ', topK)
             return(topK, viol_index)
