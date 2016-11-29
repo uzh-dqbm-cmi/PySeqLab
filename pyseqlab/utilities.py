@@ -145,7 +145,8 @@ class SequenceStruct():
         return(boundaries)
     
 class DataFileParser():
-    """ class to parse a data file that includes the training data consisting of:
+    """ 
+        class to parse a data file that includes the training data consisting of:
         label sequences Y
         Observation sequences X (each type of observation sequences is represented in a separate column)
         IMPORTANT: label sequences are the LAST column in the file (i.e. X_a X_b Y)
