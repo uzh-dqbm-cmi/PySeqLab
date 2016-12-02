@@ -9,6 +9,7 @@ from copy import deepcopy
 from itertools import combinations
 import warnings
 import numpy
+from _operator import pos
 
 warnings.filterwarnings('error')
 
@@ -32,6 +33,7 @@ class SequenceStruct():
         self.X = X
         self.Y = (Y, seg_other_symbol)
 
+
     @property
     def X(self):
         return(self._X)
@@ -46,13 +48,14 @@ class SequenceStruct():
                             }
         """
         self._X = {}
-        for i in range(len(l)):
+        T = len(l)
+        for i in range(T):
             self._X[i+1] = l[i]
 
         # new assignment clear seg_attr
         if(self.seg_attr):
             self.seg_attr.clear()
-        self.T = len(self._X)
+        self.T = T
         
     @property
     def Y(self):
@@ -86,6 +89,7 @@ class SequenceStruct():
                         for indx in indices_list:
                             boundary = (indx, indx)
                             self._Y[boundary] = label
+
                     else:
                         indx_stack = []
                         for indx in indices_list:
@@ -115,14 +119,26 @@ class SequenceStruct():
                     label = Y_ref[i]
                     boundary = (i+1, i+1)
                     self._Y[boundary] = label
+                    
             # store the length of longest entity
             self.L = L
             # keep a copy of Y in as flat list (i.e. ['P','O','O','L','L'])
             self.flat_y = Y_ref
             
-    def update_boundaries(self):
-        self.y_boundaries = self.get_y_boundaries()
-        self.x_boundaries = self.get_x_boundaries()
+            # construct a map from the yboundaries to the pos in the list
+            sorted_yboundaries = self.get_y_boundaries()
+            self.sorted_yboundaries = sorted_yboundaries
+
+            self.yboundary_pos = {}
+            pos = 0 
+            for boundary in sorted_yboundaries:
+                self.yboundary_pos[boundary] = pos
+                pos += 1
+            self.y_range = set(range(0, pos))
+            
+#     def update_boundaries(self):
+#         self.y_boundaries = self.get_y_boundaries()
+#         self.x_boundaries = self.get_x_boundaries()
 
     def flatten_y(self, Y):
         """ input Y is {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
@@ -130,9 +146,9 @@ class SequenceStruct():
         """
         s_boundaries = sorted(Y)
         flat_y = []
-        for b in s_boundaries:
-            for _ in range(b[0], b[-1]+1):
-                flat_y.append(Y[b])
+        for u, v in s_boundaries:
+            for _ in range(u, v+1):
+                flat_y.append(Y[(u,v)])
         return(flat_y)
   
     def get_y_boundaries(self):
@@ -140,8 +156,8 @@ class SequenceStruct():
     
     def get_x_boundaries(self):
         boundaries = []
-        for elmkey in self.X:
-            boundaries.append((elmkey, elmkey))
+        for u in self.X:
+            boundaries.append((u, u))
         return(boundaries)
     
 class DataFileParser():

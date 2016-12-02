@@ -30,16 +30,22 @@ class HOFeatureExtractor(object):
         """
         if(type(template) == dict):
             self._template_X = {}
+            self.y_offsets = set()
+            self.x_featurenames = {}
             for attr_name, templateX in template.items():
                 self._template_X[attr_name] = {}
+                self.x_featurenames[attr_name] = {}
                 for offset_x, offsets_y in templateX.items():
                     s_offset_x = tuple(sorted(offset_x))
+                    feature_name = '|'.join([attr_name + "[" + str(ofst_x) + "]"  for ofst_x in s_offset_x])
+                    self.x_featurenames[attr_name][offset_x] = feature_name
                     unique_dict = {}
                     for offset_y in offsets_y:
                         s_offset_y = tuple(sorted(offset_y))
                         check = self._validate_template(s_offset_y)
                         if(check):
                             unique_dict[s_offset_y] = 1
+                            self.y_offsets.add(s_offset_y)
                     if(unique_dict):
                         self._template_X[attr_name][s_offset_x] = tuple(unique_dict.keys())
 
@@ -83,40 +89,46 @@ class HOFeatureExtractor(object):
         return(check)
                     
                 
-    def extract_seq_features_perboundary(self, seq):
-        # this method is used to extract features from sequences in the training dataset 
-        # (i.e. we know the labels and boundaries)
+    def extract_seq_features_perboundary(self, seq, seg_features=None):
+        # this method is used to extract features from sequences with known labels
+        # (i.e. we know the Y labels and boundaries)
         Y = seq.Y
         features = {}
         for boundary in Y:
             y_feat = self.extract_features_Y(seq, boundary, self.template_Y)
-            xy_feat = self.extract_features_XY(seq, boundary)
+            y_feat = y_feat['Y']
+            xy_feat = self.extract_features_XY(seq, boundary, seg_features)
 #             #print("boundary {}".format(boundary))
 #             #print("boundary {}".format(boundary))
 #             #print("y_feat {}".format(y_feat))
 #             #print("xy_feat {}".format(xy_feat))
-            for offset_tup_y in y_feat['Y']:
-                for y_patt in y_feat['Y'][offset_tup_y]:
+            #TOUPDATEEEEE
+            for offset_tup_y in y_feat:
+                print("something wrong")
+                for y_patt in y_feat[offset_tup_y]:
                     if(y_patt in xy_feat):
-                        xy_feat[y_patt].update(Counter(y_feat['Y'][offset_tup_y]))
+                        xy_feat[y_patt].update(y_feat[offset_tup_y])
+#                         xy_feat[y_patt] + Counter(y_feat[offset_tup_y])
                     else:
-                        xy_feat[y_patt] = Counter(y_feat['Y'][offset_tup_y])
+                        xy_feat[y_patt] = Counter(y_feat[offset_tup_y])
             features[boundary] = xy_feat
 #             #print("features {}".format(features[boundary]))
 #             #print("*"*40)
                 
         return(features)
+
     
     def aggregate_seq_features(self, features, boundaries):
         # summing up all detected features across all boundaries
         seq_features = {}
         for boundary in boundaries:
-            xy_features = deepcopy(features[boundary])
+            xy_features = features[boundary]
             for y_patt in xy_features:
                 if(y_patt in seq_features):
                     seq_features[y_patt].update(xy_features[y_patt])
+#                     seq_features[y_patt] + xy_features[y_patt]
                 else:
-                    seq_features[y_patt] = xy_features[y_patt]
+                    seq_features[y_patt] = Counter(xy_features[y_patt])
         return(seq_features)
     
     def extract_seq_features(self, seq):
@@ -129,28 +141,32 @@ class HOFeatureExtractor(object):
                        = {Y: tuple(y_offsets)}        
         """
         template_Y = templateY['Y']
-        Y = seq.Y
-        y_boundaries = seq.get_y_boundaries()
-        range_y = range(len(y_boundaries))
-        curr_pos = y_boundaries.index(boundary)
-        
-        y_patt_features = {}
-        feat_template = {}
-        for offset_tup_y in template_Y:
-            y_pattern = []
-            for offset_y in offset_tup_y:
-                # offset_y should be always <= 0
-                pos = curr_pos + offset_y
-                if(pos in range_y):
-                    b = y_boundaries[pos]
-                    y_pattern.append(Y[b])
-                else:
-                    y_pattern = []
-                    break 
-            if(y_pattern):
-                feat_template[offset_tup_y] = {"|".join(y_pattern):1}
+        if(not template_Y):
+            y_patt_features = {'Y':{}}
+        else:
+            Y = seq.Y
+            sorted_yboundaries = seq.sorted_yboundaries
+            yboundary_pos = seq.yboundary_pos
+            curr_pos = yboundary_pos[boundary]
+            range_y = seq.y_range
 
-        y_patt_features['Y'] = feat_template
+            y_patt_features = {}
+            feat_template = {}
+            for offset_tup_y in template_Y:
+                y_pattern = []
+                for offset_y in offset_tup_y:
+                    # offset_y should be always <= 0
+                    pos = curr_pos + offset_y
+                    if(pos in range_y):
+                        b = sorted_yboundaries[pos]
+                        y_pattern.append(Y[b])
+                    else:
+                        y_pattern = []
+                        break 
+                if(y_pattern):
+                    feat_template[offset_tup_y] = {"|".join(y_pattern):1}
+    
+            y_patt_features['Y'] = feat_template
         
 #         #print("X"*40)
 #         #print("boundary {}".format(boundary))
@@ -168,9 +184,9 @@ class HOFeatureExtractor(object):
         # get template X
         template_X = self.template_X
         attr_desc = self.attr_desc
+        x_featurenames = self.x_featurenames
         # current boundary begin and end
-        u = boundary[0]
-        v = boundary[-1]
+        u, v = boundary
 
 #         #print("positions {}".format(positions))
         seg_features = {}
@@ -185,7 +201,9 @@ class HOFeatureExtractor(object):
             feat_template = {}
             for offset_tup_x in template_X[attr_name]:
                 attributes = []
-                feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
+#                 feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
+#                 feature_name = '|'.join([attr_name + "[" + str(offset_x) + "]"  for offset_x in offset_tup_x])
+
 #                 #print("feature_name {}".format(feature_name))
                 for offset_x in offset_tup_x:
 #                     #print("offset_x {}".format(offset_x))
@@ -203,7 +221,8 @@ class HOFeatureExtractor(object):
                         attributes = []
                         break
                 if(attributes):
-                    feat_template[offset_tup_x] = represent_attr(attributes, feature_name)
+#                     feat_template[offset_tup_x] = represent_attr(attributes, feature_name)
+                    feat_template[offset_tup_x] = represent_attr(attributes, x_featurenames[attr_name][offset_tup_x])
             seg_features[attr_name] = feat_template
 #         
 #         #print("X"*40)
@@ -215,28 +234,60 @@ class HOFeatureExtractor(object):
 
         return(seg_features)
     
-    def extract_features_XY(self, seq, boundary):
+#     def extract_features_XY(self, seq, boundary):
+#         """ template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
+#             template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
+#         """
+#         
+#         seg_feat_templates = self.extract_features_X(seq, boundary)
+#         y_feat_template = self.extract_features_Y(seq, boundary,{'Y':self.y_offsets})
+#         templateX = self.template_X
+# 
+# #         #print("seg_feat_templates {}".format(seg_feat_templates))
+#         xy_features = {}
+#         for attr_name, seg_feat_template in seg_feat_templates.items():
+#             for offset_tup_x in seg_feat_template:
+#                 
+#                 templateY = {'Y':templateX[attr_name][offset_tup_x]}
+#                 y_feat_template = self.extract_features_Y(seq, boundary, templateY)
+# #                 #print("y_feat_template {}".format(y_feat_template))
+#                 y_feat_template = y_feat_template['Y']
+#                 for y_patt_dict in y_feat_template.values():
+#                     for y_patt in y_patt_dict:
+#                         if(y_patt in xy_features):
+#                             xy_features[y_patt].update(seg_feat_template[offset_tup_x])
+# #                             xy_features[y_patt] + Counter(seg_feat_template[offset_tup_x])
+#                         else:
+#                             xy_features[y_patt] = Counter(seg_feat_template[offset_tup_x])
+# #                         #print("xy_features {}".format(xy_features))
+#         return(xy_features)
+    
+    def extract_features_XY(self, seq, boundary, seg_features = None):
         """ template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
             template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
         """
-        
-        seg_feat_templates = self.extract_features_X(seq, boundary)
+        if(not seg_features):
+            seg_feat_templates = self.extract_features_X(seq, boundary)
+        else:
+            seg_feat_templates = seg_features[boundary]
+            
+        y_feat_template = self.extract_features_Y(seq, boundary,{'Y':self.y_offsets})
+#         print(y_feat_template)
+#         print(self.y_offsets)
+        y_feat_template = y_feat_template['Y']
         templateX = self.template_X
 
 #         #print("seg_feat_templates {}".format(seg_feat_templates))
         xy_features = {}
         for attr_name, seg_feat_template in seg_feat_templates.items():
             for offset_tup_x in seg_feat_template:
-                templateY = {'Y':templateX[attr_name][offset_tup_x]}
-                y_feat_template = self.extract_features_Y(seq, boundary, templateY)
-#                 #print("y_feat_template {}".format(y_feat_template))
-                y_feat_template = y_feat_template['Y']
-                for y_patt_dict in y_feat_template.values():
-                    for y_patt in y_patt_dict:
-                        if(y_patt in xy_features):
-                            xy_features[y_patt].update(Counter(seg_feat_template[offset_tup_x]))
-                        else:
-                            xy_features[y_patt] = Counter(seg_feat_template[offset_tup_x])
+                for offset_tup_y in templateX[attr_name][offset_tup_x]:
+                    if(offset_tup_y in y_feat_template):
+                        for y_patt in y_feat_template[offset_tup_y]:
+                            if(y_patt in xy_features):
+                                xy_features[y_patt].update(seg_feat_template[offset_tup_x])
+                            else:
+                                xy_features[y_patt] = seg_feat_template[offset_tup_x]
 #                         #print("xy_features {}".format(xy_features))
         return(xy_features)
     
@@ -248,6 +299,7 @@ class HOFeatureExtractor(object):
         # get template X
         template_X = self.template_X
         attr_desc = self.attr_desc
+        x_featurenames = self.x_featurenames
         # current boundary begin and end
         u = boundary[0]
         v = boundary[-1]
@@ -266,7 +318,7 @@ class HOFeatureExtractor(object):
             
             for offset_tup_x in template_X[attr_name]:
                 attributes = []
-                feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
+#                 feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
 #                 #print("feature_name {}".format(feature_name))
                 for offset_x in offset_tup_x:
 #                     #print("offset_x {}".format(offset_x))
@@ -285,7 +337,8 @@ class HOFeatureExtractor(object):
                         attributes = []
                         break
                 if(attributes):
-                    seg_features.update(represent_attr(attributes, feature_name))
+                    seg_features.update(represent_attr(attributes, x_featurenames[attr_name][offset_tup_x]))
+
 #         #print("seg_features lookup {}".format(seg_features))
         return(seg_features)
 
@@ -350,7 +403,8 @@ class HOFeatureExtractor(object):
 #         #print("attributes ",attributes)
 #         #print("featurename ", feature_name)
         feature_val = '|'.join(attributes)
-        feature = '{}={}'.format(feature_name, feature_val)
+#         feature = '{}={}'.format(feature_name, feature_val)
+        feature = feature_name + "=" + feature_val
         return({feature:1})
 
     def _represent_real_attr(self, attributes, feature_name):
@@ -933,7 +987,6 @@ class SeqsRepresentation(object):
         line += "\n \n"
         ReaderWriter.log_progress(line, log_file)
         
-    # this method could be made static -- for now it is instance method
     def create_model(self, seqs_id, seqs_info, model_repr_class, filter_obj = None):
         """ we use the sequences assigned  in the training set to build the model
             To construct the model, this function performs the following:
@@ -1093,7 +1146,7 @@ class SeqsRepresentation(object):
         y_ref = list(seq.flat_y)        
         # update seq.Y with the imposter Y
         seq.Y = (y_imposter, seg_other_symbol)
-        y_imposter_boundaries = seq.get_y_boundaries()
+        y_imposter_boundaries = seq.sorted_yboundaries
         #^print("y_imposter_boundaries ", y_imposter_boundaries)
         # this will update the value of the seg_attr of the sequence 
         new_boundaries = attr_extractor.generate_attributes(seq, y_imposter_boundaries)
