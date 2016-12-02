@@ -1058,13 +1058,14 @@ class SeqsRepresentation(object):
             if(L > 1):
                 self._lookup_seq_attributes(seq, L)
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-            activated_states, seg_features = f_extractor.lookup_seq_modelactivefeatures(seq, model)
+            activated_states, seg_features, sfeatures = f_extractor.lookup_seq_modelactivefeatures(seq, model, learning=True)
 
             # dump model active features data
             activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
             seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
             ReaderWriter.dump_data(activated_states, os.path.join(activefeatures_dir, "activated_states"))
             ReaderWriter.dump_data(seg_features, os.path.join(activefeatures_dir, "seg_features"))
+            ReaderWriter.dump_data(sfeatures, os.path.join(activefeatures_dir, "l_segfeatures"))
 
             
         end_time = datetime.now()
@@ -1104,12 +1105,21 @@ class SeqsRepresentation(object):
         seg_features = ReaderWriter.read_data(os.path.join(seq_dir, "seg_features"))
         return(seg_features)
     
-    def get_seq_globalfeatures_perboundary(self, seq_id, seqs_info):
+    def get_seq_lsegfeatures(self, seq_id, seqs_info):
+        seq_dir = seqs_info[seq_id]["activefeatures_dir"]
+        seg_features = ReaderWriter.read_data(os.path.join(seq_dir, "l_segfeatures"))
+        return(seg_features)
+    
+    def get_seq_globalfeatures(self, seq_id, seqs_info, per_boundary=True):
         """it retrieves the features available for the current sequence (i.e. F(X,Y) for all j \in [1...J] 
         """
         seq_dir = seqs_info[seq_id]['globalfeatures_dir']
-        gfeatures_perboundary = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures_per_boundary"))
-        return(gfeatures_perboundary)
+        if(per_boundary):
+            fname = "globalfeatures_per_boundary"
+        else:
+            fname = "globalfeatures"
+        gfeatures = ReaderWriter.read_data(os.path.join(seq_dir, fname))
+        return(gfeatures)
     
     def represent_gfeatures(self, gfeatures_perboundary, boundaries, model):
         feature_extractor = self.feature_extractor
@@ -1135,7 +1145,7 @@ class SeqsRepresentation(object):
         y_ref = list(seq.flat_y)        
         # update seq.Y with the imposter Y
         seq.Y = (y_imposter, seg_other_symbol)
-        y_imposter_boundaries = seq.sorted_yboundaries
+        y_imposter_boundaries = seq.y_sboundaries
         #^print("y_imposter_boundaries ", y_imposter_boundaries)
         # this will update the value of the seg_attr of the sequence 
         new_boundaries = attr_extractor.generate_attributes(seq, y_imposter_boundaries)
@@ -1143,7 +1153,11 @@ class SeqsRepresentation(object):
         if(new_boundaries):
             attr_scaler.scale_real_attributes(seq, new_boundaries)
             
-        imposter_gfeatures = feature_extractor.extract_seq_features_perboundary(seq)
+        activefeatures_dir =  seqs_info[seq_id]["activefeatures_dir"]
+
+        l_segfeatures = ReaderWriter.read_data(os.path.join(activefeatures_dir, "l_segfeatures"), mode = "rb")
+
+        imposter_gfeatures = feature_extractor.extract_seq_features_perboundary(seq, l_segfeatures)
         #^print("imposter_gfeatures ", imposter_gfeatures)
         # put back the original Y
         seq.Y = (y_ref, seg_other_symbol) 
