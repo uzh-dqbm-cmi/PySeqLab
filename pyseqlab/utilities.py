@@ -126,13 +126,13 @@ class SequenceStruct():
             self.flat_y = Y_ref
             
             # construct a map from the yboundaries to the pos in the list
-            sorted_yboundaries = self.get_y_boundaries()
-            self.sorted_yboundaries = sorted_yboundaries
+            y_sboundaries = self.get_y_boundaries()
+            self.y_sboundarires = y_sboundaries
 
-            self.yboundary_pos = {}
+            self.y_boundpos_map = {}
             pos = 0 
-            for boundary in sorted_yboundaries:
-                self.yboundary_pos[boundary] = pos
+            for boundary in y_sboundaries:
+                self.y_boundpos_map[boundary] = pos
                 pos += 1
             self.y_range = set(range(0, pos))
             

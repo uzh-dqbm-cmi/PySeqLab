@@ -95,9 +95,9 @@ class HOFeatureExtractor(object):
         Y = seq.Y
         features = {}
         for boundary in Y:
+            xy_feat = self.extract_features_XY(seq, boundary, seg_features)
             y_feat = self.extract_features_Y(seq, boundary, self.template_Y)
             y_feat = y_feat['Y']
-            xy_feat = self.extract_features_XY(seq, boundary, seg_features)
 #             #print("boundary {}".format(boundary))
 #             #print("boundary {}".format(boundary))
 #             #print("y_feat {}".format(y_feat))
@@ -119,7 +119,7 @@ class HOFeatureExtractor(object):
 
     
     def aggregate_seq_features(self, features, boundaries):
-        # summing up all detected features across all boundaries
+        # summing up all local features across all boundaries
         seq_features = {}
         for boundary in boundaries:
             xy_features = features[boundary]
@@ -141,13 +141,12 @@ class HOFeatureExtractor(object):
                        = {Y: tuple(y_offsets)}        
         """
         template_Y = templateY['Y']
-        if(not template_Y):
-            y_patt_features = {'Y':{}}
-        else:
+
+        if(template_Y):
             Y = seq.Y
-            sorted_yboundaries = seq.sorted_yboundaries
-            yboundary_pos = seq.yboundary_pos
-            curr_pos = yboundary_pos[boundary]
+            y_sboundaries = seq.y_sboundarires
+            y_boundpos_map = seq.y_boundpos_map
+            curr_pos = y_boundpos_map[boundary]
             range_y = seq.y_range
 
             y_patt_features = {}
@@ -158,7 +157,7 @@ class HOFeatureExtractor(object):
                     # offset_y should be always <= 0
                     pos = curr_pos + offset_y
                     if(pos in range_y):
-                        b = sorted_yboundaries[pos]
+                        b = y_sboundaries[pos]
                         y_pattern.append(Y[b])
                     else:
                         y_pattern = []
@@ -167,6 +166,9 @@ class HOFeatureExtractor(object):
                     feat_template[offset_tup_y] = {"|".join(y_pattern):1}
     
             y_patt_features['Y'] = feat_template
+            
+        else:
+            y_patt_features = {'Y':{}}
         
 #         #print("X"*40)
 #         #print("boundary {}".format(boundary))
@@ -201,9 +203,6 @@ class HOFeatureExtractor(object):
             feat_template = {}
             for offset_tup_x in template_X[attr_name]:
                 attributes = []
-#                 feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
-#                 feature_name = '|'.join([attr_name + "[" + str(offset_x) + "]"  for offset_x in offset_tup_x])
-
 #                 #print("feature_name {}".format(feature_name))
                 for offset_x in offset_tup_x:
 #                     #print("offset_x {}".format(offset_x))
@@ -233,34 +232,7 @@ class HOFeatureExtractor(object):
 #         #print("X"*40)
 
         return(seg_features)
-    
-#     def extract_features_XY(self, seq, boundary):
-#         """ template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-#             template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
-#         """
-#         
-#         seg_feat_templates = self.extract_features_X(seq, boundary)
-#         y_feat_template = self.extract_features_Y(seq, boundary,{'Y':self.y_offsets})
-#         templateX = self.template_X
-# 
-# #         #print("seg_feat_templates {}".format(seg_feat_templates))
-#         xy_features = {}
-#         for attr_name, seg_feat_template in seg_feat_templates.items():
-#             for offset_tup_x in seg_feat_template:
-#                 
-#                 templateY = {'Y':templateX[attr_name][offset_tup_x]}
-#                 y_feat_template = self.extract_features_Y(seq, boundary, templateY)
-# #                 #print("y_feat_template {}".format(y_feat_template))
-#                 y_feat_template = y_feat_template['Y']
-#                 for y_patt_dict in y_feat_template.values():
-#                     for y_patt in y_patt_dict:
-#                         if(y_patt in xy_features):
-#                             xy_features[y_patt].update(seg_feat_template[offset_tup_x])
-# #                             xy_features[y_patt] + Counter(seg_feat_template[offset_tup_x])
-#                         else:
-#                             xy_features[y_patt] = Counter(seg_feat_template[offset_tup_x])
-# #                         #print("xy_features {}".format(xy_features))
-#         return(xy_features)
+
     
     def extract_features_XY(self, seq, boundary, seg_features = None):
         """ template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
@@ -342,8 +314,14 @@ class HOFeatureExtractor(object):
 #         #print("seg_features lookup {}".format(seg_features))
         return(seg_features)
 
-
-    def lookup_seq_modelactivefeatures(self, seq, model):
+    def flatten_segfeatures(self, seg_features):
+        flat_segfeatures = {}
+        for attr_name in seg_features:
+            for offset in seg_features[attr_name]:
+                flat_segfeatures.update(seg_features[attr_name][offset])
+        return(flat_segfeatures)
+        
+    def lookup_seq_modelactivefeatures(self, seq, model, learning=False):
         # segment length
         L = model.L
         T = seq.T
@@ -353,8 +331,9 @@ class HOFeatureExtractor(object):
         ypatt_features = model.ypatt_features
         activated_states = {}
         seg_features = {}
-
+        sfeatures = {}
         
+        # to move this one to the model representation and store it as an attribute
         if(ypatt_features):
             ypatt_activestates = model.find_activated_states(ypatt_features, patts_len)
             #^print("ypatt_features ", ypatt_features)
@@ -376,7 +355,13 @@ class HOFeatureExtractor(object):
                     max_len = max_patt_len
                     
                 allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
-                seg_features[boundary] = self.lookup_features_X(seq, boundary)
+                
+                if(learning):
+                    sfeatures[boundary] = self.extract_features_X(seq, boundary)
+                    seg_features[boundary] = self.flatten_segfeatures(sfeatures[boundary])
+                else:
+                    seg_features[boundary] = self.lookup_features_X(seq, boundary)
+                    
                 activated_states[boundary] = model.find_activated_states(seg_features[boundary], allowed_z_len)
                 #^print("allowed_z_len ", allowed_z_len)
                 #^print("seg_features ", seg_features)
@@ -392,7 +377,8 @@ class HOFeatureExtractor(object):
                 #^print("activated_states ", activated_states)
         #^print("activated_states from feature_extractor ", activated_states)
         #^print("seg_features from feature_extractor ", seg_features)
-        return(activated_states, seg_features)
+
+        return(activated_states, seg_features, sfeatures)
     
     
     ########################################################
@@ -867,7 +853,7 @@ class SeqsRepresentation(object):
             # create a folder for every sequence
             seq_dir = create_directory("seq_{}".format(seq_id), target_dir)
             ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-            seqs_info[seq_id] = {'globalfeatures_dir': seq_dir, 'T':len(x_boundaries)}
+            seqs_info[seq_id] = {'globalfeatures_dir': seq_dir, 'T':seq.T, 'L':seq.L}
             
         end_time = datetime.now()
         
@@ -883,6 +869,8 @@ class SeqsRepresentation(object):
         return(seqs_info)
 
     def preprocess_attributes(self, seqs_id, seqs_info, method = "rescaling"):
+        """process attributes
+        """
         attr_extractor = self.attr_extractor
         grouped_attr = attr_extractor.group_attributes()
         if(grouped_attr.get("real")):
@@ -892,28 +880,34 @@ class SeqsRepresentation(object):
             active_continuous_attr = {}
             
         attr_dict = {}
-        
-        ##print(continuous_attr)
-#         #print("active continuous attr {}".format(active_continuous_attr))
+
         start_time = datetime.now()
         for seq_id in seqs_id:
-            seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-            seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb")
-            y_boundaries = seq.get_y_boundaries()
-            # this will update the value of the seg_attr of the sequence 
-            new_boundaries = attr_extractor.generate_attributes(seq, y_boundaries)
-            if(new_boundaries):
-                ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
+            # length of longest entity in a sequence
+            seq_L = seqs_info[seq_id]['L']
+            if(seq_L > 1 or active_continuous_attr):
+                seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
+                seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb")
+                y_boundaries = seq.y_sboundaries
+            # generate attributes for segments 
+            if(seq_L>1):
+                # this will update the value of the seg_attr of the sequence 
+                new_boundaries = attr_extractor.generate_attributes(seq, y_boundaries)
+                # this condition might be redundant -- consider to remove and directly dump the squence
+                if(new_boundaries):
+                    ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
             
-            for attr_name in active_continuous_attr:
-                for y_boundary in y_boundaries:
-#                     #print("y_boundary {}".format(y_boundary))
-                    attr_val = seq.seg_attr[y_boundary][attr_name]
-                    if(attr_name in attr_dict):
-                        attr_dict[attr_name].append(attr_val)
-                    else:
-                        attr_dict[attr_name] = [attr_val]  
-        
+            # gather stats for rescaling/standardizing real/continuous variables
+            if(active_continuous_attr):
+                for attr_name in active_continuous_attr:
+                    for y_boundary in y_boundaries:
+                        attr_val = seq.seg_attr[y_boundary][attr_name]
+                        if(attr_name in attr_dict):
+                            attr_dict[attr_name].append(attr_val)
+                        else:
+                            attr_dict[attr_name] = [attr_val]  
+                            
+        # generate attribute scaler object
         if(attr_dict):                      
             scaling_info = {}
             if(method == "rescaling"):
@@ -926,10 +920,9 @@ class SeqsRepresentation(object):
                     scaling_info[attr_name]['mean'] = numpy.mean(attr_dict[attr_name])
                     scaling_info[attr_name]['sd'] = numpy.std(attr_dict[attr_name])
 
-#         #print("scaling_info {}".format(scaling_info))
-
             attr_scaler = AttributeScaler(scaling_info, method)
             self.attr_scaler = attr_scaler
+            # scale the attributes
             self.scale_attributes(seqs_id, seqs_info)
         end_time = datetime.now()
                     
@@ -944,17 +937,14 @@ class SeqsRepresentation(object):
         ReaderWriter.log_progress(line, log_file)
         
     def scale_attributes(self, seqs_id, seqs_info):
-        if(self.attr_scaler):
-            attr_scaler = self.attr_scaler
-            for seq_id in seqs_id:
-                seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-                seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb") 
-                boundaries = list(seq.seg_attr.keys())
-                attr_scaler.scale_real_attributes(seq, boundaries)
-                ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-#             #print("sclaed seq {}".format(seq.seg_attr))
+        attr_scaler = self.attr_scaler
+        for seq_id in seqs_id:
+            seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
+            seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb") 
+            boundaries = list(seq.seg_attr.keys())
+            attr_scaler.scale_real_attributes(seq, boundaries)
+            ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
 
-    # to drop in Parallel computation
     def extract_seqs_globalfeatures(self, seqs_id, seqs_info):
         """ - Function that parses each sequence and generates global feature  F_j(X,Y). 
             - For each sequence we obtain a set of generated global feature functions where each
@@ -968,10 +958,13 @@ class SeqsRepresentation(object):
         for seq_id in seqs_id:
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb")
-            ###### extract the sequence features #####
-            # seq_features has this format {'Y_patt':Counter(features)}
-            gfeatures_perboundary = feature_extractor.extract_seq_features_perboundary(seq)                    
+            # extract the sequence global features per boundary
+            gfeatures_perboundary = feature_extractor.extract_seq_features_perboundary(seq)   
+            y_boundaries = seq.y_sboundaries
+            # gfeatures has this format {'Y_patt':Counter(features)}
+            gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, y_boundaries)                 
             # store the features' sum (i.e. F_j(X,Y) for every sequence on disk)
+            ReaderWriter.dump_data(gfeatures, os.path.join(seq_dir, "globalfeatures"))
             ReaderWriter.dump_data(gfeatures_perboundary, os.path.join(seq_dir, "globalfeatures_per_boundary"))
             print("dumping seq with id ", seq_id)
 
@@ -999,23 +992,18 @@ class SeqsRepresentation(object):
         """
         Y_states = {}
         modelfeatures = {}
-        # length of longest entity in a segment
+        # length of default entity in a segment
         L = 1
-        feature_extractor = self.feature_extractor
         
         start_time = datetime.now()
         for seq_id in seqs_id:
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-            gfeatures_perboundary = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures_per_boundary"))
-            #^print("gfeatures_perboundary ", gfeatures_perboundary)
-            seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
-            y_boundaries = seq.get_y_boundaries()
-            #^print("y_boundaries ", y_boundaries)
-            gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, y_boundaries)
-            #^print("gfeatures aggregated ", gfeatures)
             # get the largest length of an entity in the segment
-            if(seq.L > L):
-                L = seq.L
+            seq_L = seqs_info[seq_id]['L']
+            gfeatures = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures"))
+            if(seq_L > L):
+                L = seq_L
+            # generate a global vector for the model    
             for y_patt, featuresum in gfeatures.items():
                 if(y_patt in modelfeatures):
                     modelfeatures[y_patt].update(featuresum)
@@ -1052,7 +1040,7 @@ class SeqsRepresentation(object):
         
         return(model)
 
-    def extract_seqs_modelactivefeatures(self, seqs_id, seqs_info, model, output_foldername):
+    def extract_seqs_modelactivefeatures(self, seqs_id, seqs_info, model, output_foldername, learning=False):
         # get the root_dir
         seq_id = seqs_id[0]
         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
@@ -1102,7 +1090,8 @@ class SeqsRepresentation(object):
                 if(boundary not in seq.seg_attr):
                     # this will update the value of the seg_attr of the sequence 
                     attr_extractor.generate_attributes(seq, [boundary])
-                    attr_scaler.scale_real_attributes(seq, [boundary])
+                    if(attr_scaler):
+                        attr_scaler.scale_real_attributes(seq, [boundary])
             
     
     def get_seq_activatedstates(self, seq_id, seqs_info):
