@@ -5,6 +5,7 @@
 
 import os
 from copy import deepcopy
+from collections import OrderedDict
 import numpy
 from .utilities import AStarSearcher, ReaderWriter, create_directory, vectorized_logsumexp
 
@@ -24,6 +25,7 @@ class HOCRFModelRepresentation(object):
         self.max_patt_len = None
         self.modelfeatures_inverted = None
         self.ypatt_features = None
+        self.ypatt_activestates = None
         self.P_codebook = None
         self.P_codebook_rev = None
         self.pi_lendict = None
@@ -60,7 +62,8 @@ class HOCRFModelRepresentation(object):
         self.max_patt_len = max(self.patts_len)
 
         self.modelfeatures_inverted, self.ypatt_features = self.get_inverted_modelfeatures()
-    
+        self.ypatt_activestates = self.find_activated_states(self.ypatt_features, self.patts_len)
+        
         self.P_codebook = self.get_forward_states()
         self.P_codebook_rev = self.get_P_codebook_rev()
         self.P_len = len(self.P_codebook)
@@ -160,6 +163,7 @@ class HOCRFModelRepresentation(object):
         P_codebook = {s:i for (i, s) in enumerate(P)}
         #print("P_codebook ", P_codebook)
         return(P_codebook) 
+    
     def get_P_codebook_rev(self):
         P_codebook = self.P_codebook
         P_codebook_rev = {code:pi for pi, code in P_codebook.items()}
@@ -532,20 +536,25 @@ class HOCRF(object):
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
         self.seqs_info = seqs_info
-        self.load_info_fromdisk = load_info_fromdisk
         self.func_dict = {"alpha": self._load_alpha,
                          "beta": self._load_beta,
                          "activated_states": self.load_activatedstates,
                          "seg_features": self.load_segfeatures,
+                         "globalfeatures": self.load_globalfeatures,
                          "globalfeatures_per_boundary": self.load_globalfeatures,
                          "Y":self._load_Y}
         
-        self.info_ondisk_fname = ["seg_features", "activated_states", "globalfeatures_per_boundary", "Y"]
-        self.cached_entites = ["alpha", "Z", "beta", "activefeatures_per_boundary"]
+        self.def_cached_entities = self.cached_entitites(load_info_fromdisk)
         # default beam size covers all the prefix values (i.e. pi)
         self.beam_size = len(self.model.P_codebook)
 
-
+    def cached_entitites(self, load_info_fromdisk):
+        ondisk_info = ["seg_features", "activated_states", "globalfeatures_per_boundary", "globalfeatures", "Y"]
+        inmemory_info = ["alpha", "Z", "beta", "activefeatures_per_boundary"]
+        def_cached_entities = ondisk_info[:load_info_fromdisk]
+        def_cached_entities += inmemory_info
+        return(def_cached_entities)
+    
     @property
     def seqs_info(self):
         return self._seqs_info
@@ -678,30 +687,30 @@ class HOCRF(object):
         return(beta)
         
 
-    def compute_seq_loglikelihood(self, w, seq_id, normalized = True):
+    def compute_seq_loglikelihood(self, w, seq_id):
         """computes the conditional log-likelihood of a sequence (i.e. p(Y|X;w)) 
            it is used as a cost function for the single sequence when trying to estimate parameters w
         """
 #         print("-"*40)
 #         print("... Evaluating compute_seq_loglikelihood() ...")
         
-        # we need alpha and global features to be ready
-        l = ("Y", "globalfeatures_per_boundary", "alpha")
-        self.check_cached_info(w, seq_id, l)
-        y_ref_boundaries = self.seqs_info[seq_id]['Y']['boundaries']
+        # we need global features and alpha matrix to be ready -- order is important
+        l = OrderedDict()
+        l['globalfeatures'] = (seq_id, False)
+        l['alpha'] = (w, seq_id)
+        
+        self.check_cached_info(seq_id, l)
         # get the p(X;w) -- probability of the sequence under parameter w
         Z = self.seqs_info[seq_id]["Z"]
-        gfeatures_perboundary = self.seqs_info[seq_id]["globalfeatures_per_boundary"]
-        globalfeatures = self.represent_globalfeature(gfeatures_perboundary, y_ref_boundaries)
+        gfeatures = self.seqs_info[seq_id]["globalfeatures"]
+        globalfeatures = self.represent_globalfeature(gfeatures, None)
         w_indx = list(globalfeatures.keys())
         f_val = list(globalfeatures.values())
 
         # log(p(Y|X;w))
-        if(normalized):
-            loglikelihood = numpy.dot(w[w_indx], f_val) - Z 
-            self.seqs_info[seq_id]["loglikelihood"] = loglikelihood
-        else:
-            loglikelihood = numpy.dot(w[w_indx], f_val)
+        loglikelihood = numpy.dot(w[w_indx], f_val) - Z 
+        self.seqs_info[seq_id]["loglikelihood"] = loglikelihood
+
         return(loglikelihood)
     
     def compute_seqs_loglikelihood(self, w, seqs_id):
@@ -723,13 +732,12 @@ class HOCRF(object):
         seq_info["beta"] = self.compute_backward_vec(w, seq_id)
         #print("... Computing beta probability ...")
 
-    def _load_Y(self, w, seq_id):
+    def _load_Y(self, seq_id):
         seq = self._load_seq(seq_id, target="seq")
-        self.seqs_info[seq_id]['Y'] = {'flat_y':seq.flat_y,
-                                       'boundaries':seq.get_y_boundaries()}
+        self.seqs_info[seq_id]['Y'] = {'flat_y':seq.flat_y, 'boundaries':seq.y_sboundarires}
         #print("loading Y")
 
-    def load_activatedstates(self, w, seq_id):
+    def load_activatedstates(self, seq_id):
         # get the sequence activated states
         seqs_info = self.seqs_info
         seqs_representer = self.seqs_representer
@@ -737,7 +745,7 @@ class HOCRF(object):
         seqs_info[seq_id]["activated_states"] = activated_states
         #print("loading activated states")
     
-    def load_segfeatures(self, w, seq_id):
+    def load_segfeatures(self, seq_id):
         # get the sequence segment features
         seqs_info = self.seqs_info
         seqs_representer = self.seqs_representer
@@ -745,11 +753,15 @@ class HOCRF(object):
         self.seqs_info[seq_id]["seg_features"] = seg_features
         #print("loading segment features")
     
-    def load_globalfeatures(self, w, seq_id):
+    def load_globalfeatures(self, seq_id, per_boundary=True):
         # get sequence global features
         seqs_representer = self.seqs_representer
-        gfeatures_perboundary = seqs_representer.get_seq_globalfeatures_perboundary(seq_id, self.seqs_info)
-        self.seqs_info[seq_id]["globalfeatures_per_boundary"] = gfeatures_perboundary
+        gfeatures_perboundary = seqs_representer.get_seq_globalfeatures(seq_id, self.seqs_info, per_boundary=per_boundary)
+        if(per_boundary):
+            fname = "globalfeatures_per_boundary"
+        else:
+            fname = "globalfeatures"
+        self.seqs_info[seq_id][fname] = gfeatures_perboundary
         #print("loading globalfeatures")
         
     def load_imposter_globalfeatures(self, seq_id, y_imposter, seg_other_symbol):
@@ -758,10 +770,10 @@ class HOCRF(object):
         imposter_gfeatures_perboundary, y_imposter_boundaries = seqs_representer.get_imposterseq_globalfeatures(seq_id, self.seqs_info, y_imposter, seg_other_symbol)
         return(imposter_gfeatures_perboundary, y_imposter_boundaries)
     
-    def represent_globalfeature(self, gfeatures_perboundary, boundaries):
+    def represent_globalfeature(self, gfeatures, boundaries):
         # get sequence global features
         seqs_representer = self.seqs_representer
-        windx_fval = seqs_representer.represent_gfeatures(gfeatures_perboundary, boundaries, self.model)        
+        windx_fval = seqs_representer.represent_gfeatures(gfeatures, self.model, boundaries=boundaries)        
         return(windx_fval)  
     
     
@@ -775,22 +787,17 @@ class HOCRF(object):
         elif(target == "X"):
             return(seq.X)
         
-    def check_cached_info(self, w, seq_id, entity_names):
+    def check_cached_info(self, seq_id, entity_names):
         """order of elements in the entity_names list is important """
         seq_info = self.seqs_info[seq_id]
         func_dict = self.func_dict
         none_type = type(None) 
-        for varname in entity_names:
+        for varname, args in entity_names.items():
             if(type(seq_info.get(varname)) == none_type):
-                func_dict[varname](w, seq_id)
+                func_dict[varname](*args)
 
     def clear_cached_info(self, seqs_id, cached_entities = []):
-        default_entitites = self.cached_entites[:]
-        cached_info_ondisk = self.info_ondisk_fname
-        for i in range(self.load_info_fromdisk):
-            default_entitites.append(cached_info_ondisk[i])
-
-        args = default_entitites + cached_entities
+        args = self.def_cached_entities + cached_entities
         for seq_id in seqs_id:
             seq_info = self.seqs_info[seq_id]
             for varname in args:
@@ -911,8 +918,11 @@ class HOCRF(object):
     
 
     def viterbi(self, w, seq_id, beam_size, stop_off_beam = False, y_ref=[], K=1):
-        l = ("activated_states", "seg_features")
-        self.check_cached_info(w, seq_id, l)
+        l = {}
+        l['activated_states'] = (seq_id, )
+        l['seg_features'] = (seq_id, )
+        self.check_cached_info(seq_id, l)
+        
         pi_elems = self.model.pi_elems
         pi_pky_codebook = self.model.pi_pky_codebook
         f_transition = self.model.f_transition
@@ -1007,10 +1017,13 @@ class HOCRF(object):
     def validate_forward_backward_pass(self, w, seq_id):
         self.clear_cached_info([seq_id])
         # this will compute alpha and beta matrices and save them in seqs_info dict
-#         l = ("activefeatures_by_position", "f_potential", "alpha", "b_potential", "beta")
-        l = ("activated_states", "seg_features", "alpha", "beta")
-
-        self.check_cached_info(w, seq_id, l)
+        l = OrderedDict()
+        l['activated_states'] = (seq_id, )
+        l['seg_features'] = (seq_id, )
+        l['alpha'] = (w, seq_id)
+        l['beta'] = (w, seq_id)
+        self.check_cached_info(seq_id, l)
+        
         alpha = self.seqs_info[seq_id]["alpha"]
         beta = self.seqs_info[seq_id]["beta"]
         print("states codebook {}".format(self.model.Y_codebook))
