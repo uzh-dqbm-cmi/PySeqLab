@@ -734,7 +734,7 @@ class HOCRF(object):
 
     def _load_Y(self, seq_id):
         seq = self._load_seq(seq_id, target="seq")
-        self.seqs_info[seq_id]['Y'] = {'flat_y':seq.flat_y, 'boundaries':seq.y_sboundarires}
+        self.seqs_info[seq_id]['Y'] = {'flat_y':seq.flat_y, 'boundaries':seq.y_sboundaries}
         #print("loading Y")
 
     def load_activatedstates(self, seq_id):
@@ -757,11 +757,14 @@ class HOCRF(object):
         # get sequence global features
         seqs_representer = self.seqs_representer
         gfeatures_perboundary = seqs_representer.get_seq_globalfeatures(seq_id, self.seqs_info, per_boundary=per_boundary)
+#         print("per_boundary ", per_boundary)
+#         print(gfeatures_perboundary)
         if(per_boundary):
             fname = "globalfeatures_per_boundary"
         else:
             fname = "globalfeatures"
         self.seqs_info[seq_id][fname] = gfeatures_perboundary
+#         print(self.seqs_info[seq_id][fname])
         #print("loading globalfeatures")
         
     def load_imposter_globalfeatures(self, seq_id, y_imposter, seg_other_symbol):
@@ -859,7 +862,7 @@ class HOCRF(object):
             self.write_decoded_seqs([seq], [Y_pred], out_file, sep)
             seqs_pred[seq_id] = {'seq': seq,'Y_pred': Y_pred}
             # clear added info per sequence
-            self.clear_cached_info([seq_id], self.info_ondisk_fname)
+            self.clear_cached_info([seq_id])
             counter += 1
             print("sequence decoded -- {} sequences are left".format(N-counter))
         

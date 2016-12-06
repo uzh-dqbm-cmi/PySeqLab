@@ -411,275 +411,174 @@ class Learner(object):
         ReaderWriter.log_progress(line, log_file)
         self._elapsed_time = datetime.now()
 
-    def _update_weights(self, w, y_ref_windxfval, y_imposter_windxfval):
-        w[list(y_ref_windxfval.keys())] += list(y_ref_windxfval.values())
-        w[list(y_imposter_windxfval.keys())] -= list(y_imposter_windxfval.values())
 
-    def _find_update_violation(self, w, seq_id):
-        seg_other_symbol = self.training_description['seg_other_symbol']
-        beam_size = self.training_description['beam_size']
-        update_type = self.training_description['update_type']
-        crf_model = self.crf_model
-        seqs_info = crf_model.seqs_info
-        l = {'Y':(seq_id, )}
-        crf_model.check_cached_info(seq_id, l)
-        y_ref = seqs_info[seq_id]['Y']['flat_y']
-        y_ref_boundaries = seqs_info[seq_id]['Y']['boundaries']
-        y_imposter, viol_indx = crf_model.viterbi(w, seq_id, beam_size, True, y_ref)
-        seq_err_count = None
-        y_ref_windxfval = None
-        y_imposter_windxfval = None
-        #^print("y_ref ", y_ref)
-        #^print("y_imposter ", y_imposter)
-        if(not viol_indx):
-            # we can perform full update
-            T = seqs_info[seq_id]['T']
-            print("in full update routine")
-
-            missmatch = [i for i in range(T) if y_ref[i] != y_imposter[i]]
-            len_diff = len(missmatch)
-            # range of error is [0-1]
-            seq_err_count = float(len_diff/T)
-            if(len_diff):                    
-                l = {'globalfeatures':(seq_id, )}
-                crf_model.check_cached_info(seq_id, l)
-                ref_gfeatures = seqs_info[seq_id]["globalfeatures"]
-                y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures, None)
-                # generate global features for the current imposter 
-                imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter, seg_other_symbol)                     
-                #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
-                #^print("imposter y_boundaries ", y_imposter_boundaries)
-                y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
-        else:
-            if(update_type == "early"):
-                print("in early update routine")
-                # viol_index is 1-based indexing
-                early_viol_indx = viol_indx[0]
-                #^print("viol_indx ", viol_indx)
-                #^print("early_viol_indx ", early_viol_indx)
-                counter = 0
-                for boundary in y_ref_boundaries:
-                    __, v = boundary
-                    if(v >= early_viol_indx):
-                        viol_pos = v
-                        break
-                    counter+= 1
-                
-                T = len(y_ref[:viol_pos])
-                #^print("T ", T)
-                #^print("viol_pos ", viol_pos)
-                missmatch = [i for i in range(T) if y_ref[i] != y_imposter[i]]
-                len_diff = len(missmatch)
-                # range of error is [0-1]
-                seq_err_count = float(len_diff/T)
-                #^print("seq_error_count ", seq_err_count)
-                l = {'globalfeatures_per_boundary':(seq_id, )}
-                crf_model.check_cached_info(seq_id, l)
-                ref_gfeatures_perboundary = seqs_info[seq_id]["globalfeatures_per_boundary"]
-                y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures_perboundary, y_ref_boundaries[:counter+1])
-                #^print("ref_gfeatures_perboundary ", ref_gfeatures_perboundary)
-                #^print("y_ref_boundaries ", y_ref_boundaries[:counter+1])
-                # generate global features for the current imposter 
-                imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter[:viol_pos], seg_other_symbol)                     
-                y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
-                #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
-                #^print("imposter y_boundaries ", y_imposter_boundaries)
-            elif(update_type == "max"):
-                pass
-            elif(update_type == "latest"):
-                pass
-        return(y_ref_windxfval, y_imposter_windxfval, seq_err_count)
     
-    def _compute_probvec_sapo(self, w, seq_id, y_imposters, seg_other_symb):
-        crf_model = self.crf_model
-        # compute the probability of each imposter sequence
-        ll_vec = []
-        gfeatures_list = []
-        for y_imposter in y_imposters:
-            # generate global features for the current imposter 
-            imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter, seg_other_symb)                     
-            #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
-            #^print("imposter y_boundaries ", y_imposter_boundaries)
-            y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
-            w_indx = list(y_imposter_windxfval.keys())
-            f_val = list(y_imposter_windxfval.values())
-            ll_vec.append(numpy.dot(w[w_indx], f_val))
-            gfeatures_list.append((w_indx, f_val))
-        # normalize
-        ll_vec = numpy.asarray(ll_vec)
-        Z = vectorized_logsumexp(ll_vec)
-        prob_vec = numpy.exp(ll_vec - Z)
-        return(prob_vec, gfeatures_list)
-    
-    def violation_update(self, viol_indx):
-        seg_other_symbol = self.training_description['seg_other_symbol']
-        beam_size = self.training_description['beam_size']
-        update_type = self.training_description['update_type']
-        topK = self.training_description['topK']
-        gamma = self.training_description['gamma']
-        #print(self.training_description)
-        crf_model = self.crf_model
-        seqs_info = crf_model.seqs_info
-        l = {'Y':(seq_id, )}
-        crf_model.check_cached_info(seq_id, l)
-        y_ref = seqs_info[seq_id]['Y']['flat_y']
-        y_ref_boundaries = seqs_info[seq_id]['Y']['boundaries']
-        y_imposters, viol_indx = crf_model.viterbi(w, seq_id, beam_size, True, y_ref, topK)
-        print("in early update routine")
+    def _identify_earlyviolation(self, earlyviol_indx, y_ref_boundaries):
         # viol_index is 1-based indexing
-        early_viol_indx = viol_indx[0]
-        #^print("viol_indx ", viol_indx)
-        #^print("early_viol_indx ", early_viol_indx)
         counter = 0
         for boundary in y_ref_boundaries:
             __, v = boundary
-            if(v >= early_viol_indx):
+            if(v >= earlyviol_indx):
                 viol_pos = v
+                viol_boundindex = counter + 1
                 break
             counter+= 1
-        
+        return(viol_pos, viol_boundindex)
+    
+    def _compute_seq_decerror(self, y_ref, y_imposter, viol_pos):
         T = len(y_ref[:viol_pos])
         #^print("T ", T)
         #^print("viol_pos ", viol_pos)
-        top_imposter = y_imposters[0]
-        missmatch = [i for i in range(T) if y_ref[i] != top_imposter[i]]
+        missmatch = [i for i in range(T) if y_ref[i] != y_imposter[i]]
         len_diff = len(missmatch)
         # range of error is [0-1]
         seq_err_count = float(len_diff/T)
-        crf_model.check_cached_info(w, seq_id, ("globalfeatures_per_boundary",))
-        ref_gfeatures_perboundary = seqs_info[seq_id]["globalfeatures_per_boundary"]
-        y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures_perboundary, y_ref_boundaries[:counter+1])
+        return(seq_err_count)
 
-    def _update_weights_sapo(self, w, y_ref_windxfval, prob_vec, gfeatures_list):
-        gamma = self.training_description['gamma']
-        # update weights using the decoded sequences
-        counter = 0
-        for w_indx, f_val in gfeatures_list:
-            w[w_indx] -= (gamma*prob_vec[counter]) * numpy.asarray(f_val)
-            counter +=1
-        # update weights using the reference sequence   
-        w[list(y_ref_windxfval.keys())] += gamma * numpy.asarray(list(y_ref_windxfval.values()))
-        
-    def _update_violation_sapo(self, w, seq_id):
-        seg_other_symbol = self.training_description['seg_other_symbol']
+    def _unpack_windxfval(self, y_windxfval):
+        windx = list(y_windxfval.keys())
+        fval = list(y_windxfval.values())
+        return(windx, fval)
+
+    def _find_update_violation(self, w, seq_id):
+        method = self.training_description['method']
         beam_size = self.training_description['beam_size']
         update_type = self.training_description['update_type']
-        topK = self.training_description['topK']
-        gamma = self.training_description['gamma']
-        #print(self.training_description)
+        topK = self.training_description.get('topK')
         crf_model = self.crf_model
         seqs_info = crf_model.seqs_info
         l = {'Y':(seq_id, )}
         crf_model.check_cached_info(seq_id, l)
         y_ref = seqs_info[seq_id]['Y']['flat_y']
         y_ref_boundaries = seqs_info[seq_id]['Y']['boundaries']
-        y_imposters, viol_indx = crf_model.viterbi(w, seq_id, beam_size, True, y_ref, topK)
+        if(not topK):
+            y_imposter, viol_indx = crf_model.viterbi(w, seq_id, beam_size, True, y_ref)
+            y_imposters = [y_imposter]        
+        else:
+            y_imposters, viol_indx = crf_model.viterbi(w, seq_id, beam_size, True, y_ref, topK)
 
+        seq_err_count = None
+        ref_unp_windxfval = None
+        imps_unp_windxfval = None
+        
         #^print("y_ref ", y_ref)
         #^print("y_imposter ", y_imposter)
+        # top decoded sequence
+        y_imposter = y_imposters[0]
         if(not viol_indx):
-            #print('y_ref ', y_ref)
-            #print('y_imposters ', y_imposters)
             # we can perform full update
-            T = seqs_info[seq_id]['T']
-            top_imposter = y_imposters[0]
-            missmatch = [i for i in range(T) if y_ref[i] != top_imposter[i]]
-            len_diff = len(missmatch)
-            # range of error is [0-1]
-            seq_err_count = float(len_diff/T)
-            #print(seq_err_count)
             print("in full update routine")
-            l = {'globalfeatures':(seq_id, )}
-            crf_model.check_cached_info(seq_id, l)
-            ref_gfeatures = seqs_info[seq_id]["globalfeatures"]
-            y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures, None)
-            
-            # compute the probability of each imposter sequence
-            ll_vec = []
-            gfeatures_list = []
-            for y_imposter in y_imposters:
-                # generate global features for the current imposter 
-                imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter, seg_other_symbol)                     
-                #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
-                #^print("imposter y_boundaries ", y_imposter_boundaries)
-                y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
-                w_indx = list(y_imposter_windxfval.keys())
-                f_val = list(y_imposter_windxfval.values())
-                ll_vec.append(numpy.dot(w[w_indx], f_val))
-                gfeatures_list.append((w_indx, f_val))
-            # normalize
-            ll_vec = numpy.asarray(ll_vec)
-            Z = vectorized_logsumexp(ll_vec)
-            prob_vec = numpy.exp(ll_vec - Z)
-            #print(prob_vec)
-            # update weights using the decoded sequences
-            counter = 0
-            for w_indx, f_val in gfeatures_list:
-                w[w_indx] -= (gamma*prob_vec[counter]) * numpy.asarray(f_val)
-                counter +=1
-            # update weights using the reference sequence   
-            w[list(y_ref_windxfval.keys())] += gamma * numpy.asarray(list(y_ref_windxfval.values()))
-
+            T = seqs_info[seq_id]['T']
+            seq_err_count = self._compute_seq_decerror(y_ref, y_imposter, T)
+            if(seq_err_count or method == "SAPO"):       
+                ref_unp_windxfval, imps_unp_windxfval = self._load_gfeatures(seq_id, "globalfeatures", y_imposters, T, len(y_ref_boundaries))             
 
         else:
             if(update_type == "early"):
                 print("in early update routine")
                 # viol_index is 1-based indexing
-                early_viol_indx = viol_indx[0]
-                #^print("viol_indx ", viol_indx)
-                #^print("early_viol_indx ", early_viol_indx)
-                counter = 0
-                for boundary in y_ref_boundaries:
-                    __, v = boundary
-                    if(v >= early_viol_indx):
-                        viol_pos = v
-                        break
-                    counter+= 1
-                
-                T = len(y_ref[:viol_pos])
-                #^print("T ", T)
-                #^print("viol_pos ", viol_pos)
-                top_imposter = y_imposters[0]
-                missmatch = [i for i in range(T) if y_ref[i] != top_imposter[i]]
-                len_diff = len(missmatch)
-                # range of error is [0-1]
-                seq_err_count = float(len_diff/T)
-                crf_model.check_cached_info(w, seq_id, ("globalfeatures_per_boundary",))
-                ref_gfeatures_perboundary = seqs_info[seq_id]["globalfeatures_per_boundary"]
-                y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures_perboundary, y_ref_boundaries[:counter+1])
-                #^print("ref_gfeatures_perboundary ", ref_gfeatures_perboundary)
-                #^print("y_ref_boundaries ", y_ref_boundaries[:counter+1])
-                # generate global features for the current imposter 
-                ll_vec = []
-                gfeatures_list = []
-                for y_imposter in y_imposters:
-                    # generate global features for the current imposter 
-                    imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter[:viol_pos], seg_other_symbol)                     
-                    #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
-                    #^print("imposter y_boundaries ", y_imposter_boundaries)
-                    y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
-                    w_indx = list(y_imposter_windxfval.keys())
-                    f_val = list(y_imposter_windxfval.values())
-                    ll_vec.append(numpy.dot(w[w_indx], f_val))
-                    gfeatures_list.append((w_indx, f_val))
-                # normalize
-                ll_vec = numpy.asarray(ll_vec)
-                Z = vectorized_logsumexp(ll_vec)
-                prob_vec = numpy.exp(ll_vec - Z)
-                
-                counter = 0
-                for w_indx, f_val in gfeatures_list:
-                    w[w_indx] -= (gamma*prob_vec[counter]) * numpy.asarray(f_val)
-                    counter +=1
-                    
-                w[list(y_ref_windxfval.keys())] += gamma * numpy.asarray(list(y_ref_windxfval.values()))
-                
+                earlyviol_indx = viol_indx[0]
+                viol_pos, viol_boundindex = self._identify_earlyviolation(earlyviol_indx, y_ref_boundaries)
+                seq_err_count = self._compute_seq_decerror(y_ref, y_imposter, viol_pos)
+                ref_unp_windxfval, imps_unp_windxfval = self._load_gfeatures(seq_id, "globalfeatures_per_boundary", y_imposters, viol_pos, viol_boundindex)
 
             elif(update_type == "max"):
+                # max update is only supported for one imposter sequence
+                max_diff = numpy.inf
+                L = crf_model.model.L
+                print("in max update routine")
+                # viol_index is 1-based indexing
+                for i in range(len(viol_indx)):
+                    indx = viol_indx[i]
+                    if(i == 0):
+                        # case of early update index
+                        if(L > 1):
+                            viol_pos, viol_boundindex = self._identify_earlyviolation(indx, y_ref_boundaries)
+                        else:
+                            viol_pos = indx
+                            viol_boundindex = viol_pos
+                        seq_err_count = self._compute_seq_decerror(y_ref, y_imposter, viol_pos)
+                    else:
+                        if(L>1):
+                            __, v = y_ref_boundaries[viol_boundindex]
+                            viol_pos = v
+                            viol_boundindex += 1
+                        else:
+                            viol_pos = indx
+                            viol_boundindex = viol_pos
+#                     seq_err_count = self._compute_seq_decerror(y_ref, y_imposter, viol_pos)
+                    ref_unp_windxfval, imps_unp_windxfval = self._load_gfeatures(seq_id, "globalfeatures_per_boundary", y_imposters, viol_pos, viol_boundindex)
+                    ref_windx, ref_fval = ref_unp_windxfval
+                    imp_windx, imp_fval = imps_unp_windxfval[0]
+                    
+                    diff = numpy.dot(w[ref_windx], ref_fval) - numpy.dot(w[imp_windx], imp_fval)
+                    print("diff ", diff)
+                    print("maxdiff ", max_diff)
+                    if(diff < max_diff):
+                        max_diff = diff
+                        ref_unp_windxfval = (ref_windx, ref_fval)
+                        imp_unp_windxfval = (imp_windx, imp_fval)
+                imps_unp_windxfval = [imp_unp_windxfval]
+            elif(update_type == 'latest'):
                 pass
-            elif(update_type == "latest"):
-                pass
-        return(seq_err_count)
+                        
+        return(ref_unp_windxfval, imps_unp_windxfval, seq_err_count)   
+    
+
+        
+    def _load_gfeatures(self, seq_id, gfeatures_type, y_imposters, ypos_indx, boundpos_indx):
+        seg_other_symbol = self.training_description['seg_other_symbol']
+        crf_model = self.crf_model
+        seqs_info = crf_model.seqs_info
+        y_ref_boundaries = seqs_info[seq_id]['Y']['boundaries']
+        if(gfeatures_type == "globalfeatures"):
+            per_boundary = False
+            y_ref_boundaries = None
+        else:
+            per_boundary = True
+
+        l = {gfeatures_type:(seq_id, per_boundary)}
+        crf_model.check_cached_info(seq_id, l)
+        ref_gfeatures = seqs_info[seq_id][gfeatures_type]
+        if(y_ref_boundaries):
+            y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures, y_ref_boundaries[:boundpos_indx])
+        else:
+            y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures, None)
+
+        ref_unp_windxfval = self._unpack_windxfval(y_ref_windxfval)
+        # generate global features for the imposters
+        imposters_unp_windxfval = []
+        for y_imposter in y_imposters:
+            # generate global features for the current imposter 
+            imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter[:ypos_indx], seg_other_symbol)                     
+            #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
+            #^print("imposter y_boundaries ", y_imposter_boundaries)
+            y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
+            imposters_unp_windxfval.append(self._unpack_windxfval(y_imposter_windxfval))
+        
+        return(ref_unp_windxfval, imposters_unp_windxfval)   
+
+    
+    def _update_weights_sapo(self, w, ref_unp_windxfval, imps_unp_windxfval, prob_vec):
+        gamma = self.training_description['gamma']
+        # update weights using the decoded sequences
+        for i in range(len(imps_unp_windxfval)):
+            windx, fval = imps_unp_windxfval[i]
+            w[windx] -= (gamma*prob_vec[i]) * numpy.asarray(fval)
+        # update weights using the reference sequence   
+        windx, fval = ref_unp_windxfval
+        w[windx] += gamma * numpy.asarray(fval)
+
+    def _compute_probvec_sapo(self, w, imps_unp_windxfval):
+        # normalize
+        num_imposters = len(imps_unp_windxfval)
+        ll_vec = numpy.zeros(num_imposters)
+        for i in range(num_imposters):
+            windx, fval = imps_unp_windxfval[i]
+            ll_vec[i] = numpy.dot(w[windx], fval)
+        Z = vectorized_logsumexp(ll_vec)
+        prob_vec = numpy.exp(ll_vec - Z)
+        return(prob_vec)
     
     def _sapo(self, w, train_seqs_id):
         """ implements Search-based Probabilistic Online Learning Algorithm (SAPO)
@@ -712,7 +611,10 @@ class Learner(object):
             if(shuffle_seq):
                 numpy.random.shuffle(train_seqs_id)
             for seq_id in train_seqs_id:
-                seq_err_count = self._update_violation_sapo(w, seq_id)
+                ref_unp_windxfval, imps_unp_windxfval, seq_err_count = self._find_update_violation(w, seq_id)
+                prob_vec = self._compute_probvec_sapo(w, imps_unp_windxfval)
+                self._update_weights_sapo(w, ref_unp_windxfval, imps_unp_windxfval, prob_vec)
+                # regularize the weights 
                 #w += -((C*gamma)/N)*w
                 w_avg += w
                 crf_model.clear_cached_info([seq_id])
@@ -725,7 +627,6 @@ class Learner(object):
             avg_error_list.append(float(error_count/N))
             self._track_perceptron_optimizer(w, k, avg_error_list)
             ReaderWriter.dump_data(w_avg/((k+1)*N), os.path.join(model_dir, "model_avgweights_epoch_{}".format(k+1)))
-
             print("average error : {}".format(avg_error_list))
             print("self._exitloop {}".format(self._exitloop))
             if(self._exitloop):
@@ -736,7 +637,13 @@ class Learner(object):
         ReaderWriter.log_progress(line, log_file)
         w = w_avg/(num_epochs*N) 
         return(w)      
- 
+    
+    def _update_weights_perceptron(self, w, ref_unp_windxfval, imp_unp_windxfval):
+        ref_windx, ref_fval = ref_unp_windxfval
+        imp_windx, imp_fval = imp_unp_windxfval
+        w[ref_windx] += ref_fval
+        w[imp_windx] -= imp_fval
+        
     # needs still some work and fixing....
     def _structured_perceptron(self, w, train_seqs_id):
         """ implements structured perceptron algorithm in particular the average perceptron that was
@@ -769,7 +676,7 @@ class Learner(object):
                     numpy.random.shuffle(train_seqs_id)
                 for seq_id in train_seqs_id:
                     print("sequences left {}".format(seq_left))
-                    y_ref_windxfval, y_imposter_windxfval, seq_err_count = self._find_update_violation(w, seq_id)
+                    ref_unp_windxfval, imps_unp_windxfval, seq_err_count = self._find_update_violation(w, seq_id)
                     # if decoding errors with the current weight occurs
                     #^print("seq_err_count ", seq_err_count)
                     #^print("y_ref_windxfval ", y_ref_windxfval)
@@ -783,7 +690,7 @@ class Learner(object):
                             w_avg += w
                             num_upd += 1
                         # update current weight
-                        self._update_weights(w, y_ref_windxfval, y_imposter_windxfval)
+                        self._update_weights_perceptron(w, ref_unp_windxfval, imps_unp_windxfval[0])
                     crf_model.clear_cached_info([seq_id])
                     seq_left -= 1
 #                 print("error count {}".format(error_count))

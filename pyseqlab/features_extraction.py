@@ -142,7 +142,7 @@ class HOFeatureExtractor(object):
 
         if(template_Y):
             Y = seq.Y
-            y_sboundaries = seq.y_sboundarires
+            y_sboundaries = seq.y_sboundaries
             y_boundpos_map = seq.y_boundpos_map
             curr_pos = y_boundpos_map[boundary]
             range_y = seq.y_range
@@ -873,7 +873,8 @@ class SeqsRepresentation(object):
             active_continuous_attr = {}
             
         attr_dict = {}
-
+        
+        seq_dir = None
         start_time = datetime.now()
         for seq_id in seqs_id:
             # length of longest entity in a sequence
@@ -921,22 +922,24 @@ class SeqsRepresentation(object):
                     
         # any sequence would lead to the parent directory of prepared/parsed sequences
         # using the last sequence id and corresponding sequence directory
-        target_dir = os.path.dirname(seq_dir)
-        log_file = os.path.join(target_dir, "log.txt")
-        line = "---Rescaling continuous/real features--- starting time: {} \n".format(start_time)
-        line +=  "Number of instances/training data processed: {}\n".format(len(seqs_id))
-        line += "---Rescaling continuous/real features--- end time: {} \n".format(end_time)
-        line += "\n \n"
-        ReaderWriter.log_progress(line, log_file)
+        if(seq_dir):
+            target_dir = os.path.dirname(seq_dir)
+            log_file = os.path.join(target_dir, "log.txt")
+            line = "---Rescaling continuous/real features--- starting time: {} \n".format(start_time)
+            line +=  "Number of instances/training data processed: {}\n".format(len(seqs_id))
+            line += "---Rescaling continuous/real features--- end time: {} \n".format(end_time)
+            line += "\n \n"
+            ReaderWriter.log_progress(line, log_file)
         
     def scale_attributes(self, seqs_id, seqs_info):
         attr_scaler = self.attr_scaler
-        for seq_id in seqs_id:
-            seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
-            seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb") 
-            boundaries = list(seq.seg_attr.keys())
-            attr_scaler.scale_real_attributes(seq, boundaries)
-            ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
+        if(attr_scaler):
+            for seq_id in seqs_id:
+                seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
+                seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb") 
+                boundaries = list(seq.seg_attr.keys())
+                attr_scaler.scale_real_attributes(seq, boundaries)
+                ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
 
     def extract_seqs_globalfeatures(self, seqs_id, seqs_info):
         """ - Function that parses each sequence and generates global feature  F_j(X,Y). 
@@ -1059,6 +1062,7 @@ class SeqsRepresentation(object):
             seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
             ReaderWriter.dump_data(activated_states, os.path.join(activefeatures_dir, "activated_states"))
             ReaderWriter.dump_data(seg_features, os.path.join(activefeatures_dir, "seg_features"))
+            # to add condition regarding learning
             ReaderWriter.dump_data(l_segfeatures, os.path.join(activefeatures_dir, "l_segfeatures"))
 
             
@@ -1115,9 +1119,15 @@ class SeqsRepresentation(object):
         gfeatures = ReaderWriter.read_data(os.path.join(seq_dir, fname))
         return(gfeatures)
     
+    def aggregate_gfeatures(self, gfeatures, boundaries):
+        feature_extractor = self.feature_extractor
+        # gfeatures is assumed to be represented by boundaries
+        gfeatures = feature_extractor.aggregate_seq_features(gfeatures, boundaries)
+        return(gfeatures)
+    
     def represent_gfeatures(self, gfeatures, model, boundaries=None):
         feature_extractor = self.feature_extractor
-        # if boundaries is specified, then gfeatures is assumed to be categorized/represented by boundaries
+        # if boundaries is specified, then gfeatures is assumed to be represented by boundaries
         if(boundaries):
             gfeatures = feature_extractor.aggregate_seq_features(gfeatures, boundaries)
         #^print("gfeatures ", gfeatures)

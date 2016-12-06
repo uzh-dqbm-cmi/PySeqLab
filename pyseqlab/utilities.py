@@ -127,7 +127,7 @@ class SequenceStruct():
             
             # construct a map from the yboundaries to the pos in the list
             y_sboundaries = self.get_y_boundaries()
-            self.y_sboundarires = y_sboundaries
+            self.y_sboundaries = y_sboundaries
 
             self.y_boundpos_map = {}
             pos = 0 
