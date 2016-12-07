@@ -5,10 +5,9 @@ import os
 from copy import deepcopy
 import numpy
 
-from pyseqlab.utilities import filter_templates, generate_templates, create_directory, TemplateGenerator, ReaderWriter, DataFileParser
+from pyseqlab.utilities import TemplateGenerator, ReaderWriter, DataFileParser, create_directory
 from pyseqlab.attributes_extraction import SequenceStruct, NERSegmentAttributeExtractor
-from pyseqlab.features_extraction import FOFeatureExtractor, HOFeatureExtractor, SeqsRepresentation
-from pyseqlab.features_extraction import FeatureFilter
+from pyseqlab.features_extraction import FOFeatureExtractor, HOFeatureExtractor, SeqsRepresentation, FeatureFilter
 from pyseqlab.fo_crf_model import FirstOrderCRF, FirstOrderCRFModelRepresentation
 from pyseqlab.ho_crf_model import HOCRF, HOCRFModelRepresentation
 from pyseqlab.hosemi_crf_model import HOSemiCRF, HOSemiCRFModelRepresentation
@@ -181,7 +180,7 @@ def run_suppl_example():
     return(seq, templateY, templateXY, filter_obj)
 
 def run_loaded_conll00_seqs():
-    data_file_path = os.path.join(root_dir, "dataset/conll00/train.txt")
+    data_file_path = os.path.join(root_dir, "dataset", "conll00", "train.txt")
     seqs = read_data(data_file_path, header = "main")
     template_generator = TemplateGenerator()
     templateXY = {}

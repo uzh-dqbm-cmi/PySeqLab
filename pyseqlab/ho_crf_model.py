@@ -466,7 +466,8 @@ class HOCRFModelRepresentation(object):
         activefeatures = {}
 #         print("segfeatures {}".format(seg_features))
 #         print("z_patts {}".format(z_patts))
-        for z_patt_set in activestates.values():
+        for z_len in activestates:
+            z_patt_set = activestates[z_len]
             for z_patt in z_patt_set:
 #                 print("z_patt ", z_patt)
                 windx_fval = {}
@@ -617,6 +618,7 @@ class HOCRF(object):
         
         
     def compute_forward_vec(self, w, seq_id):
+        # ..note: seg_features and activated_states need to be loaded first
         pi_pky_codebook = self.model.pi_pky_codebook
         P_codebook = self.model.P_codebook
         pi_lendict = self.model.pi_lendict
@@ -697,6 +699,8 @@ class HOCRF(object):
         # we need global features and alpha matrix to be ready -- order is important
         l = OrderedDict()
         l['globalfeatures'] = (seq_id, False)
+        l['activated_states'] = (seq_id, )
+        l['seg_features'] = (seq_id, )
         l['alpha'] = (w, seq_id)
         
         self.check_cached_info(seq_id, l)
@@ -845,7 +849,7 @@ class HOCRF(object):
             N = len(seqs_id)
             seqs_info = self.seqs_representer.prepare_seqs(seqs_dict, "processed_seqs", out_dir, unique_id = True)
             self.seqs_representer.scale_attributes(seqs_id, seqs_info)
-            self.seqs_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, self.model, "processed_seqs")
+            self.seqs_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, self.model, "processed_seqs", learning=False)
             self.seqs_info = seqs_info
             
         if(kwargs.get("sep")):
@@ -905,10 +909,10 @@ class HOCRF(object):
         indx_partitioned_pi = numpy.argpartition(-delta[j, :], beam_size)
         # identify top-k states/pi
         indx_topk_pi = indx_partitioned_pi[:beam_size]
-        # identify states falling out of the beam
-        indx_falling_pi = indx_partitioned_pi[beam_size:]
-        # remove the effect of states/pi falling out of the beam
-        delta[j, indx_falling_pi] = -numpy.inf
+#         # identify states falling out of the beam
+#         indx_falling_pi = indx_partitioned_pi[beam_size:]
+#         # remove the effect of states/pi falling out of the beam
+#         delta[j, indx_falling_pi] = -numpy.inf
         # get topk states
         topk_pi = {P_codebook_rev[indx] for indx in indx_topk_pi}
         topk_states = set()

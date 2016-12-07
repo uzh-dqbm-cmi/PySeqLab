@@ -240,7 +240,6 @@ class HOFeatureExtractor(object):
             seg_feat_templates = self.extract_features_X(seq, boundary)
         else:
             seg_feat_templates = seg_features[boundary]
-            
         y_feat_template = self.extract_features_Y(seq, boundary, {'Y':self.y_offsets})
 #         print(y_feat_template)
 #         print(self.y_offsets)
@@ -400,6 +399,8 @@ class HOFeatureExtractor(object):
 
 class FOFeatureExtractor(object):
     """ Generic feature extractor class that contains feature functions/templates for first order sequence models """
+    # currently it supports adding start state
+    # to consider adding support for stop state
     def __init__(self, templateX, templateY, attr_desc, start_state = False):
         self.template_X = templateX
         self.template_Y = templateY
@@ -412,21 +413,27 @@ class FOFeatureExtractor(object):
     @template_X.setter
     def template_X(self, template):
         """ example of template X to be processed:
-            template_X = {'w': {(0,):((0,), (-1,0)}}
+            template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
                        = {attr_name: {x_offset:tuple(y_offsets)}}
         """
         if(type(template) == dict):
             self._template_X = {}
+            self.y_offsets = set()
+            self.x_featurenames = {}
             for attr_name, templateX in template.items():
                 self._template_X[attr_name] = {}
+                self.x_featurenames[attr_name] = {}
                 for offset_x, offsets_y in templateX.items():
                     s_offset_x = tuple(sorted(offset_x))
+                    feature_name = '|'.join([attr_name + "[" + str(ofst_x) + "]"  for ofst_x in s_offset_x])
+                    self.x_featurenames[attr_name][offset_x] = feature_name
                     unique_dict = {}
                     for offset_y in offsets_y:
                         s_offset_y = tuple(sorted(offset_y))
                         check = self._validate_template(s_offset_y)
                         if(check):
                             unique_dict[s_offset_y] = 1
+                            self.y_offsets.add(s_offset_y)
                     if(unique_dict):
                         self._template_X[attr_name][s_offset_x] = tuple(unique_dict.keys())
 
@@ -436,7 +443,7 @@ class FOFeatureExtractor(object):
     @template_Y.setter
     def template_Y(self, template):
         """ example of template Y to be processed:
-            template_Y = {'Y': ((0,), (-1,0))}
+            template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
                        = {Y: tuple(y_offsets)}
         """
         if(type(template) == dict):
@@ -452,108 +459,95 @@ class FOFeatureExtractor(object):
                 self._template_Y['Y'] = tuple(unique_dict.keys())
             else:
                 self._template_Y['Y'] = ()
-
+                
     def _validate_template(self, template):
         """template is a tuple (i.e. (-1,0)"""
-        valid_offsets = ((0,), (-1,0))
+        valid_offsets = {(0,), (-1,0)}
         if(template in valid_offsets):
             check = True
         else:
             check = False
         
         return(check)
-                    
-                
-    def extract_seq_features(self, seq):
-        # this method is used to extract features from sequences in the training dataset 
-        # (i.e. we know the labels and boundaries)
+    
+    def extract_seq_features_perboundary(self, seq, seg_features=None):
+        # this method is used to extract features from sequences with known labels
+        # (i.e. we know the Y labels and boundaries)
         Y = seq.Y
         features = {}
         for boundary in Y:
+            xy_feat = self.extract_features_XY(seq, boundary, seg_features)
             y_feat = self.extract_features_Y(seq, boundary, self.template_Y)
-            xy_feat = self.extract_features_XY(seq, boundary)
-#             #print("boundary {}".format(boundary))
-#             #print("y_feat {}".format(y_feat))
-#             #print("xy_feat {}".format(xy_feat))
-            for offset_tup_y in y_feat['Y']:
-                for y_patt in y_feat['Y'][offset_tup_y]:
+            y_feat = y_feat['Y']
+            #print("boundary {}".format(boundary))
+            #print("boundary {}".format(boundary))
+            #print("y_feat {}".format(y_feat))
+            #print("xy_feat {}".format(xy_feat))
+            #TOUPDATEEEEE
+            for offset_tup_y in y_feat:
+                for y_patt in y_feat[offset_tup_y]:
                     if(y_patt in xy_feat):
-                        xy_feat[y_patt].update(Counter(y_feat['Y'][offset_tup_y]))
+                        xy_feat[y_patt].update(y_feat[offset_tup_y])
                     else:
-                        xy_feat[y_patt] = Counter(y_feat['Y'][offset_tup_y])
+                        xy_feat[y_patt] = y_feat[offset_tup_y]
             features[boundary] = xy_feat
 #             #print("features {}".format(features[boundary]))
 #             #print("*"*40)
-#         #print("features by boundary {}".format(features))
                 
-        # summing up all detected features across all boundaries
+        return(features)
+
+    
+    def aggregate_seq_features(self, features, boundaries):
+        # summing up all local features across all boundaries
         seq_features = {}
-        for boundary, xy_features in features.items():
+        for boundary in boundaries:
+            xy_features = features[boundary]
             for y_patt in xy_features:
                 if(y_patt in seq_features):
                     seq_features[y_patt].update(xy_features[y_patt])
+#                     seq_features[y_patt] + xy_features[y_patt]
                 else:
-                    seq_features[y_patt] = xy_features[y_patt]
-#                 #print("seq_features {}".format(seq_features))
-        ##print("features sum {}".format(seq_features))
+                    seq_features[y_patt] = Counter(xy_features[y_patt])
         return(seq_features)
-
+    
     def extract_features_Y(self, seq, boundary, templateY):
-        """ template_Y = {'Y': ((0,), (-1,0))}
+        """ template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
                        = {Y: tuple(y_offsets)}        
         """
         template_Y = templateY['Y']
-        Y = seq.Y
-        y_boundaries = seq.get_y_boundaries()
-        range_y = range(len(y_boundaries))
-        curr_pos = y_boundaries.index(boundary)
-        y_patt_features = {}
-        feat_template = {}
-        start_state = self.start_state
 
-        if(curr_pos == 0):
-            # corner case at t = 1
+        if(template_Y):
+            Y = seq.Y
+            y_sboundaries = seq.y_sboundaries
+            y_boundpos_map = seq.y_boundpos_map
+            curr_pos = y_boundpos_map[boundary]
+            range_y = seq.y_range
+            startstate_flag = self.start_state
+            
+            y_patt_features = {}
+            feat_template = {}
             for offset_tup_y in template_Y:
                 y_pattern = []
                 for offset_y in offset_tup_y:
                     # offset_y should be always <= 0
                     pos = curr_pos + offset_y
                     if(pos in range_y):
-                        b = y_boundaries[pos]
+                        b = y_sboundaries[pos]
                         y_pattern.append(Y[b])
                     else:
-                        if(start_state):
+                        if(startstate_flag and pos == -1):
                             y_pattern.append("__START__")
                         else:
                             y_pattern = []
                             break
-                        
                 if(y_pattern):
-                    feat_template[offset_tup_y] = {"|".join(y_pattern):1} 
+                    feat_template[offset_tup_y] = {"|".join(y_pattern):1}
+    
+            y_patt_features['Y'] = feat_template
+            
         else:
-            for offset_tup_y in template_Y:
-                y_pattern = []
-                for offset_y in offset_tup_y:
-                    # offset_y should be always <= 0
-                    pos = curr_pos + offset_y
-                    if(pos in range_y):
-                        b = y_boundaries[pos]
-                        y_pattern.append(Y[b])
-                    else:
-                        y_pattern = []
-                        break
-                if(y_pattern):
-                    feat_template[offset_tup_y] = {"|".join(y_pattern):1}          
+            y_patt_features = {'Y':{}}
 
-        y_patt_features['Y'] = feat_template
-        
-#         #print("X"*40)
-#         #print("boundary {}".format(boundary))
-#         for attr_name, f_template in y_patt_features.items():
-#             for offset, features in f_template.items():
-#                 #print("{} -> {}".format(offset, features))
-#         #print("X"*40)
-        
         return(y_patt_features)
     
     def extract_features_X(self, seq, boundary):
@@ -563,9 +557,9 @@ class FOFeatureExtractor(object):
         # get template X
         template_X = self.template_X
         attr_desc = self.attr_desc
+        x_featurenames = self.x_featurenames
         # current boundary begin and end
-        u = boundary[0]
-        v = boundary[-1]
+        u, v = boundary
 
 #         #print("positions {}".format(positions))
         seg_features = {}
@@ -580,7 +574,6 @@ class FOFeatureExtractor(object):
             feat_template = {}
             for offset_tup_x in template_X[attr_name]:
                 attributes = []
-                feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
 #                 #print("feature_name {}".format(feature_name))
                 for offset_x in offset_tup_x:
 #                     #print("offset_x {}".format(offset_x))
@@ -598,7 +591,8 @@ class FOFeatureExtractor(object):
                         attributes = []
                         break
                 if(attributes):
-                    feat_template[offset_tup_x] = represent_attr(attributes, feature_name)
+#                     feat_template[offset_tup_x] = represent_attr(attributes, feature_name)
+                    feat_template[offset_tup_x] = represent_attr(attributes, x_featurenames[attr_name][offset_tup_x])
             seg_features[attr_name] = feat_template
 #         
 #         #print("X"*40)
@@ -609,28 +603,31 @@ class FOFeatureExtractor(object):
 #         #print("X"*40)
 
         return(seg_features)
+
     
-    def extract_features_XY(self, seq, boundary):
+    def extract_features_XY(self, seq, boundary, seg_features = None):
         """ template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
             template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
         """
-        
+        if(not seg_features):
+            seg_feat_templates = self.extract_features_X(seq, boundary)
+        else:
+            seg_feat_templates = seg_features[boundary]
+        y_feat_template = self.extract_features_Y(seq, boundary, {'Y':self.y_offsets})
+        y_feat_template = y_feat_template['Y']
         templateX = self.template_X
-        seg_feat_templates = self.extract_features_X(seq, boundary)
+
 #         #print("seg_feat_templates {}".format(seg_feat_templates))
         xy_features = {}
         for attr_name, seg_feat_template in seg_feat_templates.items():
             for offset_tup_x in seg_feat_template:
-                templateY = {'Y':templateX[attr_name][offset_tup_x]}
-                y_feat_template = self.extract_features_Y(seq, boundary, templateY)
-#                 #print("y_feat_template {}".format(y_feat_template))
-                y_feat_template = y_feat_template['Y']
-                for y_patt_dict in y_feat_template.values():
-                    for y_patt in y_patt_dict:
-                        if(y_patt in xy_features):
-                            xy_features[y_patt].update(Counter(seg_feat_template[offset_tup_x]))
-                        else:
-                            xy_features[y_patt] = Counter(seg_feat_template[offset_tup_x])
+                for offset_tup_y in templateX[attr_name][offset_tup_x]:
+                    if(offset_tup_y in y_feat_template):
+                        for y_patt in y_feat_template[offset_tup_y]:
+                            if(y_patt in xy_features):
+                                xy_features[y_patt].update(seg_feat_template[offset_tup_x])
+                            else:
+                                xy_features[y_patt] = seg_feat_template[offset_tup_x]
 #                         #print("xy_features {}".format(xy_features))
         return(xy_features)
     
@@ -642,6 +639,7 @@ class FOFeatureExtractor(object):
         # get template X
         template_X = self.template_X
         attr_desc = self.attr_desc
+        x_featurenames = self.x_featurenames
         # current boundary begin and end
         u = boundary[0]
         v = boundary[-1]
@@ -660,7 +658,7 @@ class FOFeatureExtractor(object):
             
             for offset_tup_x in template_X[attr_name]:
                 attributes = []
-                feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
+#                 feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
 #                 #print("feature_name {}".format(feature_name))
                 for offset_x in offset_tup_x:
 #                     #print("offset_x {}".format(offset_x))
@@ -679,135 +677,94 @@ class FOFeatureExtractor(object):
                         attributes = []
                         break
                 if(attributes):
-                    seg_features.update(represent_attr(attributes, feature_name))
+                    seg_features.update(represent_attr(attributes, x_featurenames[attr_name][offset_tup_x]))
+
 #         #print("seg_features lookup {}".format(seg_features))
         return(seg_features)
-    
-    
-    def lookup_seq_modelactivefeatures(self, seq, model):
+
+    def flatten_segfeatures(self, seg_features):
+        flat_segfeatures = {}
+        for attr_name in seg_features:
+            for offset in seg_features[attr_name]:
+                flat_segfeatures.update(seg_features[attr_name][offset])
+        return(flat_segfeatures)
         
-        model_patt = deepcopy(model.patt_order)
-        del model_patt[1]
-#         #print("modified model patt_order {} with id {}".format(model_patt, id(model_patt)))
-        
-        model_states = list(model.Y_codebook.keys())
+    def lookup_seq_modelactivefeatures(self, seq, model, learning=False):
+        # segment length
         L = model.L
         T = seq.T
+        # maximum pattern length 
+        max_patt_len = model.max_patt_len
+        patts_len = model.patts_len
+        ypatt_activestates = model.ypatt_activestates
+        startstate_flag = self.start_state
         
-        active_features = {}
-        accum_pattern = {}
-        
+        activated_states = {}
+        seg_features = {}
+        l_segfeatures = {}
+            
         for j in range(1, T+1):
             for d in range(L):
                 if(j-d <= 0):
                     break
-                boundary = (j-d, j)
-
-                seg_features = self.lookup_features_X(seq, boundary)
-#                 #print("seg_features {}".format(seg_features))
-
-                # active features that  uses only the current states
-                active_features[boundary] = model.represent_activefeatures(model_states, seg_features)
-#                 #print("initial active_features[{}] {}".format(boundary, active_features[boundary]))
-
-                if(active_features[boundary]):
-                    # z pattern of length 1 (i.e. detected labels from set Y}
-                    detected_y_patt = {y_patt:1 for y_patt in active_features[boundary]}
-                    self._update_accum_pattern(accum_pattern, {1:detected_y_patt}, j)
-#                     #print("accum_pattern {}".format(accum_pattern))
-                    tracked_z_patt = self._build_z_patt(boundary, detected_y_patt, accum_pattern, model_patt)
-                    if(tracked_z_patt):
-                        self._update_accum_pattern(accum_pattern, tracked_z_patt, j)
-#                         #print("updated accum_pattern {}".format(accum_pattern))
-                        new_patts = {z_patt:1 for order in tracked_z_patt for z_patt in tracked_z_patt[order]}
-                        new_activefeatures = model.represent_activefeatures(new_patts, seg_features)
-#                         #print("new_activefeatures {}".format(new_activefeatures))
-                        self._update_accum_activefeatures(active_features, new_activefeatures, boundary)
-#                         #print("updated active_features[{}] {}".format(boundary, active_features[boundary]))
-
-#         #print("accum_pattern {}".format(accum_pattern))
-        return(active_features)
-    
-    def _update_accum_pattern(self, accum_pattern, detected_patt, j):
-        if(j in accum_pattern):
-            for patt_len in detected_patt:
-                if(patt_len in accum_pattern[j]):
-                    accum_pattern[j][patt_len].update(detected_patt[patt_len])
+                # start boundary
+                u = j-d
+                # end boundary
+                v = j
+                boundary = (u, v)
+                
+                if(u < max_patt_len):
+                    if(startstate_flag):
+                        max_len = max_patt_len
+                    else:
+                        max_len = u
                 else:
-                    accum_pattern[j].update({patt_len:detected_patt[patt_len]})
-        else:
-            accum_pattern[j] = detected_patt
-        
-    def _update_accum_activefeatures(self, accum_activefeatures, detected_activefeatures, boundary):
-        for z_patt in detected_activefeatures:
-            if(z_patt in accum_activefeatures[boundary]):
-                accum_activefeatures[boundary][z_patt].update(detected_activefeatures[z_patt])
-            else:
-                accum_activefeatures[boundary].update({z_patt: detected_activefeatures[z_patt]})
-    
-    def _build_z_patt(self, boundary, detected_seg_patt, accum_pattern, model_patt):
-        u = boundary[0]
-        tracked_z_patt = {}
-#         #print("detected_seg_patt {}".format(detected_seg_patt))
-        if(u == 1):
-            if(self.start_state):
-                for patt_len in model_patt:
-#                 #print("current pattern length {}".format(patt_len))
-                    for z_patt in model_patt[patt_len]:
-                        for curr_detected_patt in detected_seg_patt:
-                            mix_patt = "__START__" + "|" + curr_detected_patt
-                            if(z_patt.startswith(mix_patt)):
-                                if(patt_len in tracked_z_patt):
-                                    tracked_z_patt[patt_len][mix_patt] = 1
-                                else:
-                                    tracked_z_patt[patt_len] = {mix_patt:1}
+                    max_len = max_patt_len
+                    
+                allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
+                
+                # used while learning model parameters
+                if(learning):
+                    l_segfeatures[boundary] = self.extract_features_X(seq, boundary)
+                    seg_features[boundary] = self.flatten_segfeatures(l_segfeatures[boundary])
+                else:
+                    seg_features[boundary] = self.lookup_features_X(seq, boundary)
+                    
+                activated_states[boundary] = model.find_activated_states(seg_features[boundary], allowed_z_len)
+                #^print("allowed_z_len ", allowed_z_len)
+                #^print("seg_features ", seg_features)
+                #^print("activated_states ", activated_states)
+                if(ypatt_activestates):
+                    ypatt_activated_states = {z_len:ypatt_activestates[z_len] for z_len in allowed_z_len if z_len in ypatt_activestates}
+                    #^print("ypatt_activated_states ", ypatt_activated_states)
+                    for zlen, ypatts in ypatt_activated_states.items():
+                        if(zlen in activated_states[boundary]):
+                            activated_states[boundary][zlen].update(ypatts)
+                        else:
+                            activated_states[boundary][zlen] = set(ypatts) 
+                #^print("activated_states ", activated_states)
+        #^print("activated_states from feature_extractor ", activated_states)
+        #^print("seg_features from feature_extractor ", seg_features)
 
-        else:
-            if(u-1 in accum_pattern):
-                for patt_len in model_patt:
-    #                 #print("current pattern length {}".format(patt_len))
-                    for z_patt in model_patt[patt_len]:
-    #                     #print("z_patt {}".format(z_patt))
-                        for i in reversed(range(1, patt_len)):
-                            if(i in accum_pattern[u-1]):
-    #                             #print("current order i {}".format(i))
-                                for prev_patt in accum_pattern[u-1][i]:
-    #                                 #print("prev_patt {}".format(prev_patt))
-                                    if(z_patt.startswith(prev_patt)):
-                                        for curr_detected_patt in detected_seg_patt:
-    #                                         #print('detected_patt {}'.format(curr_detected_patt))
-                                            mix_patt = prev_patt + "|" + curr_detected_patt
-    #                                         #print("mix_patt {}".format(mix_patt))
-                                            if(z_patt.startswith(mix_patt)):
-                                                if(i+1 in tracked_z_patt):
-                                                    tracked_z_patt[i+1][mix_patt] = 1
-                                                else:
-                                                    tracked_z_patt[i+1] = {mix_patt:1}
-                                            
-         
-#         #print("tracked_z_patt {}".format(tracked_z_patt))
-#         #print("accum_pattern {}".format(accum_pattern))
-        return(tracked_z_patt) 
+        return(activated_states, seg_features, l_segfeatures)
+    
     
     ########################################################
     # functions used to represent real and binary attributes
     ########################################################
 
     def _represent_binary_attr(self, attributes, feature_name):
+#         #print("attributes ",attributes)
+#         #print("featurename ", feature_name)
         feature_val = '|'.join(attributes)
-        feature = '{}={}'.format(feature_name, feature_val)
+#         feature = '{}={}'.format(feature_name, feature_val)
+        feature = feature_name + "=" + feature_val
         return({feature:1})
 
     def _represent_real_attr(self, attributes, feature_name):
-        feature_val = numpy.sum(attributes) 
-        return({feature_name:feature_val})
+        feature_val = sum(attributes) 
+        return({feature_name:feature_val})    
 
-    #TO remove and only depend on ReaderWriter class to dump and read pickled objects
-    def dump_features(self, seq_file, seq_features):
-        """store the features of the current sequence"""
-        #print("pickling table: {}\n".format(seq_file))
-        with open(seq_file, 'wb') as f:
-            pickle.dump(seq_features, f)   
 
 class SeqsRepresentation(object):
     def __init__(self, attr_extractor, fextractor):
@@ -1108,6 +1065,17 @@ class SeqsRepresentation(object):
         seg_features = ReaderWriter.read_data(os.path.join(seq_dir, "l_segfeatures"))
         return(seg_features)
     
+    def get_seq_activefeatures(self, seq_id, seqs_info):
+        seq_dir = seqs_info[seq_id]["activefeatures_dir"]
+        try:
+            activefeatures = ReaderWriter.read_data(os.path.join(seq_dir, "activefeatures_per_boundary"))
+        except FileNotFoundError:
+            # consider logging the error
+            print("activefeatures_per_boundary file does not exist yet !!")
+            activefeatures = None
+        finally:
+            return(activefeatures)
+        
     def get_seq_globalfeatures(self, seq_id, seqs_info, per_boundary=True):
         """it retrieves the features available for the current sequence (i.e. F(X,Y) for all j \in [1...J] 
         """

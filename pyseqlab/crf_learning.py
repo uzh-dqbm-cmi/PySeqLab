@@ -150,7 +150,7 @@ class Learner(object):
                 optimization_config["beam_size"] = beam_size
                 # setting update type 
                 update_type = optimization_options.get("update_type")
-                if(update_type not in {'early', 'latest', 'max'}):
+                if(update_type not in {'early', 'latest', 'max-exhaustive', 'max-fast'}):
                     update_type = 'early'
                 optimization_config["update_type"] = update_type
                 
@@ -275,8 +275,9 @@ class Learner(object):
         line += "model directory: {} \n".format(model_dir)
         line += "model type: {} \n".format(self.crf_model.__class__)
         line += "training method: {} \n".format(method)
-        line += "type of regularization: {} \n".format(regularization_type)
-        line += "value of regularization: {} \n".format(C)
+        if(C):
+            line += "type of regularization: {} \n".format(regularization_type)
+            line += "value of regularization: {} \n".format(C)
         
         if(method  == "SGA"):
             learning_rate_schedule = self.training_description["learning_rate_schedule"]
@@ -292,9 +293,22 @@ class Learner(object):
             epsilon = self.training_description["epsilon"]
             line += "p_rho: {} \n".format(rho)
             line += "epsilon: {} \n".format(epsilon)
-        elif(method == "COLLINS-PERCEPTRON"):
-            avg_scheme = self.training_description["avg_scheme"]
-            line += "averaging scheme: {} \n".format(avg_scheme)
+        elif(method in {"SAPO", "COLLINS-PERCEPTRON"}):
+            update_type = self.training_description['update_type']
+            beam_size = self.training_description['beam_size']
+            shuffle_seq = self.training_description['shuffle_seq']
+            line += "update_type: {} \n".format(update_type)
+            line += "beam_size: {} \n".format(beam_size)
+            line += "shuffle_seq: {} \n".format(shuffle_seq)
+            if(method == "COLLINS-PERCEPTRON"):
+                avg_scheme = self.training_description["avg_scheme"]
+                line += "averaging scheme: {} \n".format(avg_scheme)
+            else:
+                gamma = self.training_description['gamma']
+                topK = self.training_description['topK']
+                line += "gamma (learning rate): {} \n".format(gamma)
+                line += "topK (number of top decoded seqs): {} \n".format(topK)
+                
         if(method not in ("L-BFGS-B", "BFGS")):
             line += "number of epochs: {} \n".format(self.training_description['num_epochs'])
         # write to file    
@@ -413,12 +427,12 @@ class Learner(object):
 
 
     
-    def _identify_earlyviolation(self, earlyviol_indx, y_ref_boundaries):
+    def _identify_violation_indx(self, viol_indx, y_ref_boundaries):
         # viol_index is 1-based indexing
         counter = 0
         for boundary in y_ref_boundaries:
             __, v = boundary
-            if(v >= earlyviol_indx):
+            if(v >= viol_indx):
                 viol_pos = v
                 viol_boundindex = counter + 1
                 break
@@ -451,11 +465,17 @@ class Learner(object):
         crf_model.check_cached_info(seq_id, l)
         y_ref = seqs_info[seq_id]['Y']['flat_y']
         y_ref_boundaries = seqs_info[seq_id]['Y']['boundaries']
+        
+        if(update_type == "max"):
+            early_stop = False
+        else:
+            early_stop = True
+        
         if(not topK):
-            y_imposter, viol_indx = crf_model.viterbi(w, seq_id, beam_size, True, y_ref)
+            y_imposter, viol_indx = crf_model.viterbi(w, seq_id, beam_size, early_stop, y_ref)
             y_imposters = [y_imposter]        
         else:
-            y_imposters, viol_indx = crf_model.viterbi(w, seq_id, beam_size, True, y_ref, topK)
+            y_imposters, viol_indx = crf_model.viterbi(w, seq_id, beam_size, early_stop, y_ref, topK)
 
         seq_err_count = None
         ref_unp_windxfval = None
@@ -478,22 +498,23 @@ class Learner(object):
                 print("in early update routine")
                 # viol_index is 1-based indexing
                 earlyviol_indx = viol_indx[0]
-                viol_pos, viol_boundindex = self._identify_earlyviolation(earlyviol_indx, y_ref_boundaries)
+                viol_pos, viol_boundindex = self._identify_violation_indx(earlyviol_indx, y_ref_boundaries)
                 seq_err_count = self._compute_seq_decerror(y_ref, y_imposter, viol_pos)
                 ref_unp_windxfval, imps_unp_windxfval = self._load_gfeatures(seq_id, "globalfeatures_per_boundary", y_imposters, viol_pos, viol_boundindex)
 
-            elif(update_type == "max"):
+            elif(update_type == "max-exhaustive"):
                 # max update is only supported for one imposter sequence
                 max_diff = numpy.inf
                 L = crf_model.model.L
                 print("in max update routine")
+                test = []
                 # viol_index is 1-based indexing
                 for i in range(len(viol_indx)):
                     indx = viol_indx[i]
                     if(i == 0):
                         # case of early update index
                         if(L > 1):
-                            viol_pos, viol_boundindex = self._identify_earlyviolation(indx, y_ref_boundaries)
+                            viol_pos, viol_boundindex = self._identify_violation_indx(indx, y_ref_boundaries)
                         else:
                             viol_pos = indx
                             viol_boundindex = viol_pos
@@ -512,13 +533,27 @@ class Learner(object):
                     imp_windx, imp_fval = imps_unp_windxfval[0]
                     
                     diff = numpy.dot(w[ref_windx], ref_fval) - numpy.dot(w[imp_windx], imp_fval)
-                    print("diff ", diff)
-                    print("maxdiff ", max_diff)
+                    test.append(diff)
+                    print("diff = {}, max_diff = {} ".format(diff, max_diff))
                     if(diff < max_diff):
                         max_diff = diff
                         ref_unp_windxfval = (ref_windx, ref_fval)
                         imp_unp_windxfval = (imp_windx, imp_fval)
                 imps_unp_windxfval = [imp_unp_windxfval]
+                print("test ", test)
+            elif(update_type == "max-fast"):
+                # based on empirical observation, the last violation index (i.e. where the beam falls off) is almost always yielding the max violation
+                # this is a heuristic, for an exhaustive procedure, choose `max-exhaustive`
+                # max update is only supported for one imposter sequence
+                max_diff = numpy.inf
+                L = crf_model.model.L
+                print("in max update routine")
+                test = []
+                # viol_index is 1-based indexing
+                lastviol_indx = viol_indx[-1]
+                viol_pos, viol_boundindex = self._identify_violation_indx(lastviol_indx, y_ref_boundaries)
+                seq_err_count = self._compute_seq_decerror(y_ref, y_imposter, viol_pos)
+                ref_unp_windxfval, imps_unp_windxfval = self._load_gfeatures(seq_id, "globalfeatures_per_boundary", y_imposters, viol_pos, viol_boundindex)
             elif(update_type == 'latest'):
                 pass
                         
@@ -578,6 +613,7 @@ class Learner(object):
             ll_vec[i] = numpy.dot(w[windx], fval)
         Z = vectorized_logsumexp(ll_vec)
         prob_vec = numpy.exp(ll_vec - Z)
+#         print("prob_vec ", prob_vec)
         return(prob_vec)
     
     def _sapo(self, w, train_seqs_id):
@@ -615,7 +651,8 @@ class Learner(object):
                 prob_vec = self._compute_probvec_sapo(w, imps_unp_windxfval)
                 self._update_weights_sapo(w, ref_unp_windxfval, imps_unp_windxfval, prob_vec)
                 # regularize the weights 
-                #w += -((C*gamma)/N)*w
+#                 reg = -(C/N)* w
+#                 w += gamma*reg
                 w_avg += w
                 crf_model.clear_cached_info([seq_id])
                 seq_left -= 1

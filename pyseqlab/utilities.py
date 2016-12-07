@@ -448,13 +448,16 @@ class TemplateGenerator(object):
         templateY = self.generate_template_Y(y_spec)
         templateXY = self._mix_template_XY(templateX, templateY)
         #update the template we are building
+        self._update_template(template, templateXY)
+        
+    def _update_template(self, template, templateXY):  
         for attr_name in templateXY:
             if(attr_name in template):
                 for x_offset in templateXY[attr_name]:
                     template[attr_name][x_offset] = templateXY[attr_name][x_offset]
             else:
-                template[attr_name] = templateXY[attr_name]
-                        
+                template[attr_name] = templateXY[attr_name] 
+                             
     def _traverse_x(self, attr_name, ngram_options, wsize):
         options = ngram_options.split(":")
         l = list(wsize)
@@ -507,151 +510,29 @@ class TemplateGenerator(object):
             ngram_list.append(elem)
             
         return(ngram_list)
-    
-    def generate_combinations(self):
-        pass
-    
-def filter_templates(ngram_template, condition, operator):
-    f_ngram_template = {}
-    if(operator == "="):
-        f_ngram_template = {condition:ngram_template[condition]}
-    elif(operator == "!="):
-        f_ngram_template = deepcopy(ngram_template)
-        del(f_ngram_template[condition])         
-    elif(operator == "in"):
-        f_ngram_template = deepcopy(ngram_template)
-        for option in ngram_template:
-            if(condition not in option):
-                del(f_ngram_template[option])
-    return(f_ngram_template)
-
-def filter_templates_by_attrname(f_ngram_template, attr_name):
-    filtered_template = {attr_name:{}}
-    for option, template in f_ngram_template.items():
-        if(attr_name in template):
-            filtered_template[attr_name].update(template[attr_name])
-    if(not filtered_template[attr_name]):
-        del filtered_template[attr_name]
-    return(filtered_template)
-
-def generate_templates(attr_names, window, y_options, x_options):
-
-    ngram_templateY = ngram_options_y(y_options)
-    ngram_templateX = ngram_options_x(attr_names, window, x_options)
-    ngram_templateXY = ngram_options_xy(ngram_templateX, ngram_templateY)
-    return((ngram_templateY, ngram_templateXY))
-
-def ngram_combinations(n,accumulative = True, comb = True):
-    option_names = []
-    if(accumulative):
+    @staticmethod
+    def generate_combinations(n):
+        option_names = []
         start = 1
-    else:
-        start = n
-    for i in range(start, n+1):
-        option_names.append("{}-gram".format(i))
-        
-    config = {}
-    if(comb):
-        start = 1
-    else:
-        start = n
-    for i in range(start, n+1):
-        config[i] = list(combinations(option_names, i))
-        
-    config_combinations = {}
-    for c_list in config.values():
-        for c_tup in c_list:
-            key_name = "_".join(c_tup)
-            option= {}
-            for elem in c_tup:
-                option.update({elem: True})
-            config_combinations[key_name] = option
+        for i in range(start, n+1):
+            option_names.append("{}-gram".format(i))
             
-    return(config_combinations)
-
-def ngram_options_y(options):
-    # get the y options 
-    n = options['n']
-    cummulative = options['cummulative']
-    comb = options['comb']
-    config_combinations = ngram_combinations(n, cummulative, comb)
-    ngram_templateY = {}
-    for comb, options in config_combinations.items():
-        templateY = {'Y':[]}
-        for option in options:
-            max_order = int(option.split("-")[0])
-            templateY['Y'] += generate_templateY(max_order, accumulative = False)['Y']
-        ngram_templateY[comb] = templateY
-    return(ngram_templateY)
-        
-def ngram_options_x(attr_names, l, options):
-    # get the x options 
-    n = options['n']
-    cummulative = options['cummulative']
-    comb = options['comb']
-    if(len(l) < n):
-        # setting up the maximum order based on the provided window
-        n = len(l)
-    config_combinations = ngram_combinations(n, cummulative, comb)
-    ngram_templateX = {}
-    for comb, options in config_combinations.items():
-        print("comb {}".format(comb))
-        ngram_templateX[comb] = generate_templateX(attr_names, l, options)     
-        print("ngram_templateX[comb] = {}".format(ngram_templateX[comb]))   
-    return(ngram_templateX)
-
-def ngram_options_xy(ngram_templateX, ngram_templateY):
-    ngram_templateXY = {}
-    for option_y, templateY in ngram_templateY.items():
-        for option_x, templateX in ngram_templateX.items():
-            ngram_templateXY["{}:{}".format(option_x, option_y)] = mix_templateXY(templateX, templateY)
-    return(ngram_templateXY)
-
-def generate_templateX(attr_names, l, options):
-    template = {}
-    for attr_name in attr_names:
-        template[attr_name] = {}
-        ngram_list = []
-        for option in options:
-            n = int(option.split("-")[0])
-            ngram_list = generate_ngram(l, n)
-            for offset in ngram_list:
-                template[attr_name][offset] = None
-    return(template)
-
-def generate_templateY(max_order, accumulative = True):
-    attr_name = 'Y'
-    template = {attr_name:[]}
-    temp = []
-    if(accumulative):
-        for j in range(max_order):
-            offsets_y = [-i for i in range(j+1)]
-            offsets_y = tuple(reversed(offsets_y))
-            temp.append(offsets_y)
-    else:
-        offsets_y = [-i for i in range(max_order)]
-        offsets_y = tuple(reversed(offsets_y))
-        temp.append(offsets_y) 
-         
-    template[attr_name] = temp     
-    return(template)
-
-def mix_templateXY(templateX, templateY):
-    template_X = deepcopy(templateX)
-    for attr_name in template_X:
-        for offset_x in template_X[attr_name]:
-            template_X[attr_name][offset_x] = tuple(templateY['Y'])
-    return(template_X)
-    
-def generate_ngram(l, n):
-    ngram_list = []
-    for i in range(0, len(l)):
-        elem = tuple(l[i:i+n])
-        if(len(elem) != n):
-            break
-        ngram_list.append(elem)
-        
-    return(ngram_list)
+        config = {}
+        for i in range(start, n+1):
+            config[i] = list(combinations(option_names, i))
+            
+        config_combinations = {}
+        for c_list in config.values():
+            for c_tup in c_list:
+                key_name = ":".join(c_tup)
+                config_combinations[key_name] = set()
+        elemkeys = config_combinations.keys()
+        for option_i in config_combinations:
+            s = config_combinations[option_i]
+            for option_j in elemkeys:
+                s.add(option_j)
+            config_combinations[option_i] = s
+        return(config_combinations)
 
 
 def delete_directory(directory):

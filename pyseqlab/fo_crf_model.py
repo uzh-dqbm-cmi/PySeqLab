@@ -5,6 +5,7 @@
 
 import os
 from copy import deepcopy
+from collections import OrderedDict
 import numpy
 from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
 
@@ -14,73 +15,112 @@ class FirstOrderCRFModelRepresentation(object):
             state: set of states (i.e. tags) 
             L: 1 (segment length)
         """ 
+        self.modelfeatures = None
+        self.modelfeatures_codebook = None
+        self.Y_codebook = None
+        self.Y_codebook_rev = None
+        self.startstate_flag = None
+        self.L = None
+        self.Z_codebook = None
+        self.Z_lendict = None
+        self.Z_elems = None
+        self.Z_numchar= None
+        self.patts_len = None
+        self.max_patt_len = None
+        self.modelfeatures_inverted = None
+        self.ypatt_features = None
+        self.ypatt_activestates = None
         
+    def create_model(self, modelfeatures, states, L):
+        """modelfeatures: set of features defining the model
+           states: set of states (i.e. tags)
+           L: length of longest segment
+        """
         self.modelfeatures = modelfeatures
-        self.modelfeatures_codebook = modelfeatures
-        self.Y_codebook = states
-        self.L = 1
+        self.modelfeatures_codebook = self.get_modelfeatures_codebook()
+        self.Y_codebook = self.get_modelstates_codebook(states)
         self.Y_codebook_rev = self.get_Y_codebook_reversed()
-        self.Z_codebook = self.get_pattern_set()
-        self.patt_order = self.get_pattern_order()
-        self.num_features = self.get_num_features()
-        self.num_states = self.get_num_states()
-        
-    @property
-    def modelfeatures_codebook(self):
-        return(self._modelfeatures_codebook)
-    @modelfeatures_codebook.setter
-    def modelfeatures_codebook(self, modelfeatures):
+        self.L = L
+        self.generate_instance_properties()
+    
+    def generate_instance_properties(self):
+        self.Z_codebook = self.get_Z_pattern()
+        self.Z_lendict, self.Z_elems, self.Z_numchar = self.get_Z_elems_info()
+        self.patts_len = set(self.Z_lendict.values())
+        self.max_patt_len = max(self.patts_len)
+
+        self.modelfeatures_inverted, self.ypatt_features = self.get_inverted_modelfeatures()
+        self.ypatt_activestates = self.find_activated_states(self.ypatt_features, self.patts_len)
+         
+    def get_modelfeatures_codebook(self):
+        modelfeatures = self.modelfeatures
         codebook = {}
         code = 0
-        for y_patt, featuresum_dict in modelfeatures.items():
-            for feature in featuresum_dict:
+        for y_patt, featuresum in modelfeatures.items():
+            for feature in featuresum:
                 fkey = y_patt + "&&" + feature
                 codebook[fkey] = code
                 code += 1
-        self._modelfeatures_codebook = codebook
-
-    @property
-    def Y_codebook(self):
-        return(self._Y_codebook)
-    @Y_codebook.setter     
-    def Y_codebook(self, states):
+        return(codebook)
+    
+    def get_modelstates_codebook(self, states):
         start_state = '__START__'
-        check = start_state in states
-        if(check):
+        if(start_state in states):
             del states[start_state]
             Y_codebook = {s:i+1 for (i, s) in enumerate(states)}
             Y_codebook[start_state] = 0
             states[start_state] = 1
+            self.startstate_flag = True
         else:
             Y_codebook = {s:i for (i, s) in enumerate(states)}
-            
-        self._Y_codebook = Y_codebook  
+            self.startstate_flag = False
+        return(Y_codebook)  
         
     def get_Y_codebook_reversed(self):
         Y_codebook = self.Y_codebook
-        return({code:state for state, code in Y_codebook.items()})    
-
-    def get_pattern_set(self):
+        return({code:state for state, code in Y_codebook.items()})
+        
+    def get_Z_pattern(self):
         modelfeatures = self.modelfeatures
         Z_codebook = {y_patt:index for index, y_patt in enumerate(modelfeatures)}
         return(Z_codebook)
     
-    def get_pattern_order(self):
+    def get_Z_elems_info(self):
+        Z_codebook = self.Z_codebook
+        Z_lendict = {}
+        Z_split_elems = {}
+        Z_nchar = {}
+        for z in Z_codebook:
+            elems = z.split("|")
+            Z_lendict[z] = len(elems)
+            Z_split_elems[z] = elems
+            Z_nchar[z] = len(z)            
+        return(Z_lendict, Z_split_elems, Z_nchar)
+    
+    def get_inverted_modelfeatures(self):
         modelfeatures = self.modelfeatures
-        patt_order = {}
-        for y_patt in modelfeatures:
-            elems = y_patt.split("|")
-            l = len(elems)
-            if(l in patt_order):
-                patt_order[l].append(y_patt)
-            else:
-                patt_order[l] = [y_patt]
-        return(patt_order)
-
-    def get_num_features(self):
-        return(len(self.modelfeatures_codebook))
-    def get_num_states(self):
-        return(len(self.Y_codebook))
+        Z_lendict = self.Z_lendict
+        inverted_segfeatures = {}
+        ypatt_features = set()
+        
+        for y_patt, featuresum in modelfeatures.items():
+            z_len = Z_lendict[y_patt]
+            # get features that are based only on y_patts
+            if(y_patt in featuresum):
+                ypatt_features.add(y_patt)
+            for feature in featuresum:
+                if(feature in inverted_segfeatures):
+                    if(z_len in inverted_segfeatures[feature]):
+                        inverted_segfeatures[feature][z_len].add(y_patt)
+                    else:
+                        s = set()
+                        s.add(y_patt)                      
+                        inverted_segfeatures[feature][z_len] = s
+                else:
+                    s = set()
+                    s.add(y_patt)
+                    inverted_segfeatures[feature] = {z_len:s}
+        return(inverted_segfeatures, ypatt_features)
     
     def represent_globalfeatures(self, seq_featuresum):
         modelfeatures_codebook = self.modelfeatures_codebook
@@ -92,46 +132,118 @@ class FirstOrderCRFModelRepresentation(object):
                     windx_fval[modelfeatures_codebook[fkey]] = seg_features[seg_featurename]
         return(windx_fval)
     
-        
-    def represent_activefeatures(self, z_patts, seg_features):  
+    def represent_activefeatures(self, activestates, seg_features):  
         modelfeatures = self.modelfeatures
-        modelfeatures_codebook = self.modelfeatures_codebook 
+        modelfeatures_codebook = self.modelfeatures_codebook   
+        Z_codebook = self.Z_codebook      
         activefeatures = {}
 #         print("segfeatures {}".format(seg_features))
 #         print("z_patts {}".format(z_patts))
-        for z_patt in z_patts:
-            if(z_patt in modelfeatures):
+        for z_len in activestates:
+            z_patt_set = activestates[z_len]
+            for z_patt in z_patt_set:
+#                 print("z_patt ", z_patt)
                 windx_fval = {}
                 for seg_featurename in seg_features:
+                    # this condition might be omitted 
                     if(seg_featurename in modelfeatures[z_patt]):
-#                         print("seg_featurename {}".format(seg_featurename))
-#                         print("z_patt {}".format(z_patt))
+    #                         print("seg_featurename {}".format(seg_featurename))
+    #                         print("z_patt {}".format(z_patt))
                         fkey = z_patt + "&&" + seg_featurename
+                        #print(fkey)
                         windx_fval[modelfeatures_codebook[fkey]] = seg_features[seg_featurename]     
                 if(z_patt in modelfeatures[z_patt]):
                     fkey = z_patt + "&&" + z_patt
                     windx_fval[modelfeatures_codebook[fkey]] = 1
+                    #print(fkey)
                     
                 if(windx_fval):
+                    #activefeatures[Z_codebook[z_patt]] = windx_fval
                     activefeatures[z_patt] = windx_fval
-#         print("activefeatures {}".format(activefeatures))         
-        return(activefeatures)
 
+#         print("activefeatures {}".format(activefeatures))         
+        return(activefeatures)     
+    
+    def find_activated_states(self, seg_features, allowed_z_len):
+        modelfeatures_inverted = self.modelfeatures_inverted
+        active_states = {}
+        for feature in seg_features:
+            if(feature in modelfeatures_inverted):
+                factivestates = modelfeatures_inverted[feature]
+                for z_len in factivestates:
+                    if(z_len in allowed_z_len):
+                        if(z_len in active_states):
+                            active_states[z_len].update(factivestates[z_len])
+                        else:
+                            active_states[z_len] = set(factivestates[z_len])
+                #print("active_states from func ", active_states)
+        return(active_states)
+
+    def filter_activated_states(self, activated_states, accum_active_states, pos):
+        Z_elems = self.Z_elems
+        filtered_activestates = {}
+        
+        for z_len in activated_states:
+            if(z_len == 1):
+                continue
+            start_pos = pos - z_len + 1
+            if(start_pos in accum_active_states):
+                filtered_activestates[z_len] = set()
+                for z_patt in activated_states[z_len]:
+                    check = True
+                    zelems = Z_elems[z_patt]
+                    for i in range(z_len):
+                        if(start_pos+i not in accum_active_states):
+                            check = False
+                            break
+                        if(zelems[i] not in accum_active_states[start_pos+i]):
+                            check = False
+                            break
+                    if(check):                        
+                        filtered_activestates[z_len].add(z_patt)
+        return(filtered_activestates)
+    
+    def get_num_features(self):
+        return(len(self.modelfeatures_codebook))
+    def get_num_states(self):
+        return(len(self.Y_codebook))
 """
 First order CRF
 """
 class FirstOrderCRF(object):
-    def __init__(self, model, seqs_representer, seqs_info):
+    def __init__(self, model, seqs_representer, seqs_info, load_fromdisk):
         self.model = model
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
         self.seqs_info = seqs_info
         self.func_dict = {"alpha": self._load_alpha,
                          "beta": self._load_beta,
-                         "potential_matrix": self._load_potentialmatrix,
-                         "activefeatures_by_position": self.load_activefeatures,
+                         "activated_states": self.load_activatedstates,
+                         "seg_features": self.load_segfeatures,
                          "globalfeatures": self.load_globalfeatures,
-                         "flat_y":self._load_flaty}
+                         "globalfeatures_per_boundary": self.load_globalfeatures,
+                         "potential_matrix": self._load_potentialmatrix,
+                         "activefeatures": self.load_activefeatures,
+                         "Y":self._load_Y}
+        
+        self.def_cached_entities = self.cached_entitites(load_fromdisk)
+        # default beam size 
+        self.beam_size = len(self.model.Y_codebook)
+        
+#         self.func_dict = {"alpha": self._load_alpha,
+#                          "beta": self._load_beta,
+#                          "potential_matrix": self._load_potentialmatrix,
+#                          "activefeatures_by_position": self.load_activefeatures,
+#                          "globalfeatures": self.load_globalfeatures,
+#                          "flat_y":self._load_flaty}
+    
+    def cached_entitites(self, load_info_fromdisk):
+        ondisk_info = ["l_segfeatures", "seg_features", "activated_states", "globalfeatures_per_boundary", "globalfeatures", "Y"]
+        inmemory_info = ["alpha", "Z", "beta", "activefeatures", "potential_matrix"]
+        def_cached_entities = ondisk_info[:load_info_fromdisk]
+        def_cached_entities += inmemory_info
+        return(def_cached_entities)
+       
     @property
     def seqs_info(self):
         return self._seqs_info
@@ -139,16 +251,64 @@ class FirstOrderCRF(object):
     def seqs_info(self, info_dict):
         # make a copy of the passed seqs_info dictionary
         self._seqs_info = deepcopy(info_dict)
+
     
+    def identify_activefeatures(self, seq_id, boundary, accum_activestates):
+        model = self.model
+        state_len = 1
+        # get activated states per boundary
+        activated_states = self.seqs_info[seq_id]['activated_states'][boundary]
+        seg_features = self.seqs_info[seq_id]['seg_features'][boundary]
+        #^print("boundary ", boundary)
+        #^print('seg_features ', seg_features)
+        #^print('activated_states ', activated_states)
+        #^print("accum_activestates ", accum_activestates)
+        u, v = boundary
+    
+        if(state_len in activated_states):
+            accum_activestates[v] = set(activated_states[state_len])
+            
+            if(boundary != (1,1)):
+                filtered_states =  model.filter_activated_states(activated_states, accum_activestates, u)
+                filtered_states[state_len] = set(activated_states[state_len])
+            # initial point t0
+            else:
+                filtered_states = activated_states
+            
+            #print("filtered_states ", filtered_states)
+            #print("seg_features ", seg_features)        
+            active_features = model.represent_activefeatures(filtered_states, seg_features)
+
+        else:
+            accum_activestates[v] = set()
+            active_features = {}
+        
+        return(active_features)   
+    
+    def generate_activefeatures(self, seq_id):
+        # generate active features for every boundary of the sequence 
+        # to be used when using gradient-based methods for learning
+        T = self.seqs_info[seq_id]["T"]
+        accum_activestates = {}
+        activefeatures_perboundary = {}
+        for j in range(1, T+1):
+            boundary = (j, j)
+            # identify active features
+            active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
+            activefeatures_perboundary[boundary] = active_features
+        return(activefeatures_perboundary)
+            
     def compute_psi_potential(self, w, seq_id):
         """ assumes that activefeatures_matrix has been already generated and saved in self.seqs_info dictionary """
         Y_codebook = self.model.Y_codebook
+        Z_lendict = self.model.Z_lendict
+        Z_elems = self.model.Z_elems
         # T is the length of the sequence 
         T = self.seqs_info[seq_id]["T"]
         # number of possible states including the __START__ and __STOP__ states
         M = self.model.num_states
         # get activefeatures_matrix
-        activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
+        activefeatures = self.seqs_info[seq_id]["activefeatures"]
         potential_matrix = numpy.zeros((T+1,M,M), dtype='longdouble')
 
         for boundary, features_dict in activefeatures.items():
@@ -157,14 +317,13 @@ class FirstOrderCRF(object):
                 f_val = list(windx_fval_dict.values())
                 w_indx = list(windx_fval_dict.keys())
                 potential = numpy.dot(w[w_indx], f_val)
-                parts = y_patt.split("|")
-                if(len(parts) == 1):
-                    y_c = parts[0]
+                if(Z_lendict(y_patt) == 1):
+                    y_c = Z_elems[0]
                     potential_matrix[t, :, Y_codebook[y_c]] += potential
                 else:
                     # case of len(parts) = 2
-                    y_p = parts[0]
-                    y_c = parts[1]
+                    y_p = Z_elems[0]
+                    y_c = Z_elems[1]
                     potential_matrix[t, Y_codebook[y_p], Y_codebook[y_c]] += potential
 #         print("potential_matrix {}".format(potential_matrix))
         return(potential_matrix)
@@ -175,10 +334,12 @@ class FirstOrderCRF(object):
         T = self.seqs_info[seq_id]["T"]
         # number of possible states including the __START__ and __STOP__ states
         M = self.model.num_states
+        startstate_flag = self.model.startstate_flag
         # get the potential matrix 
         potential_matrix = self.seqs_info[seq_id]["potential_matrix"]
         alpha = numpy.ones((T+1, M), dtype='longdouble') * (-numpy.inf)
-        if("__START__" in self.model.Y_codebook):
+        
+        if(startstate_flag):
             alpha[0,0] = 0
         # corner case at t = 1
         t = 1; i = 0
@@ -189,7 +350,6 @@ class FirstOrderCRF(object):
 
         return(alpha)
   
-      
     def compute_backward_vec(self, w, seq_id):
         # length of the sequence without the appended states __START__ and __STOP__
         T = self.seqs_info[seq_id]["T"]
@@ -223,9 +383,10 @@ class FirstOrderCRF(object):
         self.seqs_info[seq_id]["beta"] = self.compute_backward_vec(w, seq_id)
 #         print("... Computing beta probability ...")
 
-    def _load_flaty(self, w, seq_id):
+    def _load_Y(self, seq_id):
         seq = self._load_seq(seq_id, target="seq")
-        self.seqs_info[seq_id]['flat_y'] = seq.flat_y
+        self.seqs_info[seq_id]['Y'] = {'flat_y':seq.flat_y, 'boundaries':seq.y_sboundaries}
+#         print("... loading Y ...")
         
     def _load_potentialmatrix(self, w, seq_id):
         # assumes the activefeatures_by_position has been loaded into seq_info
@@ -233,25 +394,65 @@ class FirstOrderCRF(object):
         self.seqs_info[seq_id]["potential_matrix"] = self.compute_psi_potential(w, seq_id)
 #         print("... Computing potential matrix ...")
 
-    def load_activefeatures(self, w, seq_id):
+    def load_activatedstates(self, seq_id):
+        # get the sequence activated states
+        seqs_info = self.seqs_info
+        seqs_representer = self.seqs_representer
+        activated_states = seqs_representer.get_seq_activatedstates(seq_id, seqs_info)
+        seqs_info[seq_id]["activated_states"] = activated_states
+        #print("loading activated states")
+    
+    def load_segfeatures(self, seq_id):
+        # get the sequence segment features
+        seqs_info = self.seqs_info
+        seqs_representer = self.seqs_representer
+        seg_features = seqs_representer.get_seq_segfeatures(seq_id, seqs_info)
+        self.seqs_info[seq_id]["seg_features"] = seg_features
+        #print("loading segment features")
+        
+    def load_activefeatures(self, seq_id):
         # get the sequence model active features
         seqs_representer = self.seqs_representer
-        seqs_activefeatures = seqs_representer.get_seqs_modelactivefeatures([seq_id], self.seqs_info)
-        self.seqs_info[seq_id]["activefeatures_by_position"] = seqs_activefeatures[seq_id]
+        activefeatures = seqs_representer.get_seqs_activefeatures(seq_id, self.seqs_info)
+        if(not activefeatures):
+            # check if activated_states and seg_features are loaded
+            l = {}
+            l['activated_states'] = (seq_id, )
+            l['seg_features'] = (seq_id, )
+            self.check_cached_info(seq_id, l)
+            activefeatures = self.generate_activefeatures(seq_id)
+            seq_dir = self.seqs_info[seq_id]['activefeatures_dir']
+            ReaderWriter.dump_data(activefeatures, os.path.join(seq_dir, 'activefeatures'))
         
-    def load_globalfeatures(self, w, seq_id):
+        self.seqs_info[seq_id]["activefeatures"] = activefeatures
+
+             
+    def load_globalfeatures(self, seq_id, per_boundary=True):
         # get sequence global features
         seqs_representer = self.seqs_representer
-        seqs_globalfeatures = seqs_representer.get_seqs_globalfeatures([seq_id], self.seqs_info, self.model)
-        self.seqs_info[seq_id]["globalfeatures"] = seqs_globalfeatures[seq_id]
+        gfeatures_perboundary = seqs_representer.get_seq_globalfeatures(seq_id, self.seqs_info, per_boundary=per_boundary)
+#         print("per_boundary ", per_boundary)
+#         print(gfeatures_perboundary)
+        if(per_boundary):
+            fname = "globalfeatures_per_boundary"
+        else:
+            fname = "globalfeatures"
+        self.seqs_info[seq_id][fname] = gfeatures_perboundary
+        #print("loading globalfeatures")
 
+        
     def load_imposter_globalfeatures(self, seq_id, y_imposter, seg_other_symbol):
         # get sequence global features
         seqs_representer = self.seqs_representer
-        #print("seq_info[{}] = {}".format(seq_id, self.seqs_info[seq_id]))
-        imposter_globalfeatures = seqs_representer.get_imposterseq_globalfeatures(seq_id, self.seqs_info, self.model, y_imposter)
-        return(imposter_globalfeatures)
-    
+        imposter_gfeatures_perboundary, y_imposter_boundaries = seqs_representer.get_imposterseq_globalfeatures(seq_id, self.seqs_info, y_imposter, seg_other_symbol)
+        return(imposter_gfeatures_perboundary, y_imposter_boundaries)
+   
+    def represent_globalfeature(self, gfeatures, boundaries):
+        # get sequence global features
+        seqs_representer = self.seqs_representer
+        windx_fval = seqs_representer.represent_gfeatures(gfeatures, self.model, boundaries=boundaries)        
+        return(windx_fval)  
+     
     def _load_seq(self, seq_id, target = "seq"):
         seqs_representer = self.seqs_representer
         seq = seqs_representer.load_seq(seq_id, self.seqs_info)
@@ -262,31 +463,22 @@ class FirstOrderCRF(object):
         elif(target == "X"):
             return(seq.X)
 
-    def check_cached_info(self, w, seq_id, entity_names):
+    def check_cached_info(self, seq_id, entity_names):
+        """order of elements in the entity_names list is important """
         seq_info = self.seqs_info[seq_id]
         func_dict = self.func_dict
         none_type = type(None) 
-        for varname in entity_names:
+        for varname, args in entity_names.items():
             if(type(seq_info.get(varname)) == none_type):
-                func_dict[varname](w, seq_id)
-                    
+                func_dict[varname](*args)
+
     def clear_cached_info(self, seqs_id, cached_entities = []):
-        default_entitites = ["potential_matrix", "alpha", "Z", "beta", "P_marginal"]
-        args = cached_entities + default_entitites
+        args = self.def_cached_entities + cached_entities
         for seq_id in seqs_id:
             seq_info = self.seqs_info[seq_id]
             for varname in args:
                 if(varname in seq_info):
                     seq_info[varname] = None
-
-        
-#     def reset_seqs_info(self, seqs_id):
-#         for seq_id in seqs_id:
-#             self.seqs_info[seq_id] = {"T": self.seqs_info[seq_id]["T"],
-#                                       "globalfeatures_dir": self.seqs_info[seq_id]["globalfeatures_dir"],
-#                                       "activefeatures_dir": self.seqs_info[seq_id]["activefeatures_dir"]
-#                                       }
-#             
 
     
     def compute_seqs_loglikelihood(self, w, seqs_id):
@@ -312,13 +504,18 @@ class FirstOrderCRF(object):
 #         print("-"*40)
 #         print("... Evaluating compute_seq_loglikelihood() ...")
         
-        # we need alpha and global features to be ready
-        l = ("globalfeatures", "activefeatures_by_position", "potential_matrix", "alpha")
-        self.check_cached_info(w, seq_id, l)
+        # we need global features and alpha matrix to be ready -- order is important
+        l = OrderedDict()
+        l['globalfeatures'] = (seq_id, False)
+        l['activefeatures'] = (seq_id, )
+        l['potential_matrix'] = (w, seq_id)
+        l['alpha'] = (w, seq_id)
         
         # get the p(X;w) -- probability of the sequence under parameter w
         Z = self.seqs_info[seq_id]["Z"]
-        globalfeatures = self.seqs_info[seq_id]["globalfeatures"]
+        
+        gfeatures = self.seqs_info[seq_id]["globalfeatures"]
+        globalfeatures = self.represent_globalfeature(gfeatures, None)
         windx = list(globalfeatures.keys())
         fval = list(globalfeatures.values())
 
@@ -342,12 +539,17 @@ class FirstOrderCRF(object):
 #         print("... Evaluating compute_seq_gradient() ...")
 
 
-        # we need alpha, beta, global features and active features per position to be ready
-        l = ("globalfeatures", "activefeatures_by_position", "potential_matrix","alpha", "beta")
-        self.check_cached_info(w, seq_id, l)
+        # we need alpha, beta, global features and active features  to be ready
+        l = OrderedDict()
+        l['globalfeatures'] = (seq_id, False)
+        l['activefeatures'] = (seq_id, )
+        l['potential_matrix'] = (w, seq_id)
+        l['alpha'] = (w, seq_id)
+        l['beta'] = (w, seq_id)
         
         P_marginals = self.compute_marginals(seq_id)
         self.seqs_info[seq_id]["P_marginal"] = P_marginals
+        
         f_expectation = self.compute_feature_expectation(seq_id)
         globalfeatures = self.seqs_info[seq_id]["globalfeatures"]
 #         print("seq id {}".format(seq_id))
@@ -375,6 +577,8 @@ class FirstOrderCRF(object):
     def compute_marginals(self, seq_id):
         Y_codebook = self.model.Y_codebook
         Z_codebook = self.model.Z_codebook
+        Z_lendict = self.model.Z_lendict
+        Z_elems = self.model.Z_elems
         T = self.seqs_info[seq_id]["T"]
 
         alpha = self.seqs_info[seq_id]["alpha"]
@@ -391,21 +595,20 @@ class FirstOrderCRF(object):
         for j in range(1, T+1):
             for y_patt in Z_codebook:
 #                 print("y_patt {}".format(y_patt))
-                parts = y_patt.split("|")
-                if(len(parts) == 1):
-                    y_c = Y_codebook[parts[0]]
+                if(Z_lendict[y_patt] == 1):
+                    y_c = Y_codebook[Z_elems[0]]
                     accumulator = alpha[j, y_c] + beta[j, y_c] - Z
                 else:
                     # case of len(parts) = 2
-                    y_b = Y_codebook[parts[0]]
-                    y_c = Y_codebook[parts[1]]
+                    y_b = Y_codebook[Z_elems[0]]
+                    y_c = Y_codebook[Z_elems[1]]
                     accumulator = alpha[j-1, y_b] + potential_matrix[j, y_b, y_c] + beta[j, y_c] - Z
                 P_marginals[j, Z_codebook[y_patt]] = numpy.exp(accumulator)
         return(P_marginals)
     
     def compute_feature_expectation(self, seq_id):
         """ assumes that activefeatures_matrix has been already generated and saved in self.seqs_info dictionary """
-        activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
+        activefeatures = self.seqs_info[seq_id]["activefeatures"]
         P_marginals = self.seqs_info[seq_id]["P_marginal"]
         Z_codebook = self.model.Z_codebook
         f_expectation = {}
