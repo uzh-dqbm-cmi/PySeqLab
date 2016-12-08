@@ -7,7 +7,7 @@ import os
 from copy import deepcopy
 from collections import OrderedDict
 import numpy
-from .utilities import AStarSearcher, ReaderWriter, create_directory, vectorized_logsumexp
+from .utilities import HO_AStarSearcher, ReaderWriter, create_directory, vectorized_logsumexp
 
 class HOCRFModelRepresentation(object):
     def __init__(self):
@@ -831,10 +831,13 @@ class HOCRF(object):
             decoder = self.viterbi
             
         file_name = kwargs.get('file_name')
-        if(not file_name):
-            file_name = "decoded.txt"
-        out_file = os.path.join(create_directory(corpus_name, out_dir), file_name)
-        
+        if(file_name):
+            out_file = os.path.join(create_directory(corpus_name, out_dir), file_name)
+            if(kwargs.get("sep")):
+                sep = kwargs['sep']
+            else:
+                sep = "\t"
+
         beam_size = kwargs.get('beam_size')
         if(not beam_size):
             beam_size = self.beam_size
@@ -851,11 +854,6 @@ class HOCRF(object):
             self.seqs_representer.scale_attributes(seqs_id, seqs_info)
             self.seqs_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, self.model, "processed_seqs", learning=False)
             self.seqs_info = seqs_info
-            
-        if(kwargs.get("sep")):
-            sep = kwargs['sep']
-        else:
-            sep = "\t"
 
         seqs_pred = {}
         seqs_info = self.seqs_info
@@ -863,7 +861,8 @@ class HOCRF(object):
         for seq_id in seqs_info:
             Y_pred, __ = decoder(w, seq_id, beam_size)
             seq = ReaderWriter.read_data(os.path.join(seqs_info[seq_id]["globalfeatures_dir"], "sequence"))
-            self.write_decoded_seqs([seq], [Y_pred], out_file, sep)
+            if(file_name):
+                self.write_decoded_seqs([seq], [Y_pred], out_file, sep)
             seqs_pred[seq_id] = {'seq': seq,'Y_pred': Y_pred}
             # clear added info per sequence
             self.clear_cached_info([seq_id])
@@ -894,7 +893,7 @@ class HOCRF(object):
     def prune_states(self, j, delta, beam_size):
         P_codebook_rev = self.model.P_codebook_rev
         pi_elems = self.model.pi_elems
-        pi_lendict = self.model.pi_lendict
+#         pi_lendict = self.model.pi_lendict
 
 #         # sort the pi in descending order of their score
 #         indx_sorted_pi = numpy.argsort(delta[j,:])[::-1]
@@ -917,10 +916,11 @@ class HOCRF(object):
         topk_pi = {P_codebook_rev[indx] for indx in indx_topk_pi}
         topk_states = set()
         for pi in topk_pi:
-            if(pi_lendict[pi] > 1):
-                topk_states.add(pi_elems[pi][-1])
-            else:
-                topk_states.add(pi)
+            topk_states.add(pi_elems[pi][-1])
+#             if(pi_lendict[pi] > 1):
+#                 topk_states.add(pi_elems[pi][-1])
+#             else:
+#                 topk_states.add(pi)
         return(topk_states)
     
 
@@ -1014,7 +1014,7 @@ class HOCRF(object):
 #             print("P_codebook ", P_codebook)
             return(Y_decoded, viol_index)
         else:
-            asearcher = AStarSearcher(P_codebook, P_codebook_rev, pi_elems)
+            asearcher = HO_AStarSearcher(P_codebook, P_codebook_rev, pi_elems)
             topK = asearcher.search(delta, back_track, T, K)
 #             print('topk ', topK)
             return(topK, viol_index)

@@ -334,7 +334,101 @@ class AStarAgenda(object):
         astar_node = heapq.heappop(self.qagenda)[-1]
         return(astar_node)
     
-class AStarSearcher(object):
+class FO_AStarSearcher(object):
+    def __init__(self, Y_codebook, Y_codebook_rev):
+        self.Y_codebook = Y_codebook
+        self.Y_codebook_rev = Y_codebook_rev
+
+    def infer_labels(self, top_node, back_track):
+        Y_codebook_rev = self.Y_codebook_rev
+        # decoding the sequence
+        #print("we are decoding")
+        #top_node.print_node()
+        y_c = top_node.pi_c
+        pos = top_node.position
+        Y_decoded = []
+        Y_decoded.append(int(y_c))
+        t = pos - 1
+        while t>0:
+            y_c_tplus1 = Y_decoded[-1]
+            print("y_c_tplus1", y_c_tplus1)
+            y_c_t = back_track[t+1, y_c_tplus1]
+            Y_decoded.append(y_c_t)
+            t -= 1
+        Y_decoded.reverse()
+        Y_decoded = [Y_codebook_rev[y_code] for y_code in Y_decoded]
+        
+        while(top_node.frwdlink):
+            y = top_node.frwdlink.label
+            Y_decoded.append(y)
+            top_node = top_node.frwdlink
+#         print(Y_decoded)
+        return(Y_decoded)
+    
+    def search(self, alpha, back_track, T, K):
+        # push the best astar nodes to the queue (i.e. the states at time T)
+        print("back_track ", back_track)
+        q = AStarAgenda()
+        r = set()
+        c = 0
+        Y_codebook_rev = self.Y_codebook_rev
+        # create nodes from the states at time T
+        for y_c in Y_codebook_rev:
+            print("y_c", y_c)
+            cost = alpha[T, y_c]
+            pos = T
+            frwdlink = None
+            label = Y_codebook_rev[y_c]
+            node = AStarNode(cost, pos, y_c, label, frwdlink)
+#             node.print_node()
+            q.push(node, cost)
+            
+        track = []
+        topk_list = []
+        try:
+            while c < K:
+                #print("heap size ", len(q.qagenda))
+                top_node = q.pop()
+                track.append(top_node)
+        
+                for i in reversed(range(2, top_node.position+1)):
+                    # best previous state at pos = i-1
+                    print(top_node.pi_c)
+                    curr_y_c = top_node.pi_c
+                    best_y_c = back_track[i, curr_y_c]
+                    pos = i - 1
+                    for prev_y_c in Y_codebook_rev:
+                        # create a new astar node
+                        if(prev_y_c != best_y_c):
+                            label = Y_codebook_rev[prev_y_c]
+                            cost = alpha[pos, prev_y_c]
+                            s = AStarNode(cost, pos, prev_y_c, label, top_node)
+                            q.push(s, cost)
+                    
+                    # create the backlink of the previous top_node (i.e. create a node from the best_y_c) 
+                    cost = alpha[pos, best_y_c]
+                    label = Y_codebook_rev[best_y_c]
+                    top_node = AStarNode(cost, pos, y_c, label, top_node)
+                    
+                # decode and check if it is not saved already in topk list
+                y_labels = self.infer_labels(track[-1], back_track)
+#                 print(y_labels)
+                signature = "".join(y_labels)
+                if(signature not in r):
+                    r.add(signature)
+                    topk_list.append(y_labels)
+                    c += 1
+                track.pop()
+        except (KeyError, IndexError) as e:
+            # consider logging the error
+            print(e)
+    
+        finally:
+            #print('r ', r)
+            #print('topk ', topk_list)
+            return(topk_list)
+
+class HO_AStarSearcher(object):
     def __init__(self, P_codebook, P_codebook_rev, pi_elems):
         self.P_codebook = P_codebook
         self.P_codebook_rev = P_codebook_rev
@@ -360,19 +454,19 @@ class AStarSearcher(object):
         t = pos - 1
         while t>0:
             p_tplus1 = Y_decoded[-1][0]
-            p_t, y_t = back_track[(t+1, P_codebook[p_tplus1])]
+            p_t, y_t = back_track[t+1, P_codebook[p_tplus1]]
             #print("t={}, (t+1, p_t_code)=({}, {})->({},{})".format(t, t+1, P_codebook[p_tplus1], p_t, y_t))
             Y_decoded.append((p_t, y_t))
             t -= 1
         Y_decoded.reverse()
+        Y_decoded = [y for (__, y) in Y_decoded]
         
         while(top_node.frwdlink):
-            pi_c = top_node.frwdlink.pi_c
             y = top_node.frwdlink.label
-            Y_decoded.append((P_codebook_rev[pi_c], y))
+            Y_decoded.append(y)
             top_node = top_node.frwdlink
 #         print(Y_decoded)
-        return([y for (pi, y) in Y_decoded])
+        return(Y_decoded)
     
     def search(self, alpha, back_track, T, K):
         # push the best astar nodes to the queue (i.e. the pi's at time T)
@@ -398,24 +492,22 @@ class AStarSearcher(object):
                 #print("heap size ", len(q.qagenda))
                 top_node = q.pop()
                 track.append(top_node)
-        
-#                 for n in q.qagenda:
-#                     print(n)
-            
+                
                 for i in reversed(range(2, top_node.position+1)):
-                    prev_pi, y = back_track[i, top_node.pi_c]
-                    prev_pi_c = P_codebook[prev_pi]
+                    best_prev_pi, best_y = back_track[i, top_node.pi_c]
+                    best_prev_pi_c = P_codebook[best_prev_pi]
                     pos = i - 1
-                    for curr_pi_c in P_codebook_rev:
+                    for prev_pi_c in P_codebook_rev:
                         # create a new astar node
-                        if(curr_pi_c != prev_pi_c):
-                            label = self.get_node_label(curr_pi_c)
-                            cost = alpha[pos, curr_pi_c]
-                            s = AStarNode(cost, pos, curr_pi_c, label, top_node)
+                        if(prev_pi_c != best_prev_pi_c):
+                            label = self.get_node_label(prev_pi_c)
+                            cost = alpha[pos, prev_pi_c]
+                            s = AStarNode(cost, pos, prev_pi_c, label, top_node)
                             q.push(s, cost)
+                            
                     # create the backlink of the top_node 
-                    cost = alpha[pos, prev_pi_c]
-                    top_node = AStarNode(cost, pos, prev_pi_c, y, top_node)
+                    cost = alpha[pos, best_prev_pi_c]
+                    top_node = AStarNode(cost, pos, best_prev_pi_c, best_y, top_node)
                     
                 # decode and check if it is not saved already in topk list
                 y_labels = self.infer_labels(track[-1], back_track)

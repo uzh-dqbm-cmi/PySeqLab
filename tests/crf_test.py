@@ -28,14 +28,14 @@ class TestCRFModel(object):
         self.root_dir = root_dir
         self.filter_obj = filter_obj
         
-    def test_workflow(self, seqs, target_function):
+    def test_workflow(self, seqs):
         """ testing scenarios of mixing different templates
         """
     #     numpy.random.seed(1)
         corpus_name = "reference_corpus"
         working_dir = create_directory("working_dir", self.root_dir)
         self._working_dir = working_dir
-        unique_id = False
+        unique_id = True
         seqs_dict = {}
         templateY = self.template_Y
         templateXY = self.template_XY
@@ -55,7 +55,7 @@ class TestCRFModel(object):
         seq_representer.preprocess_attributes(seqs_id, seqs_info, method = scaling_method)
         seq_representer.extract_seqs_globalfeatures(seqs_id, seqs_info)
         model = seq_representer.create_model(seqs_id, seqs_info, modelrepr_class, self.filter_obj)
-        seq_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, model, "")
+        seq_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, model, "", learning = True)
         crf_model = model_class(model, seq_representer, seqs_info)
         
         self._seq_representer = seq_representer
@@ -63,26 +63,27 @@ class TestCRFModel(object):
         self._seqs_info = seqs_info
         self._crf_model = crf_model
         self._model = model
-        target_function()
                             
     def test_forward_backward_computation(self):
         crf_model = self._crf_model
         seqs_id = self._seqs_id
-        lines = ""
-        raw_diff, rel_diff = crf_model.validate_forward_backward_pass(numpy.ones(len(crf_model.weights)), seqs_id[0])
-        lines += "raw_diff {}\n".format(raw_diff)
-        lines += "rel_diff {}\n".format(rel_diff)
-        lines += "#"*40 + "\n"
+        for seq_id in seqs_id:
+            lines = ""
+            raw_diff, rel_diff = crf_model.validate_forward_backward_pass(numpy.ones(len(crf_model.weights)), seq_id)
+            lines += "raw_diff {}\n".format(raw_diff)
+            lines += "rel_diff {}\n".format(rel_diff)
+            lines += "#"*40 + "\n"
         print(lines)
 
     def test_grad_computation(self):
-        lines = ""
         crf_model = self._crf_model
         seqs_id = self._seqs_id
-        avg_diff = crf_model.check_gradient(numpy.ones(len(crf_model.weights)), seqs_id[0])
-        lines += "avg_diff {} \n".format(avg_diff)
-        lines += "#"*40 + "\n"
-        print(lines)
+        for seq_id in seqs_id:
+            avg_diff = crf_model.check_gradient(numpy.ones(len(crf_model.weights)), seq_id)
+            lines = ""
+            lines += "avg_diff {} \n".format(avg_diff)
+            lines += "#"*40 + "\n"
+            print(lines)
         
     def test_model_validity(self):
         """ testing scenarios of mixing different templates
@@ -134,26 +135,6 @@ class TestCRFModel(object):
     def find_wrong_templates(self, seqs):
         # identify if wrong templates exist while using y and f_xy as feature templates
         self.test_workflow(seqs, self.test_feature_extraction)
-        
-    def test_crf_forwardbackward(self, seqs):
-        for i in range(len(seqs)):
-            seq = seqs[i]
-            self.test_workflow([seq], self.test_forward_backward_computation)
-    
-    def test_crf_grad(self, seqs):
-        for i in range(len(seqs)):
-            seq = seqs[i]
-            self.test_workflow([seq], self.test_grad_computation)
-    
-    def test_crf_implementation(self, seqs):
-        for i in range(len(seqs)):
-            seq = seqs[i]
-            self.test_workflow([seq], self.test_forward_backward_computation)
-            self.test_workflow([seq], self.test_grad_computation)
-
-    def test_crf_learning(self, seqs):
-        self.test_workflow(seqs, self.test_model_validity)
-
 
 
 def read_data(file_path, header):
@@ -189,9 +170,19 @@ def run_loaded_conll00_seqs():
     templateY = template_generator.generate_template_Y('1-gram:2-gram:3-gram')
     filter_obj = None
     return(seqs[0:1], templateY, templateXY, filter_obj)
+
+def run_conll00_seqs():
+    data_file_path = os.path.join(root_dir, "dataset", "conll00", "train.txt")
+    seqs = read_data(data_file_path, header = "main")
+    template_generator = TemplateGenerator()
+    templateXY = {}
+    # generating template for attr_name = w
+    template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram', templateXY)
+    templateY = {'Y':()}
+    filter_obj = None
+    return(seqs[:5], templateY, templateXY, filter_obj)
     
-    
-def test_crfs(model_type, scaling_method, optimization_options, run_config):
+def test_crfs(model_type, scaling_method, optimization_options, run_config, test_type):
     if(model_type == "HOSemi"):
         crf_model = HOSemiCRF 
         model_repr = HOSemiCRFModelRepresentation
@@ -207,12 +198,16 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config):
     
     seqs, f_y, f_xy, filter_obj = run_config()
     crf_tester = TestCRFModel(f_y, f_xy, crf_model, model_repr, fextractor, scaling_method, optimization_options, filter_obj)
-#     crf_tester.find_wrong_templates(seqs)
-    
-    crf_tester.test_crf_learning(seqs)
-#     crf_tester.test_model_validity()
-    crf_tester.test_crf_forwardbackward(seqs)
-#     crf_tester.test_crf_grad(seqs[0:1])
+    crf_tester.test_workflow(seqs)
+    if(test_type == 'forward-backward'):
+        # test forward backward computation
+        crf_tester.test_forward_backward_computation()
+    elif(test_type == "gradient"):
+        # test gradient computation
+        crf_tester.test_grad_computation()
+    elif(test_type == "model learning"):
+        # test model learning
+        crf_tester.test_model_validity()
     return(crf_tester._crf_model)
 
 if __name__ == "__main__":

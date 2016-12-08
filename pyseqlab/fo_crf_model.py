@@ -7,10 +7,10 @@ import os
 from copy import deepcopy
 from collections import OrderedDict
 import numpy
-from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
+from .utilities import FO_AStarSearcher, ReaderWriter, create_directory, vectorized_logsumexp
 
 class FirstOrderCRFModelRepresentation(object):
-    def __init__(self, modelfeatures, states, L = 1):
+    def __init__(self):
         """ modelfeatures: set of features defining the model
             state: set of states (i.e. tags) 
             L: 1 (segment length)
@@ -30,6 +30,8 @@ class FirstOrderCRFModelRepresentation(object):
         self.modelfeatures_inverted = None
         self.ypatt_features = None
         self.ypatt_activestates = None
+        self.num_features = None
+        self.num_states = None
         
     def create_model(self, modelfeatures, states, L):
         """modelfeatures: set of features defining the model
@@ -51,7 +53,9 @@ class FirstOrderCRFModelRepresentation(object):
 
         self.modelfeatures_inverted, self.ypatt_features = self.get_inverted_modelfeatures()
         self.ypatt_activestates = self.find_activated_states(self.ypatt_features, self.patts_len)
-         
+        self.num_features = self.get_num_features()
+        self.num_states = self.get_num_states()
+        
     def get_modelfeatures_codebook(self):
         modelfeatures = self.modelfeatures
         codebook = {}
@@ -207,11 +211,11 @@ class FirstOrderCRFModelRepresentation(object):
         return(len(self.modelfeatures_codebook))
     def get_num_states(self):
         return(len(self.Y_codebook))
-"""
-First order CRF
-"""
+
 class FirstOrderCRF(object):
-    def __init__(self, model, seqs_representer, seqs_info, load_fromdisk):
+    """ First order CRF
+    """
+    def __init__(self, model, seqs_representer, seqs_info, load_fromdisk=6):
         self.model = model
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
@@ -230,17 +234,10 @@ class FirstOrderCRF(object):
         # default beam size 
         self.beam_size = len(self.model.Y_codebook)
         
-#         self.func_dict = {"alpha": self._load_alpha,
-#                          "beta": self._load_beta,
-#                          "potential_matrix": self._load_potentialmatrix,
-#                          "activefeatures_by_position": self.load_activefeatures,
-#                          "globalfeatures": self.load_globalfeatures,
-#                          "flat_y":self._load_flaty}
-    
     def cached_entitites(self, load_info_fromdisk):
-        ondisk_info = ["l_segfeatures", "seg_features", "activated_states", "globalfeatures_per_boundary", "globalfeatures", "Y"]
-        inmemory_info = ["alpha", "Z", "beta", "activefeatures", "potential_matrix"]
+        ondisk_info = ["activefeatures", "l_segfeatures", "seg_features", "activated_states", "globalfeatures_per_boundary", "globalfeatures", "Y"]
         def_cached_entities = ondisk_info[:load_info_fromdisk]
+        inmemory_info = ["alpha", "Z", "beta", "potential_matrix", "P_marginal"]
         def_cached_entities += inmemory_info
         return(def_cached_entities)
        
@@ -310,21 +307,46 @@ class FirstOrderCRF(object):
         # get activefeatures_matrix
         activefeatures = self.seqs_info[seq_id]["activefeatures"]
         potential_matrix = numpy.zeros((T+1,M,M), dtype='longdouble')
-
-        for boundary, features_dict in activefeatures.items():
+        for boundary in activefeatures:
             t = boundary[0]
-            for y_patt, windx_fval_dict in features_dict.items():
-                f_val = list(windx_fval_dict.values())
-                w_indx = list(windx_fval_dict.keys())
+            for y_patt in activefeatures[boundary]:
+                f_val = list(activefeatures[boundary][y_patt].values())
+                w_indx = list(activefeatures[boundary][y_patt].keys())
+                
                 potential = numpy.dot(w[w_indx], f_val)
-                if(Z_lendict(y_patt) == 1):
-                    y_c = Z_elems[0]
+                if(Z_lendict[y_patt] == 1):
+                    y_c = Z_elems[y_patt][0]
                     potential_matrix[t, :, Y_codebook[y_c]] += potential
                 else:
                     # case of len(parts) = 2
-                    y_p = Z_elems[0]
-                    y_c = Z_elems[1]
+                    y_p = Z_elems[y_patt][0]
+                    y_c = Z_elems[y_patt][1]
                     potential_matrix[t, Y_codebook[y_p], Y_codebook[y_c]] += potential
+#         print("potential_matrix {}".format(potential_matrix))
+        return(potential_matrix)
+    
+    def compute_potential(self, w, active_features):
+        """ potential matrix for given active features at a specified boundary """
+        Y_codebook = self.model.Y_codebook
+        Z_lendict = self.model.Z_lendict
+        Z_elems = self.model.Z_elems
+        # number of possible states including the __START__ and __STOP__ states
+        M = self.model.num_states
+        # get activefeatures_matrix
+        potential_matrix = numpy.zeros((M,M), dtype='longdouble')
+
+        for y_patt in active_features:
+            f_val = list(active_features[y_patt].values())
+            w_indx = list(active_features[y_patt].keys())
+            potential = numpy.dot(w[w_indx], f_val)
+            if(Z_lendict[y_patt] == 1):
+                y_c = Z_elems[y_patt][0]
+                potential_matrix[:, Y_codebook[y_c]] += potential
+            else:
+                # case of len(parts) = 2
+                y_p = Z_elems[y_patt][0]
+                y_c = Z_elems[y_patt][1]
+                potential_matrix[Y_codebook[y_p], Y_codebook[y_c]] += potential
 #         print("potential_matrix {}".format(potential_matrix))
         return(potential_matrix)
 
@@ -413,7 +435,7 @@ class FirstOrderCRF(object):
     def load_activefeatures(self, seq_id):
         # get the sequence model active features
         seqs_representer = self.seqs_representer
-        activefeatures = seqs_representer.get_seqs_activefeatures(seq_id, self.seqs_info)
+        activefeatures = seqs_representer.get_seq_activefeatures(seq_id, self.seqs_info)
         if(not activefeatures):
             # check if activated_states and seg_features are loaded
             l = {}
@@ -510,6 +532,7 @@ class FirstOrderCRF(object):
         l['activefeatures'] = (seq_id, )
         l['potential_matrix'] = (w, seq_id)
         l['alpha'] = (w, seq_id)
+        self.check_cached_info(seq_id, l)
         
         # get the p(X;w) -- probability of the sequence under parameter w
         Z = self.seqs_info[seq_id]["Z"]
@@ -518,7 +541,6 @@ class FirstOrderCRF(object):
         globalfeatures = self.represent_globalfeature(gfeatures, None)
         windx = list(globalfeatures.keys())
         fval = list(globalfeatures.values())
-
         # log(p(Y|X;w))
         loglikelihood = numpy.dot(w[windx], fval) - Z 
         self.seqs_info[seq_id]["loglikelihood"] = loglikelihood
@@ -546,12 +568,15 @@ class FirstOrderCRF(object):
         l['potential_matrix'] = (w, seq_id)
         l['alpha'] = (w, seq_id)
         l['beta'] = (w, seq_id)
+        self.check_cached_info(seq_id, l)
         
         P_marginals = self.compute_marginals(seq_id)
         self.seqs_info[seq_id]["P_marginal"] = P_marginals
         
         f_expectation = self.compute_feature_expectation(seq_id)
-        globalfeatures = self.seqs_info[seq_id]["globalfeatures"]
+        gfeatures = self.seqs_info[seq_id]["globalfeatures"]
+        globalfeatures = self.represent_globalfeature(gfeatures, None)
+#         print("globalfeatures in grad \n", globalfeatures)
 #         print("seq id {}".format(seq_id))
 #         print("len(f_expectation) {}".format(len(f_expectation)))
 #         print("len(globalfeatures) {}".format(len(globalfeatures)))
@@ -596,12 +621,12 @@ class FirstOrderCRF(object):
             for y_patt in Z_codebook:
 #                 print("y_patt {}".format(y_patt))
                 if(Z_lendict[y_patt] == 1):
-                    y_c = Y_codebook[Z_elems[0]]
+                    y_c = Y_codebook[Z_elems[y_patt][0]]
                     accumulator = alpha[j, y_c] + beta[j, y_c] - Z
                 else:
                     # case of len(parts) = 2
-                    y_b = Y_codebook[Z_elems[0]]
-                    y_c = Y_codebook[Z_elems[1]]
+                    y_b = Y_codebook[Z_elems[y_patt][0]]
+                    y_c = Y_codebook[Z_elems[y_patt][1]]
                     accumulator = alpha[j-1, y_b] + potential_matrix[j, y_b, y_c] + beta[j, y_c] - Z
                 P_marginals[j, Z_codebook[y_patt]] = numpy.exp(accumulator)
         return(P_marginals)
@@ -622,48 +647,70 @@ class FirstOrderCRF(object):
                         f_expectation[w_indx] = f_val * P_marginals[t, Z_codebook[z_patt]]
         return(f_expectation)
     
+
+            
     def decode_seqs(self, decoding_method, out_dir, **kwargs):
-        """ seqs: a list comprising of sequences that are instances of SequenceStrcut() class
-            method: a string referring to type of decoding {'viterbi', 'per_state_decoding'}
-            seqs_info: dictionary containing the info about the sequences to parse
+        """ decoding_method: a string referring to type of decoding {'viterbi', 'per_state_decoding'}
+            **kwargs could be one of the following:
+                seqs: a list comprising of sequences that are instances of SequenceStrcut() class
+                seqs_info: dictionary containing the info about the sequences to parse
         """
         corpus_name = "decoding_seqs"
-        out_file = os.path.join(create_directory(corpus_name, out_dir), "decoded.txt")
         w = self.weights
-        
-        if(decoding_method == "viterbi"):
-            decoder = self.viterbi
-        elif(decoding_method == "perstate_decoding"):
+
+        if(decoding_method == "perstate_decoding"):
             decoder = self.perstate_posterior_decoding
+        else:
+            decoder = self.viterbi
+
+
+        file_name = kwargs.get('file_name')
+        if(file_name):
+            out_file = os.path.join(create_directory(corpus_name, out_dir), file_name)
+            if(kwargs.get("sep")):
+                sep = kwargs['sep']
+            else:
+                sep = "\t"
+        
+        beam_size = kwargs.get('beam_size')
+        if(not beam_size):
+            beam_size = self.beam_size
             
         if(kwargs.get("seqs_info")):
             self.seqs_info = kwargs["seqs_info"]
+            N = len(self.seqs_info)
         elif(kwargs.get("seqs")): 
-            seqs = kwargs["seqs"]
+            seqs = kwargs["seqs"]           
             seqs_dict = {i+1:seqs[i] for i in range(len(seqs))}
             seqs_id = list(seqs_dict.keys())
+            N = len(seqs_id)
             seqs_info = self.seqs_representer.prepare_seqs(seqs_dict, "processed_seqs", out_dir, unique_id = True)
             self.seqs_representer.scale_attributes(seqs_id, seqs_info)
-            self.seqs_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, self.model, "processed_seqs")
+            self.seqs_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, self.model, "processed_seqs", learning=False)
             self.seqs_info = seqs_info
+            
+
 
         seqs_pred = {}
         seqs_info = self.seqs_info
+        counter = 0
         for seq_id in seqs_info:
-            Y_pred = decoder(w, seq_id)
+            Y_pred, __ = decoder(w, seq_id, beam_size)
             seq = ReaderWriter.read_data(os.path.join(seqs_info[seq_id]["globalfeatures_dir"], "sequence"))
-            self.write_decoded_seqs([seq], [Y_pred], out_file)
+            if(file_name):
+                self.write_decoded_seqs([seq], [Y_pred], out_file, sep)
             seqs_pred[seq_id] = {'seq': seq,'Y_pred': Y_pred}
             # clear added info per sequence
             self.clear_cached_info([seq_id])
-            
+            counter += 1
+            print("sequence decoded -- {} sequences are left".format(N-counter))
+        
         # clear seqs_info
         self.seqs_info.clear()
         return(seqs_pred)
 
             
-    def write_decoded_seqs(self, ref_seqs, Y_pred_seqs, out_file):
-        sep = " "
+    def write_decoded_seqs(self, ref_seqs, Y_pred_seqs, out_file, sep = "\t"):
         for i in range(len(ref_seqs)):
             Y_pred_seq = Y_pred_seqs[i]
             ref_seq = ref_seqs[i]
@@ -672,57 +719,123 @@ class FirstOrderCRF(object):
             for t in range(1, T+1):
                 for field_name in ref_seq.X[t]:
                     line += ref_seq.X[t][field_name] + sep
-                line += Y_pred_seq[t-1]
                 if(ref_seq.flat_y):
-                    line += sep + ref_seq.flat_y[t-1] + "\n"
-                else:
-                    line += "\n" 
+                    line += ref_seq.flat_y[t-1] + sep
+                line += Y_pred_seq[t-1]
+                line += "\n" 
             line += "\n"
-
-            ReaderWriter.log_progress(line, out_file) 
+            ReaderWriter.log_progress(line,out_file) 
             
+    def prune_states(self, j, score_mat, beam_size):
+        Y_codebook_rev = self.model.Y_codebook_rev
+        # using argpartition as better alternative to argsort
+        indx_partitioned_y = numpy.argpartition(-score_mat[j, :], beam_size)
+        # identify top-k states/pi
+        indx_topk_y = indx_partitioned_y[:beam_size]
+#         # identify states falling out of the beam
+        indx_falling_y = indx_partitioned_y[beam_size:]
+        # remove the effect of states/pi falling out of the beam
+        score_mat[j, indx_falling_y] = -numpy.inf
+        
+        # get topk states
+        topk_y = {Y_codebook_rev[indx] for indx in indx_topk_y}
+        
+        return(topk_y)
+    
+    def viterbi(self, w, seq_id, beam_size, stop_off_beam = False, y_ref=[], K=1):
 
-    def viterbi(self, w, seq_id):
-
-        # number of possible states including the __START__ and __STOP__ states
+        # number of possible states
         M = self.model.num_states
         T = self.seqs_info[seq_id]['T']
         Y_codebook_rev = self.model.Y_codebook_rev
-        score_mat = numpy.zeros((T+1, M))
-        # compute potential matrix 
-        l = ("activefeatures_by_position", "potential_matrix")
-        self.check_cached_info(w, seq_id, l)
-        potential_matrix = self.seqs_info[seq_id]["potential_matrix"]
-        # corner case at t = 1
-        t = 1; i = 0
-        score_mat[t, :] = potential_matrix[t, i, :]
+        Y_codebook = self.model.Y_codebook
+        score_mat = numpy.ones((T+1, M), dtype='longdouble') * -numpy.inf
+        score_mat[0,0] = 0
         # back pointer to hold the index of the state that achieved highest score while decoding
         backpointer = numpy.ones((T+1, M)) * (-1)
-        backpointer[t, :] = 0
-        for t in range(2, T+1):
-            for j in range(M):
-                vec = score_mat[t-1, :] + potential_matrix[t, :, j]
-                score_mat[t, j] = numpy.max(vec)
-                backpointer[t, j] = numpy.argmax(vec)
+        viol_index = []
         
-        # decoding the sequence
-        y_T = numpy.argmax(backpointer[-1,:])
-        Y_decoded = [int(y_T)]
-        counter = 0
-        for t in reversed(range(2, T+1)):
-            Y_decoded.append(int(backpointer[t, Y_decoded[counter]]))
-            counter += 1
-        Y_decoded.reverse()
-       
-        print("decoding sequence with id {} \n".format(seq_id))
-        Y_decoded = [Y_codebook_rev[y_code] for y_code in Y_decoded]
-        return(Y_decoded)
+        if(beam_size == M):
+            # case of exact search and decoding
+            l = OrderedDict()
+            l['activefeatures'] = (seq_id, )
+            l['potential_matrix'] = (w, seq_id)
+            self.check_cached_info(seq_id, l)
+            
+            potential_matrix = self.seqs_info[seq_id]["potential_matrix"]
+            # corner case at t = 1
+            t = 1; i = 0
+            score_mat[t, :] = potential_matrix[t, i, :]
+            backpointer[t, :] = 0
+            
+            for t in range(2, T+1):
+                for j in range(M):
+                    vec = score_mat[t-1, :] + potential_matrix[t, :, j]
+                    score_mat[t, j] = numpy.max(vec)
+                    backpointer[t, j] = numpy.argmax(vec)
+        else:
+            # case of inexact search and decoding
+            l = {}
+            l['activated_states'] = (seq_id, )
+            l['seg_features'] = (seq_id, )
+            self.check_cached_info(seq_id, l)
+            
+            accum_activestates = {}
+
+            for t in range(1, T+1):
+                boundary = (t, t)
+                active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
+                potential_matrix = self.compute_potential(w, active_features)
+                for j in range(M):
+                    vec = score_mat[t-1, :] + potential_matrix[:, j]
+                    score_mat[t, j] = numpy.max(vec)
+                    backpointer[t, j] = numpy.argmax(vec)
+                    
+                topk_states = self.prune_states(t, score_mat, beam_size)
+                # update tracked active states -- to consider renaming it          
+                accum_activestates[t] = accum_activestates[t].intersection(topk_states)
+                #^print("accum_activestates[{}] = {}".format(j, accum_activestates[j]))
+                #^print('score_mat[{},:] = {} '.format(j, score_mat[j,:]))
+                #^print("topk_states ", topk_states)
+                if(y_ref):
+                    if(y_ref[t-1] not in topk_states):
+                        viol_index.append(t)
+                        if(stop_off_beam):
+                            T = t
+                            break
+        if(K == 1):
+            # decoding the sequence
+            y_c_T = numpy.argmax(score_mat[T:])
+            Y_decoded = [int(y_c_T)]
+            counter = 0
+            for t in reversed(range(2, T+1)):
+                Y_decoded.append(int(backpointer[t, Y_decoded[counter]]))
+                counter += 1
+            Y_decoded.reverse()
+           
+            print("decoding sequence with id {} \n".format(seq_id))
+            Y_decoded = [Y_codebook_rev[y_code] for y_code in Y_decoded]
+            return(Y_decoded, viol_index)
+        else:
+            asearcher = FO_AStarSearcher(Y_codebook, Y_codebook_rev)
+            print("K ",K)
+            print(score_mat)
+            print(backpointer)
+            print(T)
+            topK = asearcher.search(score_mat, backpointer, T, K)
+            print('topk ', topK)
+            return(topK, viol_index)
     
     def perstate_posterior_decoding(self, w, seq_id):
-        # get alpha, beta and Z
         Y_codebook_rev = self.model.Y_codebook_rev
-        l = ("activefeatures_by_position", "potential_matrix", "alpha", "beta")
-        self.check_cached_info(w, seq_id, l)
+        # get alpha, beta and Z
+        l = OrderedDict()
+        l['activefeatures'] = (seq_id, )
+        l['potential_matrix'] = (w, seq_id)
+        l['alpha'] = (w, seq_id)
+        l['beta'] = (w, seq_id)
+        self.check_cached_info(seq_id, l)
+        
         alpha = self.seqs_info[seq_id]["alpha"]
         beta = self.seqs_info[seq_id]["beta"]
         Z = self.seqs_info[seq_id]["Z"]
@@ -752,7 +865,7 @@ class FirstOrderCRF(object):
             ei[i] = epsilon
             l_wplus = self.compute_seq_loglikelihood(w + ei, seq_id)
             self.clear_cached_info([seq_id])
-            l = self.compute_seqs_loglikelihood(w, [seq_id])
+            l = self.compute_seq_loglikelihood(w, seq_id)
             self.clear_cached_info([seq_id])
             grad[i] = (l_wplus - l) / epsilon
             ei[i] = 0
@@ -770,8 +883,13 @@ class FirstOrderCRF(object):
     def validate_forward_backward_pass(self, w, seq_id):
         self.clear_cached_info([seq_id])
         # this will compute alpha and beta matrices and save them in seqs_info dict
-        l = ("activefeatures_by_position", "potential_matrix", "alpha", "beta")
-        self.check_cached_info(w, seq_id, l)
+        l = OrderedDict()
+        l['activefeatures'] = (seq_id, )
+        l['potential_matrix'] = (w, seq_id)
+        l['alpha'] = (w, seq_id)
+        l['beta'] = (w, seq_id)
+        self.check_cached_info(seq_id, l)
+        
         alpha = self.seqs_info[seq_id]["alpha"]
         beta = self.seqs_info[seq_id]["beta"]
         print("states codebook {}".format(self.model.Y_codebook))
@@ -801,6 +919,7 @@ class FirstOrderCRF(object):
         print("average difference is {}".format(avg_diff))
         self.clear_cached_info(seqs_id)
         return(avg_diff)
+    
 if __name__ == "__main__":
     pass
     

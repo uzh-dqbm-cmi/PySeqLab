@@ -148,6 +148,8 @@ class Learner(object):
                 elif(beam_size < 0 or beam_size > default_beam):
                     beam_size = default_beam
                 optimization_config["beam_size"] = beam_size
+                self.crf_model.beam_size = beam_size
+
                 # setting update type 
                 update_type = optimization_options.get("update_type")
                 if(update_type not in {'early', 'latest', 'max-exhaustive', 'max-fast'}):
@@ -251,8 +253,7 @@ class Learner(object):
         w_hat = estimate_weights(w0, seqs_id)
         # update model weights to w_hat
         self.crf_model.weights = w_hat
-        self.crf_model.beam_size = beam_size
-        
+        print("seqs_info before saving model ", self.crf_model.seqs_info)
         if(save_model):
             # pickle the model
             self.crf_model.save_model(file_name = os.path.join(model_dir, model_name))
@@ -316,7 +317,7 @@ class Learner(object):
         
     def _check_reldiff(self, x, y):
         tolerance = self.training_description["tolerance"]
-        if(y<=tolerance):
+        if(numpy.abs(y)<=tolerance):
             self._exitloop = True
         else:
             if(x != y):            
@@ -466,7 +467,7 @@ class Learner(object):
         y_ref = seqs_info[seq_id]['Y']['flat_y']
         y_ref_boundaries = seqs_info[seq_id]['Y']['boundaries']
         
-        if(update_type == "max"):
+        if(update_type in {'max-fast', 'max-exhaustive', 'latest'}):
             early_stop = False
         else:
             early_stop = True
@@ -535,7 +536,8 @@ class Learner(object):
                     diff = numpy.dot(w[ref_windx], ref_fval) - numpy.dot(w[imp_windx], imp_fval)
                     test.append(diff)
                     print("diff = {}, max_diff = {} ".format(diff, max_diff))
-                    if(diff < max_diff):
+                    if(diff <= max_diff):
+                        # using less than or equal would allow for getting the longest sequence having max difference
                         max_diff = diff
                         ref_unp_windxfval = (ref_windx, ref_fval)
                         imp_unp_windxfval = (imp_windx, imp_fval)
@@ -548,7 +550,6 @@ class Learner(object):
                 max_diff = numpy.inf
                 L = crf_model.model.L
                 print("in max update routine")
-                test = []
                 # viol_index is 1-based indexing
                 lastviol_indx = viol_indx[-1]
                 viol_pos, viol_boundindex = self._identify_violation_indx(lastviol_indx, y_ref_boundaries)
@@ -571,7 +572,7 @@ class Learner(object):
             y_ref_boundaries = None
         else:
             per_boundary = True
-
+            # to assign y_ref_boundries here -> y_ref_boundaries = y_ref_boundaries[:boundpos_indx]
         l = {gfeatures_type:(seq_id, per_boundary)}
         crf_model.check_cached_info(seq_id, l)
         ref_gfeatures = seqs_info[seq_id][gfeatures_type]
@@ -733,7 +734,11 @@ class Learner(object):
 #                 print("error count {}".format(error_count))
                 avg_error_list.append(float(error_count/N))
                 self._track_perceptron_optimizer(w, k, avg_error_list)
-                ReaderWriter.dump_data(w_avg/(num_upd), os.path.join(model_dir, "model_avgweights_epoch_{}".format(k+1)))
+                if(num_upd):
+                    w_dump = w_avg/num_upd
+                else:
+                    w_dump = w_avg
+                ReaderWriter.dump_data(w_dump, os.path.join(model_dir, "model_avgweights_epoch_{}".format(k+1)))
                 print("average error : {}".format(avg_error_list))
                 print("self._exitloop {}".format(self._exitloop))
                 if(self._exitloop):
@@ -799,10 +804,11 @@ class Learner(object):
             # shuffle sequences at the beginning of each epoch 
             numpy.random.shuffle(train_seqs_id)
             numseqs_left = N
-    
+            print("k ",k)
             for seq_id in train_seqs_id:
 #                     print(seq_id)
                     
+                print("first seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
                 seq_loglikelihood = crf_model.compute_seq_loglikelihood(w, seq_id)
                 seqs_loglikelihood_vec[seqs_id_mapper[seq_id]] = seq_loglikelihood
                 seq_grad = crf_model.compute_seq_gradient(w, seq_id)
@@ -848,10 +854,12 @@ class Learner(object):
                     E_deltaw2[windx] += (1-p_rho) * numpy.square(deltaw)                    
                     w[windx] += deltaw
                 
-
+                print("second seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
                 # clean cached info
                 crf_model.clear_cached_info([seq_id])
                 numseqs_left -= 1
+                print("third seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
+
                 print("num seqs left: {}".format(numseqs_left))
             
             seqs_cost_vec = [numpy.mean(seqs_loglikelihood_vec[i:i+step_size]) for i in range(0, N, step_size)]

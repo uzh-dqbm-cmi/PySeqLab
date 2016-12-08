@@ -401,7 +401,7 @@ class FOFeatureExtractor(object):
     """ Generic feature extractor class that contains feature functions/templates for first order sequence models """
     # currently it supports adding start state
     # to consider adding support for stop state
-    def __init__(self, templateX, templateY, attr_desc, start_state = False):
+    def __init__(self, templateX, templateY, attr_desc, start_state = True):
         self.template_X = templateX
         self.template_Y = templateY
         self.attr_desc = attr_desc
@@ -1068,7 +1068,7 @@ class SeqsRepresentation(object):
     def get_seq_activefeatures(self, seq_id, seqs_info):
         seq_dir = seqs_info[seq_id]["activefeatures_dir"]
         try:
-            activefeatures = ReaderWriter.read_data(os.path.join(seq_dir, "activefeatures_per_boundary"))
+            activefeatures = ReaderWriter.read_data(os.path.join(seq_dir, "activefeatures"))
         except FileNotFoundError:
             # consider logging the error
             print("activefeatures_per_boundary file does not exist yet !!")
