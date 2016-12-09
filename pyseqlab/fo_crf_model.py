@@ -752,7 +752,7 @@ class FirstOrderCRF(object):
         score_mat = numpy.ones((T+1, M), dtype='longdouble') * -numpy.inf
         score_mat[0,0] = 0
         # back pointer to hold the index of the state that achieved highest score while decoding
-        backpointer = numpy.ones((T+1, M)) * (-1)
+        backpointer = numpy.ones((T+1, M), dtype='int') * (-1)
         viol_index = []
         
         if(beam_size == M):
@@ -813,17 +813,11 @@ class FirstOrderCRF(object):
                 counter += 1
             Y_decoded.reverse()
            
-            print("decoding sequence with id {} \n".format(seq_id))
             Y_decoded = [Y_codebook_rev[y_code] for y_code in Y_decoded]
             return(Y_decoded, viol_index)
         else:
             asearcher = FO_AStarSearcher(Y_codebook, Y_codebook_rev)
-            print("K ",K)
-            print(score_mat)
-            print(backpointer)
-            print(T)
             topK = asearcher.search(score_mat, backpointer, T, K)
-            print('topk ', topK)
             return(topK, viol_index)
     
     def perstate_posterior_decoding(self, w, seq_id):

@@ -347,11 +347,10 @@ class FO_AStarSearcher(object):
         y_c = top_node.pi_c
         pos = top_node.position
         Y_decoded = []
-        Y_decoded.append(int(y_c))
+        Y_decoded.append(y_c)
         t = pos - 1
         while t>0:
             y_c_tplus1 = Y_decoded[-1]
-            print("y_c_tplus1", y_c_tplus1)
             y_c_t = back_track[t+1, y_c_tplus1]
             Y_decoded.append(y_c_t)
             t -= 1
@@ -367,14 +366,12 @@ class FO_AStarSearcher(object):
     
     def search(self, alpha, back_track, T, K):
         # push the best astar nodes to the queue (i.e. the states at time T)
-        print("back_track ", back_track)
         q = AStarAgenda()
         r = set()
         c = 0
         Y_codebook_rev = self.Y_codebook_rev
         # create nodes from the states at time T
         for y_c in Y_codebook_rev:
-            print("y_c", y_c)
             cost = alpha[T, y_c]
             pos = T
             frwdlink = None
@@ -393,21 +390,20 @@ class FO_AStarSearcher(object):
         
                 for i in reversed(range(2, top_node.position+1)):
                     # best previous state at pos = i-1
-                    print(top_node.pi_c)
                     curr_y_c = top_node.pi_c
-                    best_y_c = back_track[i, curr_y_c]
+                    bestprev_y_c = back_track[i, curr_y_c]
                     pos = i - 1
                     for prev_y_c in Y_codebook_rev:
                         # create a new astar node
-                        if(prev_y_c != best_y_c):
+                        if(prev_y_c != bestprev_y_c):
                             label = Y_codebook_rev[prev_y_c]
                             cost = alpha[pos, prev_y_c]
                             s = AStarNode(cost, pos, prev_y_c, label, top_node)
                             q.push(s, cost)
                     
                     # create the backlink of the previous top_node (i.e. create a node from the best_y_c) 
-                    cost = alpha[pos, best_y_c]
-                    label = Y_codebook_rev[best_y_c]
+                    cost = alpha[pos, bestprev_y_c]
+                    label = Y_codebook_rev[bestprev_y_c]
                     top_node = AStarNode(cost, pos, y_c, label, top_node)
                     
                 # decode and check if it is not saved already in topk list
