@@ -253,7 +253,6 @@ class Learner(object):
         w_hat = estimate_weights(w0, seqs_id)
         # update model weights to w_hat
         self.crf_model.weights = w_hat
-        print("seqs_info before saving model ", self.crf_model.seqs_info)
         if(save_model):
             # pickle the model
             self.crf_model.save_model(file_name = os.path.join(model_dir, model_name))
@@ -808,7 +807,7 @@ class Learner(object):
             for seq_id in train_seqs_id:
 #                     print(seq_id)
                     
-                print("first seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
+#                 print("first seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
                 seq_loglikelihood = crf_model.compute_seq_loglikelihood(w, seq_id)
                 seqs_loglikelihood_vec[seqs_id_mapper[seq_id]] = seq_loglikelihood
                 seq_grad = crf_model.compute_seq_gradient(w, seq_id)
@@ -854,11 +853,11 @@ class Learner(object):
                     E_deltaw2[windx] += (1-p_rho) * numpy.square(deltaw)                    
                     w[windx] += deltaw
                 
-                print("second seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
+#                 print("second seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
                 # clean cached info
                 crf_model.clear_cached_info([seq_id])
                 numseqs_left -= 1
-                print("third seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
+#                 print("third seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
 
                 print("num seqs left: {}".format(numseqs_left))
             
@@ -935,7 +934,7 @@ class Learner(object):
                 seq_loglikelihood = crf_model.compute_seq_loglikelihood(w, seq_id)
                 seqs_loglikelihood_vec[seqs_id_mapper[seq_id]] = seq_loglikelihood
                 seq_grad = crf_model.compute_seq_gradient(w, seq_id)
-                print("seq_grad {}".format(seq_grad))
+#                 print("seq_grad {}".format(seq_grad))
                 windx = list(seq_grad.keys())
                 fval = list(seq_grad.values())
                 if(C):
@@ -957,7 +956,7 @@ class Learner(object):
                     seqs_loglikelihood_vec[seqs_id_mapper[seq_id]] = seq_loglikelihood
 
                 else:                   
-                    print("fval {}".format(fval)) 
+#                     print("fval {}".format(fval)) 
                     w[windx] += numpy.multiply(eta, fval)
                     
                 t += 1

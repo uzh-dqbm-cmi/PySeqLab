@@ -551,8 +551,8 @@ class HOCRF(object):
 
     def cached_entitites(self, load_info_fromdisk):
         ondisk_info = ["seg_features", "activated_states", "globalfeatures_per_boundary", "globalfeatures", "Y"]
-        inmemory_info = ["alpha", "Z", "beta", "activefeatures_per_boundary"]
         def_cached_entities = ondisk_info[:load_info_fromdisk]
+        inmemory_info = ["alpha", "Z", "beta", "activefeatures_per_boundary"]
         def_cached_entities += inmemory_info
         return(def_cached_entities)
     
@@ -925,6 +925,8 @@ class HOCRF(object):
     
 
     def viterbi(self, w, seq_id, beam_size, stop_off_beam = False, y_ref=[], K=1):
+        
+        # TO update and make it similar to the FO crf implementation
         l = {}
         l['activated_states'] = (seq_id, )
         l['seg_features'] = (seq_id, )
@@ -977,17 +979,17 @@ class HOCRF(object):
             #^print("P_len ", P_len)
             if(beam_size < P_len):
                 topk_states = self.prune_states(j, delta, beam_size)
+                # update tracked active states -- to consider renaming it          
+                accum_activestates[j] = accum_activestates[j].intersection(topk_states)
+                #^print("accum_activestates[{}] = {}".format(j, accum_activestates[j]))
                 #^print('delta[{},:] = {} '.format(j, delta[j,:]))
                 #^print("topk_states ", topk_states)
                 if(y_ref):
                     if(y_ref[j-1] not in topk_states):
                         viol_index.append(j)
-                # update tracked active states -- to consider renaming it          
-                accum_activestates[j] = accum_activestates[j].intersection(topk_states)
-                #^print("accum_activestates[{}] = {}".format(j, accum_activestates[j]))
-                if(viol_index and stop_off_beam):
-                    T = j
-                    break
+                        if(stop_off_beam):
+                            T = j
+                            break
         #^print('seq_id ', seq_id)
         #^print("activefeatures_perboundary ", activefeatures_perboundary)
         if(K == 1):

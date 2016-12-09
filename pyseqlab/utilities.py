@@ -314,7 +314,7 @@ class AStarNode(object):
         self.frwdlink = frwdlink
         
     def print_node(self):
-        statement = "cost: {}, position: {}, label: {}, ".format(self.cost, self.position, self.label)
+        statement = "cost: {}, position: {}, pi_code: {}, label: {}, ".format(self.cost, self.position, self.pi_c, self.label)
         if(self.frwdlink):
             statement += "forward_link: {}".format(self.frwdlink)
         else:

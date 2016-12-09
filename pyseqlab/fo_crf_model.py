@@ -215,7 +215,7 @@ class FirstOrderCRFModelRepresentation(object):
 class FirstOrderCRF(object):
     """ First order CRF
     """
-    def __init__(self, model, seqs_representer, seqs_info, load_fromdisk=6):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk=6):
         self.model = model
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
@@ -230,7 +230,7 @@ class FirstOrderCRF(object):
                          "activefeatures": self.load_activefeatures,
                          "Y":self._load_Y}
         
-        self.def_cached_entities = self.cached_entitites(load_fromdisk)
+        self.def_cached_entities = self.cached_entitites(load_info_fromdisk)
         # default beam size 
         self.beam_size = len(self.model.Y_codebook)
         
