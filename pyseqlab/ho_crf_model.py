@@ -625,6 +625,7 @@ class HOCRF(object):
         T = self.seqs_info[seq_id]["T"]
         alpha = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         alpha[0,P_codebook[""]] = 0
+        
         accum_activestates = {}
         activefeatures_perboundary = {}
         

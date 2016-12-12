@@ -806,7 +806,7 @@ class FirstOrderCRF(object):
         if(K == 1):
             # decoding the sequence
             y_c_T = numpy.argmax(score_mat[T:])
-            Y_decoded = [int(y_c_T)]
+            Y_decoded = [y_c_T]
             counter = 0
             for t in reversed(range(2, T+1)):
                 Y_decoded.append(int(backpointer[t, Y_decoded[counter]]))

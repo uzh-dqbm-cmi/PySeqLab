@@ -9,67 +9,80 @@ import numpy
 from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
 
 class HOSemiCRFModelRepresentation(object):
-    def __init__(self, modelfeatures, states, L):
-        """ modelfeatures: set of features defining the model
-            states: set of states (i.e. tags)
-            L: length of longest segment
-        """ 
-        self.modelfeatures = modelfeatures
-        self.modelfeatures_codebook = modelfeatures
-        self.Y_codebook = states
-        self.L = L
-        self.Z_codebook = self.get_pattern_set()
-        self.patt_order = self.get_pattern_order()
-        self.P_codebook = self.get_forward_states()
-        self.S_codebook = self.get_backward_states()
-        self.f_transition = self.get_forward_transition()
-        self.b_transition = self.get_backward_transitions()
-        self.pky_z = self.map_pky_z()
-        self.siy_z = self.map_siy_z()
-        self.z_piy = self.map_z_piy()
-        self.num_features = self.get_num_features()
-        self.num_states = self.get_num_states()
-
-    def represent_globalfeatures(self, seq_featuresum):
-        modelfeatures_codebook = self.modelfeatures_codebook
-        windx_fval = {}
-        for y_patt, seg_features in seq_featuresum.items():
-            for seg_featurename in seg_features: 
-                fkey = y_patt + "&&" + seg_featurename
-                if(fkey in modelfeatures_codebook):
-                    windx_fval[modelfeatures_codebook[fkey]] = seg_features[seg_featurename]
-        return(windx_fval)
-
+    def __init__(self):
+        """ HOSemi CRF model representation
+        """         
+        self.modelfeatures = None
+        self.modelfeatures_codebook = None
+        self.Y_codebook = None
+        self.L = None
+        self.Z_codebook = None
+        self.Z_lendict = None
+        self.Z_elems = None
+        self.Z_numchar= None
+        self.patts_len = None
+        self.max_patt_len = None
+        self.modelfeatures_inverted = None
+        self.ypatt_features = None
+        self.ypatt_activestates = None
+        self.P_codebook = None
+        self.P_codebook_rev = None
+        self.pi_lendict = None
+        self.S_codebook = None
+        self.si_lendict = None
+        self.si_numchar = None
+        self.f_transition = None
+        self.b_transition = None
+        self.pky_codebook = None
+        self.pky_codebook_rev = None
+        self.pi_pky_codebook = None
+        self.siy_codebook = None        
+        self.pky_z = None
+        self.siy_z = None
+        self.num_features = None
+        self.num_states = None
         
-    def represent_activefeatures(self, z_patts, seg_features):  
-        modelfeatures = self.modelfeatures
-        modelfeatures_codebook = self.modelfeatures_codebook 
-        activefeatures = {}
-#         print("segfeatures {}".format(seg_features))
-#         print("z_patts {}".format(z_patts))
-        for z_patt in z_patts:
-            if(z_patt in modelfeatures):
-                windx_fval = {}
-                for seg_featurename in seg_features:
-                    if(seg_featurename in modelfeatures[z_patt]):
-#                         print("seg_featurename {}".format(seg_featurename))
-#                         print("z_patt {}".format(z_patt))
-                        fkey = z_patt + "&&" + seg_featurename
-                        windx_fval[modelfeatures_codebook[fkey]] = seg_features[seg_featurename]     
-                if(z_patt in modelfeatures[z_patt]):
-                    fkey = z_patt + "&&" + z_patt
-                    windx_fval[modelfeatures_codebook[fkey]] = 1
-                    
-                if(windx_fval):
-                    activefeatures[z_patt] = windx_fval
-#         print("activefeatures {}".format(activefeatures))         
-        return(activefeatures)
+    def create_model(self, modelfeatures, states, L):
+        self.modelfeatures = modelfeatures
+        self.modelfeatures_codebook = self.get_modelfeatures_codebook()
+        self.Y_codebook = self.get_modelstates_codebook(states)
+        self.L = L
+        self.generate_instance_properties()
+        
+    def generate_instance_properties(self):
+        self.Z_codebook = self.get_Z_pattern()
+        self.Z_lendict, self.Z_elems, self.Z_numchar = self.get_Z_info()
+        self.patts_len = set(self.Z_lendict.values())
+        self.max_patt_len = max(self.patts_len)
+
+        self.modelfeatures_inverted, self.ypatt_features = self.get_inverted_modelfeatures()
+        self.ypatt_activestates = self.find_activated_states(self.ypatt_features, self.patts_len)
+        
+        self.P_codebook = self.get_forward_states()
+        self.P_codebook_rev = self.get_P_codebook_rev()
+        self.P_len = len(self.P_codebook)
+        self.pi_lendict, self.pi_elems, self.pi_numchar = self.get_pi_info()
+        
+        
+        self.S_codebook = self.get_backward_states()
+        self.si_lendict, self.si_elems, self.si_numchar = self.get_si_info()
+        
+        self.f_transition = self.get_forward_transition()
+        self.pky_z = self.map_pky_z()
+
+        self.siy_codebook, self.siy_numchar, self.siy_components = self.get_siy_info()
+        self.b_transition = self.get_backward_transitions()
+        self.siy_z = self.map_siy_z()
+        
+        self.pi_pky_codebook = self.get_pi_pky_codebook()
+        self.si_siy_codebook = self.get_si_siy_codebook()        
+        self.num_features = self.get_num_features()
+        self.num_states = self.get_num_states()   
     
-    @property
-    def modelfeatures_codebook(self):
-        return(self._modelfeatures_codebook)
-    @modelfeatures_codebook.setter
-    def modelfeatures_codebook(self, modelfeatures):
+    
+    def get_modelfeatures_codebook(self):
+        """flatten model features into a codebook (i.e. each feature is assigned a unique code/number)"""
+        modelfeatures = self.modelfeatures
         codebook = {}
         code = 0
         for y_patt, featuresum in modelfeatures.items():
@@ -77,81 +90,161 @@ class HOSemiCRFModelRepresentation(object):
                 fkey = y_patt + "&&" + feature
                 codebook[fkey] = code
                 code += 1
-        self._modelfeatures_codebook = codebook
+        return(codebook)
 
-    @property
-    def Y_codebook(self):
-        return(self._Y_codebook)
-    @Y_codebook.setter     
-    def Y_codebook(self, states):
-        self._Y_codebook = {s:i for (i, s) in enumerate(states)}
+
+    def get_modelstates_codebook(self, states):
+        """generate Y codebook (i.e. assign each state a unique code)"""
+        return({s:i for (i, s) in enumerate(states)})
         
-    def get_pattern_set(self):
+    def get_Z_pattern(self):
+        """ get y patterns (called z patterns) detected in the training dataset"""
         modelfeatures = self.modelfeatures
         Z_codebook = {y_patt:index for index, y_patt in enumerate(modelfeatures)}
         return(Z_codebook)
     
-    def get_pattern_order(self):
+    def get_Z_info(self):
+        """ generates information about z patterns """
         Z_codebook = self.Z_codebook
-        patt_order = {}
-        for y_patt in Z_codebook:
-            elems = y_patt.split("|")
-            l = len(elems)
-            if(l in patt_order):
-                patt_order[l].append(y_patt)
-            else:
-                patt_order[l] = [y_patt]
-        return(patt_order)  
+        Z_lendict = {}
+        Z_elems = {}
+        Z_numchar = {}
+        for z in Z_codebook:
+            elems = z.split("|")
+            Z_elems[z] = elems
+            Z_lendict[z] = len(elems)
+            Z_numchar[z] = len(z)            
+        return(Z_lendict, Z_elems, Z_numchar)
+    
+
+    def get_inverted_modelfeatures(self):
+        modelfeatures = self.modelfeatures
+        Z_lendict = self.Z_lendict
+        inverted_segfeatures = {}
+        ypatt_features = set()
+        
+        for y_patt, featuresum in modelfeatures.items():
+            z_len = Z_lendict[y_patt]
+            # get features that are based only on y_patts
+            if(y_patt in featuresum):
+                ypatt_features.add(y_patt)
+            for feature in featuresum:
+                if(feature in inverted_segfeatures):
+                    if(z_len in inverted_segfeatures[feature]):
+                        inverted_segfeatures[feature][z_len].add(y_patt)
+                    else:
+                        s = set()
+                        s.add(y_patt)                      
+                        inverted_segfeatures[feature][z_len] = s
+                else:
+                    s = set()
+                    s.add(y_patt)
+                    inverted_segfeatures[feature] = {z_len:s}
+        return(inverted_segfeatures, ypatt_features)
     
     def get_forward_states(self):
         Y_codebook = self.Y_codebook
-        Z_codebook = self.Z_codebook
+        Z_elems = self.Z_elems
+        Z_lendict = self.Z_lendict
         P = {}
-        for z_patt in Z_codebook:
-            elems = z_patt.split("|")
-            for i in range(len(elems)-1):
+        for z_patt in Z_elems:
+            elems = Z_elems[z_patt]
+            z_len = Z_lendict[z_patt]
+            for i in range(z_len-1):
                 P["|".join(elems[:i+1])] = 1
         for y in Y_codebook:
             P[y] = 1
         # empty element         
         P[""] = 1
         P_codebook = {s:i for (i, s) in enumerate(P)}
+        #print("P_codebook ", P_codebook)
         return(P_codebook) 
     
+    def get_P_codebook_rev(self):
+        P_codebook = self.P_codebook
+        P_codebook_rev = {code:pi for pi, code in P_codebook.items()}
+        return(P_codebook_rev)
+    
+    def get_pi_info(self): 
+        P_codebook = self.P_codebook
+        pi_lendict = {}
+        pi_numchar = {}
+        pi_elems = {}
+        
+        for pi in P_codebook:
+            elems = pi.split("|")
+            pi_elems[pi] = elems 
+            if(pi == ""):
+                pi_lendict[pi] = 0
+                pi_numchar[pi] = 0
+                
+            else:
+                pi_lendict[pi] = len(elems)
+                pi_numchar[pi] = len(pi)
+        return(pi_lendict, pi_elems, pi_numchar)
+    
     def get_backward_states(self):
+        """ combining P_codebook with Y_codebook """
         Y_codebook = self.Y_codebook
         P_codebook = self.P_codebook
         S = {}
+        
         for p in P_codebook:
             if(p == ""):
                 for y in Y_codebook:
                     S[y] = 1
             else:
                 for y in Y_codebook:
-                    S[p + "|" + y] = 1
+                    py = p + "|" + y
+                    S[py] = 1
         S_codebook = {s:i for (i, s) in enumerate(S)}
         return(S_codebook)
-                
+                    
+    def get_si_info(self): 
+        S_codebook = self.S_codebook
+        si_lendict = {}
+        si_numchar = {}
+        si_elems = {}
+        
+        for si in S_codebook:
+            elems = si.split("|")
+            si_elems[si] = elems 
+            si_lendict[si] = len(elems)
+            si_numchar[si] = len(si)
+        return(si_lendict, si_elems, si_numchar)
+    
     def get_forward_transition(self):
         Y_codebook = self.Y_codebook
         P_codebook = self.P_codebook
+        pi_numchar = self.pi_numchar
+        Z_numchar = self.Z_numchar
+        
         pk_y= {}
         for p in P_codebook:
             for y in Y_codebook:
                 pk_y[(p, y)] = 1
+
         pk_y_suffix = {}
         for p in P_codebook:
             if(p != ""):
+                len_p = pi_numchar[p]
                 for (pk, y) in pk_y:
                     ref_str = pk + "|" + y
-                    check = self.check_suffix(p, ref_str)
-                    if(check):
-                        if((pk, y) in pk_y_suffix):
-                            pk_y_suffix[(pk, y)].append(p)
-                        else:
-                            pk_y_suffix[(pk, y)] = [p]
+                    # in case pk is the empty sequence the number of character will be zero
+                    len_ref = pi_numchar[pk] + Z_numchar[y] + 1
+                    start_pos = len_ref - len_p
+                    if(start_pos>=0):
+                        # check suffix relation
+                        check = ref_str[start_pos:] == p
+                        #check = self.check_suffix(p, ref_str)
+                        if(check):
+                            if((pk, y) in pk_y_suffix):
+                                pk_y_suffix[pk, y].append(p)
+                            else:
+                                pk_y_suffix[pk, y] = [p]
                             
-        pk_y_suffix = self.keep_largest_suffix(pk_y_suffix)
+        pk_y_suffix = self.keep_longest_elems(pk_y_suffix)
+
         f_transition = {}
         for (pk, y), pi in pk_y_suffix.items():
             if(pk == ""):
@@ -159,25 +252,82 @@ class HOSemiCRFModelRepresentation(object):
             else:
                 elmkey = pk + "|" + y
             if(pi in f_transition):
-                f_transition[pi][elmkey] = pk
+                f_transition[pi][elmkey] = (pk, y)
             else:
-                f_transition[pi] = {elmkey:pk}
-        return(f_transition)
+                f_transition[pi] = {elmkey:(pk, y)}
+        #print("f_transition ", f_transition)
+        return(f_transition)                
                     
-    def get_backward_transitions(self):
-        Y_codebook = self.Y_codebook
+    def map_pky_z(self):
+        f_transition = self.f_transition
+        Z_codebook = self.Z_codebook
+        # given that we demand to have a unigram label features then Z set will always contain Y elems
+        Z_numchar = self.Z_numchar
+        pky_codebook = self.S_codebook
+        si_numchar = self.si_numchar
+        
+        z_pky = {}
+        for pi in f_transition:
+            for pky in f_transition[pi]:
+                # get number of characters in the pky 
+                len_pky = si_numchar[pky]
+                for z in Z_codebook:
+                    len_z = Z_numchar[z]
+                    # check suffix relation
+                    start_pos = len_pky - len_z
+                    if(start_pos >= 0):
+                        check = pky[start_pos:] == z
+                        if(check):
+                            pky_c = pky_codebook[pky]
+                            if(z in z_pky):
+                                z_pky[z].append(pky_c)
+                            else:
+                                z_pky[z] = [pky_c]
+        return(z_pky) 
+    
+    
+    def get_siy_info(self):
         S_codebook = self.S_codebook
-        si_y_suffix = {}
+        Y_codebook = self.Y_codebook
+        Z_numchar = self.Z_numchar
+        si_numchar = self.si_numchar
+        
+        siy_components = {}
+        siy_codebook = {}
+        siy_numchar = {}
+        counter = 0
         for si in S_codebook:
-            si_y = {(si, y):1 for y in Y_codebook}
-            for sk in S_codebook:
-                for (si, y) in si_y:
-                    check = self.check_suffix(sk, si + "|" + y)
+            for y in Y_codebook:
+                siy = si + "|" + y
+                siy_codebook[siy] = counter
+                siy_numchar[siy] = si_numchar[si] + Z_numchar[y] + 1
+                siy_components[siy] = (si, y)
+                counter += 1        
+        return(siy_codebook, siy_numchar, siy_components)
+    
+    def get_backward_transitions(self):
+        S_codebook = self.S_codebook
+        si_numchar = self.si_numchar
+        si_y_suffix = {}
+        siy_components = self.siy_components
+        siy_numchar = self.siy_numchar
+        
+        for sk in S_codebook:
+            len_sk = si_numchar[sk] 
+            for siy in siy_components:
+                len_ref = siy_numchar[siy]
+                start_pos = len_ref - len_sk
+                if(start_pos >= 0): 
+                    # check suffix relation
+                    check = siy[start_pos:] == sk
+                    #check = self.check_suffix(sk, si + "|" + y)
                     if(check):
-                        if((si, y) in si_y_suffix):
-                            si_y_suffix[(si, y)].append(sk)
+                        si_y_tup = siy_components[siy]
+                        if(si_y_tup in si_y_suffix):
+                            si_y_suffix[si_y_tup].append(sk)
                         else:
-                            si_y_suffix[(si, y)] = [sk]
+                            si_y_suffix[si_y_tup] = [sk]
+        
         #print("si_y_suffix {}".format(si_y_suffix))
         si_y_suffix = self.keep_largest_suffix(si_y_suffix)
         #print("si_y_suffix {}".format(si_y_suffix))
@@ -190,53 +340,64 @@ class HOSemiCRFModelRepresentation(object):
             else:
                 b_transition[si] = {elmkey:sk}
         return(b_transition)    
-        
-    def map_pky_z(self):
-        f_transition = self.f_transition
-        Z_codebook = self.Z_codebook
-        pky_z_map = {}
-        for pi in f_transition:
-            for pky in f_transition[pi]:
-                l = []
-                for z in Z_codebook:
-                    if(self.check_suffix(z, pky)):
-                        l.append(z)
-                pky_z_map[pky] = l
-        return(pky_z_map)
-    
+
+                
     def map_siy_z(self):
         b_transition = self.b_transition
         Z_codebook = self.Z_codebook
-        siy_z_map = {}
+        # given that we demand to have a unigram label features then Z set will always contain Y elems
+        Z_numchar = self.Z_numchar
+        siy_codebook = self.siy_codebook
+        siy_numchar = self.siy_numchar
+        
+        z_siy = {}
         for si in b_transition:
             for siy in b_transition[si]:
-                l = []
+                # get number of characters in the siy 
+                # +1 is for the separator '|'
+                len_siy = siy_numchar[siy] 
                 for z in Z_codebook:
-                    if(self.check_suffix(z, siy)):
-                        l.append(z)
-                siy_z_map[siy] = l
-        return(siy_z_map)   
-  
-    def map_z_piy(self):
-        Y_codebook = self.Y_codebook
-        Z_codebook = self.Z_codebook
-        P_codebook = self.P_codebook
-        z_piy = {}
-        for z in Z_codebook:
-            for p in P_codebook:
-                for y in Y_codebook:
-                    if(p == ""):
-                        ref_str = y
-                    else:
-                        ref_str = p + "|" + y
-                    if(self.check_suffix(z, ref_str)):
-                        if(z in z_piy):
-                            z_piy[z].update({(p, y):ref_str})
-                        else:
-                            z_piy[z] = {(p, y):ref_str}
+                    len_z = Z_numchar[z]
+                    # check suffix relation
+                    start_pos = len_siy - len_z
+                    if(start_pos >= 0):
+                        check = siy[start_pos:] == z
+                        if(check):
+                            siy_c = siy_codebook[siy]
+                            if(z in z_siy):
+                                z_siy[z].append(siy_c)
+                            else:
+                                z_siy[z] = [siy_c]
+        return(z_siy)    
 
-        return(z_piy)
-            
+    def get_pi_pky_codebook(self):
+        f_transition = self.f_transition
+        pky_codebook = self.S_codebook
+        P_codebook = self.P_codebook
+        
+        pi_pky_codebook = {}
+        for pi in f_transition:
+            pi_pky_codebook[pi]=([],[])
+            for pky, (pk, _) in f_transition[pi].items():
+                pi_pky_codebook[pi][0].append(pky_codebook[pky])
+                pi_pky_codebook[pi][1].append(P_codebook[pk])
+
+        return(pi_pky_codebook)
+    
+    def get_si_siy_codebook(self):
+        b_transition = self.b_transition
+        siy_codebook = self.siy_codebook
+        S_codebook = self.S_codebook
+        
+        si_siy_codebook = {}
+        for si in b_transition:
+            si_siy_codebook[si] = ([],[])
+            for siy, sk in b_transition[si].items():
+                si_siy_codebook[si][0].append(siy_codebook[siy])
+                si_siy_codebook[si][1].append(S_codebook[sk])
+
+        return(si_siy_codebook)
+    
     def keep_largest_suffix(self, s):
         largest_suffix = {}
         for tup, l in s.items():
@@ -251,13 +412,113 @@ class HOSemiCRFModelRepresentation(object):
     def get_num_states(self):
         return(len(self.Y_codebook))
     
+    def represent_globalfeatures(self, seq_featuresum):
+        modelfeatures_codebook = self.modelfeatures_codebook
+        windx_fval = {}
+        for y_patt, seg_features in seq_featuresum.items():
+            for seg_featurename in seg_features: 
+                fkey = y_patt + "&&" + seg_featurename
+                if(fkey in modelfeatures_codebook):
+                    windx_fval[modelfeatures_codebook[fkey]] = seg_features[seg_featurename]
+        return(windx_fval)
+        
+    def represent_activefeatures(self, activestates, seg_features):  
+        modelfeatures = self.modelfeatures
+        modelfeatures_codebook = self.modelfeatures_codebook   
+        Z_codebook = self.Z_codebook      
+        activefeatures = {}
+#         print("segfeatures {}".format(seg_features))
+#         print("z_patts {}".format(z_patts))
+        for z_len in activestates:
+            z_patt_set = activestates[z_len]
+            for z_patt in z_patt_set:
+#                 print("z_patt ", z_patt)
+                windx_fval = {}
+                for seg_featurename in seg_features:
+                    # this condition might be omitted 
+                    if(seg_featurename in modelfeatures[z_patt]):
+    #                         print("seg_featurename {}".format(seg_featurename))
+    #                         print("z_patt {}".format(z_patt))
+                        fkey = z_patt + "&&" + seg_featurename
+                        #print(fkey)
+                        windx_fval[modelfeatures_codebook[fkey]] = seg_features[seg_featurename]     
+                if(z_patt in modelfeatures[z_patt]):
+                    fkey = z_patt + "&&" + z_patt
+                    windx_fval[modelfeatures_codebook[fkey]] = 1
+                    #print(fkey)
+                    
+                if(windx_fval):
+                    #activefeatures[Z_codebook[z_patt]] = windx_fval
+                    activefeatures[z_patt] = windx_fval
+
+#         print("activefeatures {}".format(activefeatures))         
+        return(activefeatures)
+    
+    def find_activated_states(self, seg_features, allowed_z_len):
+        modelfeatures_inverted = self.modelfeatures_inverted
+        active_states = {}
+        for feature in seg_features:
+            if(feature in modelfeatures_inverted):
+                factivestates = modelfeatures_inverted[feature]
+                for z_len in factivestates:
+                    if(z_len in allowed_z_len):
+                        if(z_len in active_states):
+                            active_states[z_len].update(factivestates[z_len])
+                        else:
+                            active_states[z_len] = set(factivestates[z_len])
+                #print("active_states from func ", active_states)
+        return(active_states)
+
+    def filter_activated_states(self, activated_states, accum_active_states, pos):
+        # TOUPDATE where accum_active_states support boundary keys 
+        Z_elems = self.Z_elems
+        filtered_activestates = {}
+        
+        for z_len in activated_states:
+            if(z_len == 1):
+                continue
+            start_pos = pos - z_len + 1
+            if(start_pos in accum_active_states):
+                filtered_activestates[z_len] = set()
+                for z_patt in activated_states[z_len]:
+                    check = True
+                    zelems = Z_elems[z_patt]
+                    for i in range(z_len):
+                        if(start_pos+i not in accum_active_states):
+                            check = False
+                            break
+                        if(zelems[i] not in accum_active_states[start_pos+i]):
+                            check = False
+                            break
+                    if(check):                        
+                        filtered_activestates[z_len].add(z_patt)
+        return(filtered_activestates)
+
 class HOSemiCRF(object):
-    def __init__(self, model, seqs_representer, seqs_info):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 4):
         self.model = model
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
         self.seqs_info = seqs_info
+        self.func_dict = {"alpha": self._load_alpha,
+                         "beta": self._load_beta,
+                         "activated_states": self.load_activatedstates,
+                         "seg_features": self.load_segfeatures,
+                         "globalfeatures": self.load_globalfeatures,
+                         "globalfeatures_per_boundary": self.load_globalfeatures,
+                         "Y":self._load_Y}
+        
+        self.def_cached_entities = self.cached_entitites(load_info_fromdisk)
+        # default beam size covers all the prefix values (i.e. pi)
+        self.beam_size = len(self.model.P_codebook)
 
+    def cached_entitites(self, load_info_fromdisk):
+        ondisk_info = ["activefeatures", "l_segfeatures", "seg_features", "activated_states", "globalfeatures_per_boundary", "globalfeatures", "Y"]
+        def_cached_entities = ondisk_info[:load_info_fromdisk]
+        inmemory_info = ["alpha", "Z", "f_potential", "beta", "b_potential", "P_marginal"]
+        def_cached_entities += inmemory_info
+        return(def_cached_entities)
+    
     @property
     def seqs_info(self):
         return self._seqs_info
@@ -265,42 +526,79 @@ class HOSemiCRF(object):
     def seqs_info(self, info_dict):
         # make a copy of the passed seqs_info dictionary
         self._seqs_info = deepcopy(info_dict)
+    
+    def identify_activefeatures(self, seq_id, boundary, accum_activestates):
+        model = self.model
+        state_len = 1
+        # get activated states per boundary
+        activated_states = self.seqs_info[seq_id]['activated_states'][boundary]
+        seg_features = self.seqs_info[seq_id]['seg_features'][boundary]
+        #^print("boundary ", boundary)
+        #^print('seg_features ', seg_features)
+        #^print('activated_states ', activated_states)
+        #^print("accum_activestates ", accum_activestates)
+        u, v = boundary
+    
+        if(state_len in activated_states):
+            accum_activestates[v] = set(activated_states[state_len])
+            
+            if(boundary != (1,1)):
+                filtered_states =  model.filter_activated_states(activated_states, accum_activestates, u)
+                filtered_states[state_len] = set(activated_states[state_len])
+            # initial point t0
+            else:
+                filtered_states = activated_states
+            
+            #print("filtered_states ", filtered_states)
+            #print("seg_features ", seg_features)        
+            active_features = model.represent_activefeatures(filtered_states, seg_features)
 
-    def compute_psi_potential(self, w, seq_id, tup_z_map):
+        else:
+            accum_activestates[v] = set()
+            active_features = {}
+        
+        return(active_features)   
+    
+    def generate_activefeatures(self, seq_id):
+        # generate active features for every boundary of the sequence 
+        # to be used when using gradient-based methods for learning
         T = self.seqs_info[seq_id]["T"]
         L = self.model.L
-        activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
-        psi_potential= {}
+        
+        accum_activestates = {}
+        activefeatures_perboundary = {}
         for j in range(1, T+1):
             for d in range(L):
-                if(j+d > T):
-                    break
-                boundary = (j, j+d)
-                psi_potential[boundary] = {}
-                if(activefeatures[boundary]):
-                    for tup in tup_z_map:
-                        potential = 0
-                        for z_patt in tup_z_map[tup]:
-                            if(z_patt in activefeatures[boundary]):
-                                f_val = list(activefeatures[boundary][z_patt].values())
-                                w_indx = list(activefeatures[boundary][z_patt].keys())
-                                potential += numpy.dot(w[w_indx], f_val)
-                        psi_potential[boundary][tup] = potential
-                else:
-                    potential = 0
-                    for tup in tup_z_map:
-                        psi_potential[boundary][tup] = potential
-                        
-        return(psi_potential)
+                u = j - d
+                v = j
+                boundary = (u, v)
+                # identify active features
+                active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
+                activefeatures_perboundary[boundary] = active_features
+        return(activefeatures_perboundary)
     
-    def compute_f_potential(self, w, seq_id):
-        pky_z = self.model.pky_z
-        f_potential = self.compute_psi_potential(w, seq_id, pky_z)
+    def compute_fpotential(self, w, active_features):
+        """ compute the potential of active features at a defined boundary """
+        model = self.model
+        pky_codebook = model.S_codebook
+        z_pky = model.pky_z
+        f_potential = numpy.zeros(len(pky_codebook))
+
+        # to consider caching the w_indx and fval as in cached_pf
+        for z in active_features:
+            w_indx = list(active_features[z].keys())
+            f_val = list(active_features[z].values())
+            potential = numpy.inner(w[w_indx], f_val)
+            # get all pky's in coded format where z maintains a suffix relation with them
+            pky_c_list = z_pky[z]
+            f_potential[pky_c_list] += potential
+
         return(f_potential)
-    
+               
     def compute_forward_vec(self, seq_id):
         f_potential = self.seqs_info[seq_id]["f_potential"]
-        f_transition = self.model.f_transition
+        pi_pky_codebook = self.mode.pi_pky_codebook
+        pi_lendict = self.model.pi_lendict
         P_codebook = self.model.P_codebook
         T = self.seqs_info[seq_id]["T"]
         L = self.model.L
@@ -308,19 +606,19 @@ class HOSemiCRF(object):
         alpha[0,P_codebook[""]] = 0
          
         for j in range(1, T+1):
-            for pi in f_transition:
-                accumulator = -numpy.inf
-                for d in range(L):
-                    u = j - d
-                    v = j
-                    if(u <= 0):
-                        break
-                    boundary = (u, v)
-                    for pky, pk in f_transition[pi].items():
-                        pk_code = P_codebook[pk]
-                        potential = f_potential[boundary][pky]
-                        accumulator = numpy.logaddexp(accumulator, potential + alpha[u-1, pk_code])
-                alpha[j, P_codebook[pi]] = accumulator 
+            for pi in pi_pky_codebook:
+                if(j >= pi_lendict[pi]):
+                    accumulator = numpy.ones(L, dtype='longdouble') * -numpy.inf
+                    for d in range(L):
+                        u = j - d
+                        v = j
+                        if(u <= 0):
+                            break
+                        time_diff = v - u
+                        vec = f_potential[time_diff, pi_pky_codebook[pi][0]] + alpha[u-1, pi_pky_codebook[pi][1]]
+                        accumulator[d] = vectorized_logsumexp(vec)
+                    
+                    alpha[j, P_codebook[pi]] = vectorized_logsumexp(accumulator) 
                  
         return(alpha)
 

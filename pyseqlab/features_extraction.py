@@ -347,7 +347,7 @@ class HOFeatureExtractor(object):
                     
                 allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
                 
-                # used while learning model parameters
+                # used in the case of model training
                 if(learning):
                     l_segfeatures[boundary] = self.extract_features_X(seq, boundary)
                     seg_features[boundary] = self.flatten_segfeatures(l_segfeatures[boundary])
