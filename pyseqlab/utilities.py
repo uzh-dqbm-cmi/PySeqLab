@@ -621,8 +621,74 @@ class TemplateGenerator(object):
                 s.add(option_j)
             config_combinations[option_i] = s
         return(config_combinations)
+    
+class BoundNode(object):
+    def __init__(self, parent, boundary):
+        self.parent = parent
+        self.boundary = boundary
+        self.children = []
+        
+    def add_child(self, child):
+        self.children.append(child)
+    
+    def get_child(self):
+        return(self.children.pop())
+    
+    def get_signature(self):
+        return(id(self))
+    
+def generate_partitions(boundary, L, patt_len, bound_node_map, depth_node_map, parent_node, depth=1):
+    """ generate all possible partitions within the range of segment length and model order"""
+    if(depth >= patt_len):
+        return
+    if(parent_node):
+        if(boundary in bound_node_map):
+            curr_node = bound_node_map[boundary]
+        else:
+            curr_node = BoundNode(parent_node, boundary)
+            bound_node_map[boundary] = curr_node
+    else:
+        # setup root node
+        curr_node = BoundNode(None, boundary)
+        bound_node_map[boundary] = curr_node
 
-
+    u= boundary[0]-1
+    v= u
+    depth += 1
+    if(depth == patt_len):
+        if(not depth_node_map):
+            depth_node_map[depth] = []
+    for d in range(L):
+        if(u-d < 1):
+            break
+        upd_boundary = (u-d, v)
+        if(upd_boundary in bound_node_map):
+            child = bound_node_map[upd_boundary]
+        else:
+            child = BoundNode(curr_node, upd_boundary)
+            bound_node_map[upd_boundary] = child
+            if(depth in depth_node_map):
+                depth_node_map[depth].append(child)
+        curr_node.add_child(child)
+        generate_partitions(upd_boundary, L, patt_len, bound_node_map, depth_node_map, child, depth)
+        
+def generate_boundaries(bound_node_map, depth_node_map):
+    g = []
+    max_depth = list(depth_node_map.keys())[-1]
+    nodes = depth_node_map[max_depth]
+    for curr_node in nodes:
+        print(curr_node)
+        l = []
+        l.append(curr_node.boundary)
+        while(True):
+            curr_node = curr_node.parent
+            if(curr_node):
+                l.append(curr_node.boundary)
+            else:
+                g.append(l)
+                break
+    return(g)
+        
 def delete_directory(directory):
     if(os.path.isdir(directory)):
         shutil.rmtree(directory)
