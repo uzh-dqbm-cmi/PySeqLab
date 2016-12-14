@@ -826,10 +826,8 @@ class HOCRF(object):
         corpus_name = "decoding_seqs"
         w = self.weights
         # supporting only viterbi for now
-        if(decoding_method == "viterbi"):
-            decoder = self.viterbi
-        else:
-            decoder = self.viterbi
+        decoder = self.viterbi
+
             
         file_name = kwargs.get('file_name')
         if(file_name):

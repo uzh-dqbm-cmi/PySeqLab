@@ -5,8 +5,9 @@
 
 import os
 from copy import deepcopy
+from collections import OrderedDict
 import numpy
-from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
+from .utilities import ReaderWriter, create_directory, vectorized_logsumexp, generate_partitions
 
 class HOSemiCRFModelRepresentation(object):
     def __init__(self):
@@ -68,7 +69,7 @@ class HOSemiCRFModelRepresentation(object):
         self.si_lendict, self.si_elems, self.si_numchar = self.get_si_info()
         
         self.f_transition = self.get_forward_transition()
-        self.pky_z = self.map_pky_z()
+        self.pky_z, self.z_pi_piy = self.map_pky_z()
 
         self.siy_codebook, self.siy_numchar, self.siy_components = self.get_siy_info()
         self.b_transition = self.get_backward_transitions()
@@ -265,10 +266,14 @@ class HOSemiCRFModelRepresentation(object):
         Z_numchar = self.Z_numchar
         pky_codebook = self.S_codebook
         si_numchar = self.si_numchar
+        P_codebook = self.P_codebook
         
+        z_pi_piy = {}
         z_pky = {}
+        
         for pi in f_transition:
             for pky in f_transition[pi]:
+                pk = f_transition[pi][pky][0]
                 # get number of characters in the pky 
                 len_pky = si_numchar[pky]
                 for z in Z_codebook:
@@ -279,11 +284,15 @@ class HOSemiCRFModelRepresentation(object):
                         check = pky[start_pos:] == z
                         if(check):
                             pky_c = pky_codebook[pky]
+                            pk_c = P_codebook[pk]
                             if(z in z_pky):
                                 z_pky[z].append(pky_c)
+                                z_pi_piy[0].append(pk_c)
+                                z_pi_piy[1].append(pky_c)
                             else:
                                 z_pky[z] = [pky_c]
-        return(z_pky) 
+                                z_pi_piy[z] = ([pk_c], [pky_c])
+        return(z_pky, z_pi_piy) 
     
     
     def get_siy_info(self):
@@ -469,29 +478,34 @@ class HOSemiCRFModelRepresentation(object):
                 #print("active_states from func ", active_states)
         return(active_states)
 
-    def filter_activated_states(self, activated_states, accum_active_states, pos):
-        # TOUPDATE where accum_active_states support boundary keys 
+    def filter_activated_states(self, activated_states, accum_active_states, curr_boundary):
         Z_elems = self.Z_elems
         filtered_activestates = {}
-        
+        # generate partition boundaries
+        partitions = generate_partitions(curr_boundary, self.L, self.patts_len, {}, {}, None)
         for z_len in activated_states:
             if(z_len == 1):
                 continue
-            start_pos = pos - z_len + 1
-            if(start_pos in accum_active_states):
-                filtered_activestates[z_len] = set()
-                for z_patt in activated_states[z_len]:
-                    check = True
-                    zelems = Z_elems[z_patt]
-                    for i in range(z_len):
-                        if(start_pos+i not in accum_active_states):
-                            check = False
+            for partition in partitions:
+                start_pos = len(partition) - z_len
+                if(start_pos >= 0):
+                    bound_check = True
+                    for bound in partition:
+                        if(bound not in accum_active_states):
+                            bound_check = False
                             break
-                        if(zelems[i] not in accum_active_states[start_pos+i]):
-                            check = False
-                            break
-                    if(check):                        
-                        filtered_activestates[z_len].add(z_patt)
+                    if(bound_check):
+                        filtered_activestates[z_len] = set()
+                        for z_patt in activated_states[z_len]:
+                            check = True
+                            zelems = Z_elems[z_patt]
+                            for i in range(z_len):
+                                bound = partition[i]
+                                if(zelems[i] not in accum_active_states[bound]):
+                                    check = False
+                                    break
+                            if(check):                        
+                                filtered_activestates[z_len].add(z_patt)
         return(filtered_activestates)
 
 class HOSemiCRF(object):
@@ -515,7 +529,7 @@ class HOSemiCRF(object):
     def cached_entitites(self, load_info_fromdisk):
         ondisk_info = ["activefeatures", "l_segfeatures", "seg_features", "activated_states", "globalfeatures_per_boundary", "globalfeatures", "Y"]
         def_cached_entities = ondisk_info[:load_info_fromdisk]
-        inmemory_info = ["alpha", "Z", "f_potential", "beta", "b_potential", "P_marginal"]
+        inmemory_info = ["alpha", "Z", "psi_potential", "beta", "P_marginal"]
         def_cached_entities += inmemory_info
         return(def_cached_entities)
     
@@ -537,13 +551,12 @@ class HOSemiCRF(object):
         #^print('seg_features ', seg_features)
         #^print('activated_states ', activated_states)
         #^print("accum_activestates ", accum_activestates)
-        u, v = boundary
     
         if(state_len in activated_states):
-            accum_activestates[v] = set(activated_states[state_len])
+            accum_activestates[boundary] = set(activated_states[state_len])
             
             if(boundary != (1,1)):
-                filtered_states =  model.filter_activated_states(activated_states, accum_activestates, u)
+                filtered_states =  model.filter_activated_states(activated_states, accum_activestates, boundary)
                 filtered_states[state_len] = set(activated_states[state_len])
             # initial point t0
             else:
@@ -554,7 +567,7 @@ class HOSemiCRF(object):
             active_features = model.represent_activefeatures(filtered_states, seg_features)
 
         else:
-            accum_activestates[v] = set()
+            accum_activestates[boundary] = set()
             active_features = {}
         
         return(active_features)   
@@ -594,16 +607,19 @@ class HOSemiCRF(object):
             f_potential[pky_c_list] += potential
 
         return(f_potential)
-               
-    def compute_forward_vec(self, seq_id):
-        f_potential = self.seqs_info[seq_id]["f_potential"]
-        pi_pky_codebook = self.mode.pi_pky_codebook
+    
+
+
+    def compute_forward_vec(self, w, seq_id):
+        activefeatures = self.seqs_info[seq_id]['activefeatures']
+        pi_pky_codebook = self.model.pi_pky_codebook
         pi_lendict = self.model.pi_lendict
         P_codebook = self.model.P_codebook
         T = self.seqs_info[seq_id]["T"]
         L = self.model.L
         alpha = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         alpha[0,P_codebook[""]] = 0
+        psi_potential = {}
          
         for j in range(1, T+1):
             for pi in pi_pky_codebook:
@@ -614,57 +630,67 @@ class HOSemiCRF(object):
                         v = j
                         if(u <= 0):
                             break
-                        time_diff = v - u
-                        vec = f_potential[time_diff, pi_pky_codebook[pi][0]] + alpha[u-1, pi_pky_codebook[pi][1]]
+                        f_potential = self.compute_fpotential(w, activefeatures[u,v])
+                        psi_potential[u,v] = f_potential
+                        vec = f_potential[pi_pky_codebook[pi][0]] + alpha[u-1, pi_pky_codebook[pi][1]]
                         accumulator[d] = vectorized_logsumexp(vec)
                     
                     alpha[j, P_codebook[pi]] = vectorized_logsumexp(accumulator) 
-                 
+        
+        self.seqs_info[seq_id]['psi_potential'] = psi_potential
         return(alpha)
 
-    def compute_b_potential(self, w, seq_id):
-        siy_z  = self.model.siy_z
-        b_potential = self.compute_psi_potential(w, seq_id, siy_z)
+    
+    def compute_bpotential(self, w, active_features):
+        model = self.model
+        siy_codebook = model.siy_codebook
+        z_siy = model.siy_z
+        b_potential = numpy.zeros(len(siy_codebook))
+        # to consider caching the w_indx and fval as in cached_pf
+        for z in active_features:
+            w_indx = list(active_features[z].keys())
+            f_val = list(active_features[z].values())
+            potential = numpy.inner(w[w_indx], f_val)
+            # get all ysk's in coded format where z maintains a prefix relation with them
+            siy_c_list = z_siy[z]
+            b_potential[siy_c_list] += potential
+
         return(b_potential)
     
-    def compute_backward_vec(self, seq_id):
-        b_potential = self.seqs_info[seq_id]["b_potential"]
-        b_transition = self.model.b_transition
+    def compute_backward_vec(self, w, seq_id):
+        activefeatures = self.seqs_info[seq_id]['activefeatures']
+        si_siy_codebook = self.model.si_siy_codebook
         S_codebook = self.model.S_codebook
         T = self.seqs_info[seq_id]["T"]
         L = self.model.L
         beta = numpy.ones((T+2,len(S_codebook)), dtype='longdouble') * (-numpy.inf)
         beta[T+1,] = 0
         for j in reversed(range(1, T+1)):
-            for si in b_transition:
-                accumulator = -numpy.inf
+            for si in si_siy_codebook:
+                accumulator = numpy.ones(L, dtype='longdouble') * -numpy.inf
                 for d in range(L):
                     u = j 
                     v = j + d
                     if(v > T):
                         break
-                    boundary = (u, v)
-                    for siy, sk in b_transition[si].items():
-                        sk_code = S_codebook[sk]
-                        potential = b_potential[boundary][siy]
-                        accumulator = numpy.logaddexp(accumulator, potential + beta[j+d+1, sk_code])
-                beta[j, S_codebook[si]] = accumulator 
+                    b_potential = self.compute_bpotential(w, activefeatures[u,v])
+                    vec = b_potential[si_siy_codebook[si][0]] + beta[v+1, si_siy_codebook[si][1]]
+                    accumulator[d] = vectorized_logsumexp(vec)
+
+                beta[j, S_codebook[si]] = vectorized_logsumexp(accumulator)
                     
         return(beta)
 
     def compute_marginals(self, seq_id):
-        f_potential = self.seqs_info[seq_id]["f_potential"]
-        P_codebook = self.model.P_codebook
-        S_codebook = self.model.S_codebook
+        psi_potential = self.seqs_info[seq_id]["psi_potential"]
         Z_codebook = self.model.Z_codebook
+        z_pi_piy = self.model.pi_piy
         T = self.seqs_info[seq_id]["T"]
         L = self.model.L
 
         alpha = self.seqs_info[seq_id]["alpha"]
         beta = self.seqs_info[seq_id]["beta"] 
         Z = self.seqs_info[seq_id]["Z"]   
-        z_piy = self.model.z_piy
-
         P_marginals = numpy.zeros((L, T+1, len(self.model.Z_codebook)), dtype='longdouble')
          
         for j in range(1, T+1):
@@ -674,19 +700,16 @@ class HOSemiCRF(object):
                 if(v > T):
                     break
                 boundary = (u, v)
-                for z_patt in z_piy:
-                    accumulator = -numpy.inf
-                    for (pi, y) in z_piy[z_patt]:
-                        piy = z_piy[z_patt][(pi,y)]
-                        numerator = alpha[u-1, P_codebook[pi]] + f_potential[boundary][piy] + beta[v+1, S_codebook[piy]]
-                        accumulator = numpy.logaddexp(accumulator, numerator)
-                    P_marginals[d, j, Z_codebook[z_patt]] = numpy.exp(accumulator - Z)
-        print("P_marginals {}".format(P_marginals))
+                f_potential = psi_potential[boundary]
+                for z in Z_codebook:
+                    pi_c, piy_c = z_pi_piy[z]
+                    numerator = alpha[u-1, pi_c] + f_potential[piy_c] + beta[v+1, piy_c]
+                    P_marginals[d, j, Z_codebook[z]] = numpy.exp(vectorized_logsumexp(numerator) - Z)
         return(P_marginals)
     
     def compute_feature_expectation(self, seq_id):
         """ assumes that activefeatures_matrix has been already generated and saved in self.seqs_info dictionary """
-        activefeatures = self.seqs_info[seq_id]["activefeatures_by_position"]
+        activefeatures = self.seqs_info[seq_id]["activefeatures"]
         P_marginals = self.seqs_info[seq_id]["P_marginal"]
         Z_codebook = self.model.Z_codebook
         f_expectation = {}
@@ -708,20 +731,26 @@ class HOSemiCRF(object):
         """
 #         print("-"*40)
 #         print("... Evaluating compute_seq_loglikelihood() ...")
+    
+        # we need global features and alpha matrix to be ready -- order is important
+        l = OrderedDict()
+        l['globalfeatures'] = (seq_id, False)
+        l['activated_states'] = (seq_id, )
+        l['seg_features'] = (seq_id, )
+        l['alpha'] = (w, seq_id)
         
-        # we need alpha and global features to be ready
-        l = ("globalfeatures", "activefeatures_by_position", "f_potential", "alpha")
-        self.check_cached_info(w, seq_id, l)
-        
+        self.check_cached_info(seq_id, l)
         # get the p(X;w) -- probability of the sequence under parameter w
         Z = self.seqs_info[seq_id]["Z"]
-        globalfeatures = self.seqs_info[seq_id]["globalfeatures"]
+        gfeatures = self.seqs_info[seq_id]["globalfeatures"]
+        globalfeatures = self.represent_globalfeature(gfeatures, None)
         w_indx = list(globalfeatures.keys())
         f_val = list(globalfeatures.values())
 
         # log(p(Y|X;w))
         loglikelihood = numpy.dot(w[w_indx], f_val) - Z 
         self.seqs_info[seq_id]["loglikelihood"] = loglikelihood
+
         return(loglikelihood)
     
     def compute_seq_gradient(self, w, seq_id):
@@ -737,24 +766,26 @@ class HOSemiCRF(object):
 #         print("-"*40)
 #         print("... Evaluating compute_seq_gradient() ...")
 
-
-        # we need alpha, beta, global features and active features per position to be ready
-        l = ("globalfeatures", "activefeatures_by_position", "f_potential", "alpha", "b_potential", "beta")
-        self.check_cached_info(w, seq_id, l)
+        # we need alpha, beta, global features and active features  to be ready
+        l = OrderedDict()
+        l['globalfeatures'] = (seq_id, False)
+        l['activefeatures'] = (seq_id, )
+        l['alpha'] = (w, seq_id)
+        l['beta'] = (w, seq_id)
+        self.check_cached_info(seq_id, l)
+        
         P_marginals = self.compute_marginals(seq_id)
         self.seqs_info[seq_id]["P_marginal"] = P_marginals
+        
         f_expectation = self.compute_feature_expectation(seq_id)
-        globalfeatures = self.seqs_info[seq_id]["globalfeatures"]
+        gfeatures = self.seqs_info[seq_id]["globalfeatures"]
+        globalfeatures = self.represent_globalfeature(gfeatures, None)
 #         print("seq id {}".format(seq_id))
 #         print("len(f_expectation) {}".format(len(f_expectation)))
 #         print("len(globalfeatures) {}".format(len(globalfeatures)))
         
-        if(len(f_expectation) < len(globalfeatures)):
-            missing_features = globalfeatures.keys() - f_expectation.keys()
-            addendum = {w_indx:0 for w_indx in missing_features}
-            f_expectation.update(addendum)  
-            print("missing features len(f_expectation) < len(globalfeatures)")
-        elif(len(f_expectation) > len(globalfeatures)):
+
+        if(len(f_expectation) > len(globalfeatures)):
             missing_features = f_expectation.keys() - globalfeatures.keys()
             addendum = {w_indx:0 for w_indx in missing_features}
             globalfeatures.update(addendum)
@@ -784,85 +815,99 @@ class HOSemiCRF(object):
             seqs_grad[w_indx] += f_val
         return(seqs_grad)
     
-    def check_cached_info(self, w, seq_id, entity_names):
-        """ order of args is very important
-            to compute 1 - alpha matrix we need to compute f_potential before
-                       2 - beta matrix we need to compute the b_potential before
-            
-        """
+    def check_cached_info(self, seq_id, entity_names):
+        """order of elements in the entity_names list is important """
         seq_info = self.seqs_info[seq_id]
+        func_dict = self.func_dict
         none_type = type(None) 
-        for varname in entity_names:
+        for varname, args in entity_names.items():
             if(type(seq_info.get(varname)) == none_type):
-                if(varname == "alpha"):
-                    # assumes the f_potential has been loaded into seq_info
-                    seq_info[varname] = self.compute_forward_vec(seq_id)
-                    seq_info["Z"] = vectorized_logsumexp(seq_info[varname][-1,:])
-#                     print("... Computing alpha probability ...")
-                             
-                elif(varname == "beta"):
-                    # assumes the b_potential has been loaded into seq_info
-                    seq_info[varname] = self.compute_backward_vec(seq_id)
-#                     print("... Computing beta probability ...")
-                         
-                elif(varname == "f_potential"):
-                    # assumes the activefeatures_by_position matrix has been loaded into seq_info
-                    # compute forward potential matrix
-                    seq_info["f_potential"] = self.compute_f_potential(w, seq_id)
-#                     print("... Computing f_potential matrix ...")
-
-                elif(varname == "b_potential"):
-                    # assumes the activefeatures_by_position matrix has been loaded into seq_info
-                    # compute backward potential matrix
-                    seq_info["b_potential"] = self.compute_b_potential(w, seq_id)
-#                     print("... Computing b_potential matrix ...")
-        
-                elif(varname == "activefeatures_by_position"):
-                    # load the sequence model active features by position and save in seq_info
-                    self.load_activefeatures(seq_id)
-#                     print("... Loading active features ...")
-                         
-                elif(varname == "globalfeatures"):
-                    # load the sequence global features and save it in seq_info
-                    self.load_globalfeatures(seq_id)
-#                     print("... Loading global features ...")
-# 
-#                 elif(varname == "seq"):
-#                     seq = self._load_seq(seq_id, target="seq")
-#                     seq_info["seq"] = seq
-                        
-                elif(varname == "flat_y"):
-                    seq = self._load_seq(seq_id, target="seq")
-                    seq_info['flat_y'] = seq.flat_y
-
+                func_dict[varname](*args)
 
     def clear_cached_info(self, seqs_id, cached_entities = []):
-        default_entitites = ["f_potential", "alpha", "Z", "b_potential", "beta", "P_marginal"]
-        args = cached_entities + default_entitites
+        args = self.def_cached_entities + cached_entities
         for seq_id in seqs_id:
             seq_info = self.seqs_info[seq_id]
             for varname in args:
                 if(varname in seq_info):
                     seq_info[varname] = None
             
+
+    def _load_alpha(self, w, seq_id):
+        # assumes the f_potential has been loaded into seq_info
+        seq_info = self.seqs_info[seq_id]
+        seq_info["alpha"] = self.compute_forward_vec(w, seq_id)
+        seq_info["Z"] = vectorized_logsumexp(seq_info["alpha"][-1,:])
+        #print("... Computing alpha probability ...")
+    
+    def _load_beta(self, w, seq_id):
+        # assumes the b_potential has been loaded into seq_info
+        seq_info = self.seqs_info[seq_id]
+        seq_info["beta"] = self.compute_backward_vec(w, seq_id)
+        #print("... Computing beta probability ...")
+
+    def _load_Y(self, seq_id):
+        seq = self._load_seq(seq_id, target="seq")
+        self.seqs_info[seq_id]['Y'] = {'flat_y':seq.flat_y, 'boundaries':seq.y_sboundaries}
+        #print("loading Y")
+
+    def load_activatedstates(self, seq_id):
+        # get the sequence activated states
+        seqs_info = self.seqs_info
+        seqs_representer = self.seqs_representer
+        activated_states = seqs_representer.get_seq_activatedstates(seq_id, seqs_info)
+        seqs_info[seq_id]["activated_states"] = activated_states
+        #print("loading activated states")
+    
+    def load_segfeatures(self, seq_id):
+        # get the sequence segment features
+        seqs_info = self.seqs_info
+        seqs_representer = self.seqs_representer
+        seg_features = seqs_representer.get_seq_segfeatures(seq_id, seqs_info)
+        self.seqs_info[seq_id]["seg_features"] = seg_features
+        #print("loading segment features")
+        
     def load_activefeatures(self, seq_id):
         # get the sequence model active features
         seqs_representer = self.seqs_representer
-        seqs_activefeatures = seqs_representer.get_seqs_modelactivefeatures([seq_id], self.seqs_info)
-        self.seqs_info[seq_id]["activefeatures_by_position"] = seqs_activefeatures[seq_id]
-        
-    def load_globalfeatures(self, seq_id):
+        activefeatures = seqs_representer.get_seq_activefeatures(seq_id, self.seqs_info)
+        if(not activefeatures):
+            # check if activated_states and seg_features are loaded
+            l = {}
+            l['activated_states'] = (seq_id, )
+            l['seg_features'] = (seq_id, )
+            self.check_cached_info(seq_id, l)
+            activefeatures = self.generate_activefeatures(seq_id)
+            seq_dir = self.seqs_info[seq_id]['activefeatures_dir']
+            ReaderWriter.dump_data(activefeatures, os.path.join(seq_dir, 'activefeatures'))
+        self.seqs_info[seq_id]["activefeatures"] = activefeatures 
+           
+    def load_globalfeatures(self, seq_id, per_boundary=True):
         # get sequence global features
         seqs_representer = self.seqs_representer
-        seqs_globalfeatures = seqs_representer.get_seqs_globalfeatures([seq_id], self.seqs_info, self.model)
-        self.seqs_info[seq_id]["globalfeatures"] = seqs_globalfeatures[seq_id]
+        gfeatures_perboundary = seqs_representer.get_seq_globalfeatures(seq_id, self.seqs_info, per_boundary=per_boundary)
+#         print("per_boundary ", per_boundary)
+#         print(gfeatures_perboundary)
+        if(per_boundary):
+            fname = "globalfeatures_per_boundary"
+        else:
+            fname = "globalfeatures"
+        self.seqs_info[seq_id][fname] = gfeatures_perboundary
+#         print(self.seqs_info[seq_id][fname])
+        #print("loading globalfeatures")
         
     def load_imposter_globalfeatures(self, seq_id, y_imposter, seg_other_symbol):
         # get sequence global features
         seqs_representer = self.seqs_representer
-        imposter_globalfeatures = seqs_representer.get_imposterseq_globalfeatures(seq_id, self.seqs_info, self.model, y_imposter, seg_other_symbol)
-        return(imposter_globalfeatures)
-        
+        imposter_gfeatures_perboundary, y_imposter_boundaries = seqs_representer.get_imposterseq_globalfeatures(seq_id, self.seqs_info, y_imposter, seg_other_symbol)
+        return(imposter_gfeatures_perboundary, y_imposter_boundaries)
+    
+    def represent_globalfeature(self, gfeatures, boundaries):
+        # get sequence global features
+        seqs_representer = self.seqs_representer
+        windx_fval = seqs_representer.represent_gfeatures(gfeatures, self.model, boundaries=boundaries)        
+        return(windx_fval)        
+    
     def _load_seq(self, seq_id, target = "seq"):
         seqs_representer = self.seqs_representer
         seq = seqs_representer.load_seq(seq_id, self.seqs_info)
@@ -872,45 +917,69 @@ class HOSemiCRF(object):
             return(seq.Y)
         elif(target == "X"):
             return(seq.X)
-        
+         
     def save_model(self, file_name):
         # to clean things before pickling the model
         self.seqs_info.clear() 
         ReaderWriter.dump_data(self, file_name)
     
+
     def decode_seqs(self, decoding_method, out_dir, **kwargs):
-        """ seqs: a list comprising of sequences that are instances of SequenceStrcut() class
-            method: a string referring to type of decoding {'viterbi', 'per_state_decoding'}
-            seqs_info: dictionary containing the info about the sequences to parse
+        """ decoding_method: a string referring to type of decoding {'viterbi', 'per_state_decoding'}
+            **kwargs could be one of the following:
+                seqs: a list comprising of sequences that are instances of SequenceStrcut() class
+                seqs_info: dictionary containing the info about the sequences to parse
         """
         corpus_name = "decoding_seqs"
-        out_file = os.path.join(create_directory(corpus_name, out_dir), "decoded.txt")
         w = self.weights
-        
-        if(decoding_method == "viterbi"):
-            decoder = self.viterbi
+        # supporting only viterbi for now
+        decoder = self.viterbi
+            
+        file_name = kwargs.get('file_name')
+        if(file_name):
+            out_file = os.path.join(create_directory(corpus_name, out_dir), file_name)
+            if(kwargs.get("sep")):
+                sep = kwargs['sep']
+            else:
+                sep = "\t"
+
+        beam_size = kwargs.get('beam_size')
+        if(not beam_size):
+            beam_size = self.beam_size
+            
         if(kwargs.get("seqs_info")):
             self.seqs_info = kwargs["seqs_info"]
+            N = len(self.seqs_info)
         elif(kwargs.get("seqs")): 
             seqs = kwargs["seqs"]           
             seqs_dict = {i+1:seqs[i] for i in range(len(seqs))}
-            seqs_info = self.seqs_representer.prepare_seqs(seqs_dict, corpus_name, out_dir, unique_id = True)
+            seqs_id = list(seqs_dict.keys())
+            N = len(seqs_id)
+            seqs_info = self.seqs_representer.prepare_seqs(seqs_dict, "processed_seqs", out_dir, unique_id = True)
+            self.seqs_representer.scale_attributes(seqs_id, seqs_info)
+            self.seqs_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, self.model, "processed_seqs", learning=False)
             self.seqs_info = seqs_info
 
         seqs_pred = {}
         seqs_info = self.seqs_info
+        counter = 0
         for seq_id in seqs_info:
-            Y_pred = decoder(w, seq_id)
+            Y_pred, __ = decoder(w, seq_id, beam_size)
             seq = ReaderWriter.read_data(os.path.join(seqs_info[seq_id]["globalfeatures_dir"], "sequence"))
-            self.write_decoded_seqs([seq], [Y_pred], out_file)
+            if(file_name):
+                self.write_decoded_seqs([seq], [Y_pred], out_file, sep)
             seqs_pred[seq_id] = {'seq': seq,'Y_pred': Y_pred}
+            # clear added info per sequence
+            self.clear_cached_info([seq_id])
+            counter += 1
+            print("sequence decoded -- {} sequences are left".format(N-counter))
+        
         # clear seqs_info
         self.seqs_info.clear()
         return(seqs_pred)
 
             
-    def write_decoded_seqs(self, ref_seqs, Y_pred_seqs, out_file):
-        sep = " "
+    def write_decoded_seqs(self, ref_seqs, Y_pred_seqs, out_file, sep = "\t"):
         for i in range(len(ref_seqs)):
             Y_pred_seq = Y_pred_seqs[i]
             ref_seq = ref_seqs[i]
@@ -919,13 +988,12 @@ class HOSemiCRF(object):
             for t in range(1, T+1):
                 for field_name in ref_seq.X[t]:
                     line += ref_seq.X[t][field_name] + sep
-                line += Y_pred_seq[t-1]
                 if(ref_seq.flat_y):
-                    line += sep + ref_seq.flat_y[t-1] + "\n"
-                else:
-                    line += "\n" 
-
-            ReaderWriter.log_progress(line,out_file)  
+                    line += ref_seq.flat_y[t-1] + sep
+                line += Y_pred_seq[t-1]
+                line += "\n" 
+            line += "\n"
+            ReaderWriter.log_progress(line,out_file)
             
 
     def viterbi(self, w, seq_id):
@@ -986,30 +1054,123 @@ class HOSemiCRF(object):
         Y_decoded = [yt for (pt,yt) in Y_decoded]
         print("Y_decoded {}".format(Y_decoded))
         return(Y_decoded)
+    
+    def viterbi_2(self, w, seq_id, beam_size, stop_off_beam = False, y_ref=[], K=1):
+        
+        # TO update and make it similar to the FO crf implementation
+        l = {}
+        l['activated_states'] = (seq_id, )
+        l['seg_features'] = (seq_id, )
+        self.check_cached_info(seq_id, l)
+        
+        pi_elems = self.model.pi_elems
+        pi_pky_codebook = self.model.pi_pky_codebook
+        P_codebook = self.model.P_codebook
+        P_codebook_rev = self.model.P_codebook_rev
+        P_len = self.model.P_len
+        L = self.model.L
+        T = self.seqs_info[seq_id]["T"]
+        # records max score at every time step
+        delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
+        # the score for the empty sequence at time 0 is 1
+        delta[0, P_codebook[""]] = 0
+        back_track = {}
+        pi_lendict = self.model.pi_lendict
+        accum_activestates = {}
+        # records where violation occurs -- it is 1-based indexing 
+        viol_index = []
+        #^print("pky_codebook_rev ", pky_codebook_rev)
+        #activefeatures_perboundary = {}
+        #print('pi_elems ', pi_elems)
+        for j in range(1, T+1):
+            pi_mat = numpy.zeros((P_len, L), dtype='longdouble')
+            for d in range(L):
+                u = j-d
+                if(u <= 0):
+                    break
+                v = j
+                boundary = (u, v)
+                for pi in pi_pky_codebook:
+                    active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
+                    # vector of size len(pky)
+                    f_potential = self.compute_fpotential(w, active_features)
+                    vec = f_potential[pi_pky_codebook[pi][0]] + delta[u-1, pi_pky_codebook[pi][1]]
+                    pi_c = P_codebook[pi]
+                    pi_mat[pi_c, d] = numpy.max(vec)
+                    argmax_ind = numpy.argmax(vec)
+                    #print("argmax chosen ", argmax_ind)
+                    pk_c = pi_pky_codebook[pi][1][argmax_ind]
+                    #print('pk_c ', pk_c)
+                    pk = P_codebook_rev[pk_c]
+                    y = pi_elems[pk][-1]
+                    back_track[j, P_codebook[pi]] = (pk, y)
+                    
 
-
+                        vec = f_potential[pi_pky_codebook[pi][0]] + alpha[u-1, pi_pky_codebook[pi][1]]
+                        accumulator[d] = vectorized_logsumexp(vec)
+                    
+            #^print('delta[{},:] = {} '.format(j, delta[j,:]))
+            # apply the beam pruning
+            #^print("beam_size ", beam_size)
+            #^print("P_len ", P_len)
+            if(beam_size < P_len):
+                topk_states = self.prune_states(j, delta, beam_size)
+                # update tracked active states -- to consider renaming it          
+                accum_activestates[j] = accum_activestates[j].intersection(topk_states)
+                #^print("accum_activestates[{}] = {}".format(j, accum_activestates[j]))
+                #^print('delta[{},:] = {} '.format(j, delta[j,:]))
+                #^print("topk_states ", topk_states)
+                if(y_ref):
+                    if(y_ref[j-1] not in topk_states):
+                        viol_index.append(j)
+                        if(stop_off_beam):
+                            T = j
+                            break
+        #^print('seq_id ', seq_id)
+        #^print("activefeatures_perboundary ", activefeatures_perboundary)
+        if(K == 1):
+            # decoding the sequence
+            Y_decoded = []
+            p_T_code = numpy.argmax(delta[T,:])
+            p_T = self.model.P_codebook_rev[p_T_code]
+            y_T = pi_elems[p_T][-1]
+            Y_decoded.append((p_T,y_T))
+            #print("t={}, p_T_code={}, p_T={}, y_T ={}".format(T, p_T_code, p_T, y_T))
+            t = T - 1
+            while t>0:
+                p_tplus1 = Y_decoded[-1][0]
+                p_t, y_t = back_track[(t+1, P_codebook[p_tplus1])]
+                #print("t={}, (t+1, p_t_code)=({}, {})->({},{})".format(t, t+1, P_codebook[p_tplus1], p_t, y_t))
+                Y_decoded.append((p_t, y_t))
+                t -= 1
+            Y_decoded.reverse()
+     
+            Y_decoded = [yt for (pt,yt) in Y_decoded]
+#             print("Y_decoded {}".format(Y_decoded))
+#             print('delta ', delta)
+#             print('backtrack ', back_track)
+#             print("P_codebook ", P_codebook)
+            return(Y_decoded, viol_index)
+        else:
+            asearcher = HO_AStarSearcher(P_codebook, P_codebook_rev, pi_elems)
+            topK = asearcher.search(delta, back_track, T, K)
+#             print('topk ', topK)
+            return(topK, viol_index)
     def check_gradient(self, w, seq_id):
         """ implementation of finite difference method similar to scipy.optimize.check_grad()
         """
-        modelfeatures_codebook_rev = {code:feature for feature, code in self.model.modelfeatures_codebook.items()}
-
         self.clear_cached_info([seq_id])
         epsilon = 1e-9
         # basis vector
         ei = numpy.zeros(len(w), dtype="longdouble")
         grad = numpy.zeros(len(w), dtype="longdouble")
         for i in range(len(w)):
-            print("weight index is {}".format(i))
-            print("feature name is {}".format(modelfeatures_codebook_rev[i]))
             ei[i] = epsilon
             l_wplus = self.compute_seq_loglikelihood(w + ei, seq_id)
-            print("l_wplus loglikelihood {}".format(l_wplus))
             self.clear_cached_info([seq_id])
-            l = self.compute_seqs_loglikelihood(w, [seq_id])
-            print("l loglikelihood {}".format(l))
+            l = self.compute_seq_loglikelihood(w, seq_id)
             self.clear_cached_info([seq_id])
             grad[i] = (l_wplus - l) / epsilon
-            print("grad is {}".format(grad[i]))
             ei[i] = 0
         estimated_grad = self.compute_seqs_gradient(w, [seq_id])
         print("finite difference gradient: \n {}".format(grad))

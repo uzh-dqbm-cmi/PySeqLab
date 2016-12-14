@@ -671,13 +671,13 @@ def generate_partitions(boundary, L, patt_len, bound_node_map, depth_node_map, p
                 depth_node_map[depth].append(child)
         curr_node.add_child(child)
         generate_partitions(upd_boundary, L, patt_len, bound_node_map, depth_node_map, child, depth)
+    return(generate_partition_boundaries(bound_node_map, depth_node_map))
         
-def generate_boundaries(bound_node_map, depth_node_map):
+def generate_partition_boundaries(bound_node_map, depth_node_map):
     g = []
     max_depth = list(depth_node_map.keys())[-1]
     nodes = depth_node_map[max_depth]
     for curr_node in nodes:
-        print(curr_node)
         l = []
         l.append(curr_node.boundary)
         while(True):
