@@ -143,12 +143,32 @@ def read_data(file_path, header):
     seqs = parser.seqs
     return(seqs)
     
-def load_predined_seq():
+
+def load_segments():
+    seqs = []
+    X = [{'w':'I'}, {'w':'live'}, {'w':'in'}, {'w':'New'}, {'w':'Haven'}]
+    Y = ['P', 'O', 'O', 'L', 'L']
+    seqs.append(SequenceStruct(X, Y))
+    X = [{'w':'Connecticut'}, {'w':'is'}, {'w':'in'}, {'w':'the'}, {'w':'United'},{'w':'States'}, {'w':'of'}, {'w':'America'}]
+    Y = ['L', 'O', 'O', 'O', 'L', 'L', 'L', 'L']
+    seqs.append(SequenceStruct(X, Y))
+    return(seqs)
+
+def run_segments():
+    template_generator = TemplateGenerator()
+    templateXY = {}
+    # generating template for attr_name = w
+    template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram', templateXY)
+    templateY = {'Y':()}
+    filter_obj = None
+    seq = load_segments()
+    return(seq, templateY, templateXY, filter_obj)
+
+def load_suppl_example():
     X = [{'w':'Peter'}, {'w':'goes'}, {'w':'to'}, {'w':'Britain'}, {'w':'and'}, {'w':'France'}, {'w':'annually'},{'w':'.'}]
     Y = ['P', 'O', 'O', 'L', 'O', 'L', 'O', 'O']
     seq = SequenceStruct(X, Y)
     return([seq])
-
 def run_suppl_example():
     template_generator = TemplateGenerator()
     templateXY = {}
@@ -157,19 +177,8 @@ def run_suppl_example():
     templateY = template_generator.generate_template_Y('3-gram')
     filter_info = {"filter_type":"pattern", "filter_val": {'P','O', 'L', 'L|O|L'}, "filter_relation": "not in"}
     filter_obj = FeatureFilter(filter_info)
-    seq = load_predined_seq()
+    seq = load_suppl_example()
     return(seq, templateY, templateXY, filter_obj)
-
-def run_loaded_conll00_seqs():
-    data_file_path = os.path.join(root_dir, "dataset", "conll00", "train.txt")
-    seqs = read_data(data_file_path, header = "main")
-    template_generator = TemplateGenerator()
-    templateXY = {}
-    # generating template for attr_name = w
-    template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram:3-gram', templateXY)
-    templateY = template_generator.generate_template_Y('1-gram:2-gram:3-gram')
-    filter_obj = None
-    return(seqs[0:1], templateY, templateXY, filter_obj)
 
 def run_conll00_seqs():
     data_file_path = os.path.join(root_dir, "dataset", "conll00", "train.txt")
@@ -182,6 +191,7 @@ def run_conll00_seqs():
     filter_obj = None
     return(seqs[:5], templateY, templateXY, filter_obj)
     
+
 def test_crfs(model_type, scaling_method, optimization_options, run_config, test_type):
     if(model_type == "HOSemi"):
         crf_model = HOSemiCRF 

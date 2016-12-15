@@ -7,7 +7,7 @@ import os
 from copy import deepcopy
 from collections import OrderedDict
 import numpy
-from .utilities import ReaderWriter, create_directory, vectorized_logsumexp, generate_partitions
+from .utilities import ReaderWriter, HOSemi_AStarSearcher, create_directory, vectorized_logsumexp, generate_partitions
 
 class HOSemiCRFModelRepresentation(object):
     def __init__(self):
@@ -244,7 +244,7 @@ class HOSemiCRFModelRepresentation(object):
                             else:
                                 pk_y_suffix[pk, y] = [p]
                             
-        pk_y_suffix = self.keep_longest_elems(pk_y_suffix)
+        pk_y_suffix = self.keep_largest_suffix(pk_y_suffix)
 
         f_transition = {}
         for (pk, y), pi in pk_y_suffix.items():
@@ -287,8 +287,8 @@ class HOSemiCRFModelRepresentation(object):
                             pk_c = P_codebook[pk]
                             if(z in z_pky):
                                 z_pky[z].append(pky_c)
-                                z_pi_piy[0].append(pk_c)
-                                z_pi_piy[1].append(pky_c)
+                                z_pi_piy[z][0].append(pk_c)
+                                z_pi_piy[z][1].append(pky_c)
                             else:
                                 z_pky[z] = [pky_c]
                                 z_pi_piy[z] = ([pk_c], [pky_c])
@@ -481,8 +481,11 @@ class HOSemiCRFModelRepresentation(object):
     def filter_activated_states(self, activated_states, accum_active_states, curr_boundary):
         Z_elems = self.Z_elems
         filtered_activestates = {}
+        
         # generate partition boundaries
-        partitions = generate_partitions(curr_boundary, self.L, self.patts_len, {}, {}, None)
+        partitions = []
+        for i in range(self.max_patt_len+1):
+            partitions += generate_partitions(curr_boundary, self.L, i, {}, {}, None)
         for z_len in activated_states:
             if(z_len == 1):
                 continue
@@ -520,6 +523,7 @@ class HOSemiCRF(object):
                          "seg_features": self.load_segfeatures,
                          "globalfeatures": self.load_globalfeatures,
                          "globalfeatures_per_boundary": self.load_globalfeatures,
+                         "activefeatures": self.load_activefeatures,
                          "Y":self._load_Y}
         
         self.def_cached_entities = self.cached_entitites(load_info_fromdisk)
@@ -684,7 +688,7 @@ class HOSemiCRF(object):
     def compute_marginals(self, seq_id):
         psi_potential = self.seqs_info[seq_id]["psi_potential"]
         Z_codebook = self.model.Z_codebook
-        z_pi_piy = self.model.pi_piy
+        z_pi_piy = self.model.z_pi_piy
         T = self.seqs_info[seq_id]["T"]
         L = self.model.L
 
@@ -735,8 +739,7 @@ class HOSemiCRF(object):
         # we need global features and alpha matrix to be ready -- order is important
         l = OrderedDict()
         l['globalfeatures'] = (seq_id, False)
-        l['activated_states'] = (seq_id, )
-        l['seg_features'] = (seq_id, )
+        l['activefeatures'] = (seq_id, )
         l['alpha'] = (w, seq_id)
         
         self.check_cached_info(seq_id, l)
@@ -994,70 +997,22 @@ class HOSemiCRF(object):
                 line += "\n" 
             line += "\n"
             ReaderWriter.log_progress(line,out_file)
-            
 
-    def viterbi(self, w, seq_id):
-        l = ("globalfeatures", "activefeatures_by_position", "f_potential")
-        self.check_cached_info(w, seq_id, l)
-        f_potential = self.seqs_info[seq_id]["f_potential"]
-        print("f_potential \n {}".format(f_potential))
-        f_transition = self.model.f_transition
-        P_codebook = self.model.P_codebook
-        T = self.seqs_info[seq_id]["T"]
-        L = self.model.L
-        # records max score at every time step
-        delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
-        # the score for the empty sequence at time 0 is 1
-        delta[0,P_codebook[""]] = 0
-        back_track = {}
-        for j in range(1, T+1):
-            for pi in f_transition:
-                max_val = -numpy.inf
-                for d in range(L):
-                    u = j - d
-                    v = j
-                    if(u <= 0):
-                        break
-                    boundary = (u, v)
-                    for pky, pk in f_transition[pi].items():
-                        pk_code = P_codebook[pk]
-                        potential = f_potential[boundary][pky]
-                        score = potential + delta[u-1, pk_code]
-                        if(score > max_val):
-                            max_val = score
-                            back_track[(j,P_codebook[pi])] = (d, pk, pky[-1])
-                            
-                delta[j, P_codebook[pi]] = max_val
-        print("delta {}".format(delta))
-        print("backtrack {}".format(back_track)) 
-        # decoding the sequence
-        p_T_code = numpy.argmax(delta[T,:])
-        d, p_T, y_T = back_track[(T, p_T_code)]
-        Y_decoded = []
-        for _ in range(d+1):
-            Y_decoded.append((p_T,y_T))
-        t = T - d - 1
-        while t>0:
-            print("t {}".format(t))
-            p_tplus1 = Y_decoded[-1][0]
-            print("p_tplus1 {}".format(p_tplus1))
-            print("p_tplus1 coded {}".format(P_codebook[p_tplus1]))
-            d, p_t, y_t = back_track[(t, P_codebook[p_tplus1])]
-            for _ in range(d+1):
-                Y_decoded.append((p_t, y_t))
-            t = t-d-1
-        Y_decoded.reverse()
-
-        print("decoding sequence with id {} \n".format(seq_id))
-        print("Y_decoded {}".format(Y_decoded))
-        self.clear_cached_info([seq_id])
-        Y_decoded = [yt for (pt,yt) in Y_decoded]
-        print("Y_decoded {}".format(Y_decoded))
-        return(Y_decoded)
     
-    def viterbi_2(self, w, seq_id, beam_size, stop_off_beam = False, y_ref=[], K=1):
-        
-        # TO update and make it similar to the FO crf implementation
+    def prune_states(self, score_vec, beam_size):
+        P_codebook_rev = self.model.P_codebook_rev
+        pi_elems = self.model.pi_elems
+
+        # using argpartition as better alternative to argsort
+        indx_partitioned_pi = numpy.argpartition(-score_vec, beam_size)
+        # identify top-k states/pi
+        indx_topk_pi = indx_partitioned_pi[:beam_size]
+        # get topk states
+        topk_pi = {P_codebook_rev[indx] for indx in indx_topk_pi}
+        topk_states = {pi_elems[pi][-1] for pi in topk_pi}
+        return(topk_states)
+    
+    def viterbi(self, w, seq_id, beam_size, stop_off_beam = False, y_ref=[], K=1):
         l = {}
         l['activated_states'] = (seq_id, )
         l['seg_features'] = (seq_id, )
@@ -1075,7 +1030,6 @@ class HOSemiCRF(object):
         # the score for the empty sequence at time 0 is 1
         delta[0, P_codebook[""]] = 0
         back_track = {}
-        pi_lendict = self.model.pi_lendict
         accum_activestates = {}
         # records where violation occurs -- it is 1-based indexing 
         viol_index = []
@@ -1084,6 +1038,7 @@ class HOSemiCRF(object):
         #print('pi_elems ', pi_elems)
         for j in range(1, T+1):
             pi_mat = numpy.zeros((P_len, L), dtype='longdouble')
+            backpointer = {}
             for d in range(L):
                 u = j-d
                 if(u <= 0):
@@ -1097,65 +1052,67 @@ class HOSemiCRF(object):
                     vec = f_potential[pi_pky_codebook[pi][0]] + delta[u-1, pi_pky_codebook[pi][1]]
                     pi_c = P_codebook[pi]
                     pi_mat[pi_c, d] = numpy.max(vec)
-                    argmax_ind = numpy.argmax(vec)
+                    argmax_indx = numpy.argmax(vec)
                     #print("argmax chosen ", argmax_ind)
-                    pk_c = pi_pky_codebook[pi][1][argmax_ind]
+                    pk_c = pi_pky_codebook[pi][1][argmax_indx]
                     #print('pk_c ', pk_c)
                     pk = P_codebook_rev[pk_c]
                     y = pi_elems[pk][-1]
-                    back_track[j, P_codebook[pi]] = (pk, y)
-                    
-
-                        vec = f_potential[pi_pky_codebook[pi][0]] + alpha[u-1, pi_pky_codebook[pi][1]]
-                        accumulator[d] = vectorized_logsumexp(vec)
-                    
-            #^print('delta[{},:] = {} '.format(j, delta[j,:]))
-            # apply the beam pruning
-            #^print("beam_size ", beam_size)
-            #^print("P_len ", P_len)
+                    backpointer[d, P_codebook[pi]] =  (pk_c, y)
+                
+                if(beam_size < P_len):
+                    topk_states = self.prune_states(pi_mat[:,d], beam_size)
+                    # update tracked active states -- to consider renaming it          
+                    accum_activestates[boundary] = accum_activestates[boundary].intersection(topk_states)
+            
+            # get the max for each pi across all segment lengths
+            for pi in pi_pky_codebook:
+                pi_c = P_codebook[pi]
+                delta[j, pi_c] = numpy.max(pi_mat[pi_c, :])
+                argmax_indx = numpy.argmax(pi_mat[pi_c, :])     
+                pk_c, y = backpointer[argmax_indx, pi_c] 
+                back_track[j, pi_c] = (argmax_indx, pk_c, y)
             if(beam_size < P_len):
-                topk_states = self.prune_states(j, delta, beam_size)
-                # update tracked active states -- to consider renaming it          
-                accum_activestates[j] = accum_activestates[j].intersection(topk_states)
-                #^print("accum_activestates[{}] = {}".format(j, accum_activestates[j]))
-                #^print('delta[{},:] = {} '.format(j, delta[j,:]))
-                #^print("topk_states ", topk_states)
+                topk_states = self.prune_states(delta[j, :], beam_size)           
                 if(y_ref):
                     if(y_ref[j-1] not in topk_states):
                         viol_index.append(j)
                         if(stop_off_beam):
                             T = j
                             break
-        #^print('seq_id ', seq_id)
-        #^print("activefeatures_perboundary ", activefeatures_perboundary)
+
         if(K == 1):
             # decoding the sequence
             Y_decoded = []
-            p_T_code = numpy.argmax(delta[T,:])
-            p_T = self.model.P_codebook_rev[p_T_code]
+            p_T_c = numpy.argmax(delta[T,:])
+            p_T = P_codebook_rev[p_T_c]
             y_T = pi_elems[p_T][-1]
-            Y_decoded.append((p_T,y_T))
-            #print("t={}, p_T_code={}, p_T={}, y_T ={}".format(T, p_T_code, p_T, y_T))
-            t = T - 1
+            
+            d, pt_c, yt = back_track[T, p_T_c]
+            for _ in range(d+1):
+                Y_decoded.append(y_T)
+                
+            t = T - d - 1
             while t>0:
-                p_tplus1 = Y_decoded[-1][0]
-                p_t, y_t = back_track[(t+1, P_codebook[p_tplus1])]
-                #print("t={}, (t+1, p_t_code)=({}, {})->({},{})".format(t, t+1, P_codebook[p_tplus1], p_t, y_t))
-                Y_decoded.append((p_t, y_t))
-                t -= 1
+                new_d, new_pt_c, new_yt = back_track[t, pt_c]
+                for _ in range(new_d+1):
+                    Y_decoded.append(yt)
+                t = t - d -1
+                pt_c = new_pt_c
+                yt = new_yt
+                
             Y_decoded.reverse()
-     
-            Y_decoded = [yt for (pt,yt) in Y_decoded]
 #             print("Y_decoded {}".format(Y_decoded))
 #             print('delta ', delta)
 #             print('backtrack ', back_track)
 #             print("P_codebook ", P_codebook)
             return(Y_decoded, viol_index)
         else:
-            asearcher = HO_AStarSearcher(P_codebook, P_codebook_rev, pi_elems)
+            asearcher = HOSemi_AStarSearcher(P_codebook, P_codebook_rev, pi_elems)
             topK = asearcher.search(delta, back_track, T, K)
 #             print('topk ', topK)
             return(topK, viol_index)
+        
     def check_gradient(self, w, seq_id):
         """ implementation of finite difference method similar to scipy.optimize.check_grad()
         """

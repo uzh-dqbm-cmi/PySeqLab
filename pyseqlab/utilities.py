@@ -522,7 +522,108 @@ class HO_AStarSearcher(object):
             #print('r ', r)
             #print('topk ', topk_list)
             return(topk_list)
+        
+class HOSemi_AStarSearcher(object):
+    def __init__(self, P_codebook, P_codebook_rev, pi_elems):
+        self.P_codebook = P_codebook
+        self.P_codebook_rev = P_codebook_rev
+        self.pi_elems = pi_elems
+        
+    def get_node_label(self, pi_code):
+        pi = self.P_codebook_rev[pi_code]
+        y =  self.pi_elems[pi][-1]
+        return(y)
 
+    def infer_labels(self, top_node, back_track):
+        # decoding the sequence
+        #print("we are decoding")
+        #top_node.print_node()
+        y = top_node.label
+        pi_c = top_node.pi_c
+        pos = top_node.position
+        Y_decoded = []
+        
+        d, pt_c, yt = back_track[pos, pi_c]
+        for _ in range(d+1):
+            Y_decoded.append(y)
+            
+        t = pos - d - 1
+        while t>0:
+            new_d, new_pt_c, new_yt = back_track[t, pt_c]
+            for _ in range(new_d+1):
+                Y_decoded.append(yt)
+            t = t - d -1
+            pt_c = new_pt_c
+            yt = new_yt
+        Y_decoded.reverse()   
+        
+        while(top_node.frwdlink):
+            y = top_node.frwdlink.label
+            Y_decoded.append(y)
+            top_node = top_node.frwdlink
+#         print(Y_decoded)
+        return(Y_decoded)
+    
+    def search(self, alpha, back_track, T, K):
+        # push the best astar nodes to the queue (i.e. the pi's at time T)
+        q = AStarAgenda()
+        r = set()
+        c = 0
+        P_codebook_rev = self.P_codebook_rev
+
+        # create nodes from the pi's at time T
+        for pi_c in P_codebook_rev:
+            cost = alpha[T, pi_c]
+            pos = T
+            frwdlink = None
+            label = self.get_node_label(pi_c)
+            node = AStarNode(cost, pos, pi_c, label, frwdlink)
+#             node.print_node()
+            q.push(node, cost)
+            
+        track = []
+        topk_list = []
+        try:
+            while c < K:
+                #print("heap size ", len(q.qagenda))
+                top_node = q.pop()
+                track.append(top_node)
+                while(True):
+                    curr_pos = top_node.position
+                    if(curr_pos == 1):
+                        break
+                    d, best_prev_pi_c, best_prev_y = back_track[curr_pos, top_node.pi_c]
+                    prev_pos = curr_pos - d - 1
+                    for prev_pi_c in P_codebook_rev:
+                        # create a new astar node
+                        if(prev_pi_c != best_prev_pi_c):
+                            label = self.get_node_label(prev_pi_c)
+                            cost = alpha[prev_pos, prev_pi_c]
+                            s = AStarNode(cost, prev_pos, prev_pi_c, label, top_node)
+                            q.push(s, cost)
+                            
+                    # create the backlink of the top_node 
+                    cost = alpha[prev_pos, best_prev_pi_c]
+                    top_node = AStarNode(cost, prev_pos, best_prev_pi_c, best_prev_y, top_node)
+                    
+                # decode and check if it is not saved already in topk list
+                y_labels = self.infer_labels(track[-1], back_track)
+#                 print(y_labels)
+                sig = "".join(y_labels)
+                if(sig not in r):
+                    r.add(sig)
+                    topk_list.append(y_labels)
+                    c += 1
+                    track.pop()
+        except (KeyError, IndexError) as e:
+            # consider logging the error
+            print(e)
+    
+        finally:
+            #print('r ', r)
+            #print('topk ', topk_list)
+            return(topk_list)
+        
 #######################
 # template generating utility functions
 #######################
@@ -640,7 +741,10 @@ class BoundNode(object):
 def generate_partitions(boundary, L, patt_len, bound_node_map, depth_node_map, parent_node, depth=1):
     """ generate all possible partitions within the range of segment length and model order"""
     if(depth >= patt_len):
-        return
+        if(not bound_node_map):
+            return(generate_partition_boundaries({boundary:None}, depth_node_map))
+        else:
+            return(generate_partition_boundaries(bound_node_map, depth_node_map))
     if(parent_node):
         if(boundary in bound_node_map):
             curr_node = bound_node_map[boundary]
@@ -675,18 +779,21 @@ def generate_partitions(boundary, L, patt_len, bound_node_map, depth_node_map, p
         
 def generate_partition_boundaries(bound_node_map, depth_node_map):
     g = []
-    max_depth = list(depth_node_map.keys())[-1]
-    nodes = depth_node_map[max_depth]
-    for curr_node in nodes:
-        l = []
-        l.append(curr_node.boundary)
-        while(True):
-            curr_node = curr_node.parent
-            if(curr_node):
-                l.append(curr_node.boundary)
-            else:
-                g.append(l)
-                break
+    if(depth_node_map):
+        max_depth = list(depth_node_map.keys())[-1]
+        nodes = depth_node_map[max_depth]
+        for curr_node in nodes:
+            l = []
+            l.append(curr_node.boundary)
+            while(True):
+                curr_node = curr_node.parent
+                if(curr_node):
+                    l.append(curr_node.boundary)
+                else:
+                    g.append(l)
+                    break
+    else:
+        g.append(sorted(bound_node_map))
     return(g)
         
 def delete_directory(directory):
