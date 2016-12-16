@@ -5,7 +5,7 @@ import os
 from copy import deepcopy
 import numpy
 
-from pyseqlab.utilities import TemplateGenerator, ReaderWriter, DataFileParser, create_directory
+from pyseqlab.utilities import TemplateGenerator, DataFileParser, create_directory
 from pyseqlab.attributes_extraction import SequenceStruct, NERSegmentAttributeExtractor
 from pyseqlab.features_extraction import FOFeatureExtractor, HOFeatureExtractor, SeqsRepresentation, FeatureFilter
 from pyseqlab.fo_crf_model import FirstOrderCRF, FirstOrderCRFModelRepresentation
@@ -169,6 +169,7 @@ def load_suppl_example():
     Y = ['P', 'O', 'O', 'L', 'O', 'L', 'O', 'O']
     seq = SequenceStruct(X, Y)
     return([seq])
+
 def run_suppl_example():
     template_generator = TemplateGenerator()
     templateXY = {}
