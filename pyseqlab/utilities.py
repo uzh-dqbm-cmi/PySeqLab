@@ -741,27 +741,28 @@ class BoundNode(object):
 def generate_partitions(boundary, L, patt_len, bound_node_map, depth_node_map, parent_node, depth=1):
     """ generate all possible partitions within the range of segment length and model order"""
     if(depth >= patt_len):
-        if(not bound_node_map):
-            return(generate_partition_boundaries({boundary:None}, depth_node_map))
-        else:
-            return(generate_partition_boundaries(bound_node_map, depth_node_map))
+        return
+
     if(parent_node):
         if(boundary in bound_node_map):
             curr_node = bound_node_map[boundary]
         else:
             curr_node = BoundNode(parent_node, boundary)
             bound_node_map[boundary] = curr_node
+            if(depth in depth_node_map):
+                depth_node_map[depth].append(curr_node)
+            else:
+                depth_node_map[depth] = [curr_node]
     else:
         # setup root node
         curr_node = BoundNode(None, boundary)
         bound_node_map[boundary] = curr_node
+        depth_node_map[depth] = [curr_node]
 
     u= boundary[0]-1
     v= u
     depth += 1
-    if(depth == patt_len):
-        if(not depth_node_map):
-            depth_node_map[depth] = []
+
     for d in range(L):
         if(u-d < 1):
             break
@@ -773,15 +774,18 @@ def generate_partitions(boundary, L, patt_len, bound_node_map, depth_node_map, p
             bound_node_map[upd_boundary] = child
             if(depth in depth_node_map):
                 depth_node_map[depth].append(child)
+            else:
+                depth_node_map[depth] = [child]
         curr_node.add_child(child)
         generate_partitions(upd_boundary, L, patt_len, bound_node_map, depth_node_map, child, depth)
-    return(generate_partition_boundaries(bound_node_map, depth_node_map))
         
-def generate_partition_boundaries(bound_node_map, depth_node_map):
-    g = []
-    if(depth_node_map):
-        max_depth = list(depth_node_map.keys())[-1]
-        nodes = depth_node_map[max_depth]
+def generate_partition_boundaries(depth_node_map):
+    g = {}
+    depths = sorted(depth_node_map, reverse=True)
+    
+    for depth in depths:
+        g[depth] = []
+        nodes = depth_node_map[depth]
         for curr_node in nodes:
             l = []
             l.append(curr_node.boundary)
@@ -790,10 +794,9 @@ def generate_partition_boundaries(bound_node_map, depth_node_map):
                 if(curr_node):
                     l.append(curr_node.boundary)
                 else:
-                    g.append(l)
+                    g[depth].append(l)
                     break
-    else:
-        g.append(sorted(bound_node_map))
+
     return(g)
         
 def delete_directory(directory):

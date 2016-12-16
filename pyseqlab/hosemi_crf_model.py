@@ -7,7 +7,8 @@ import os
 from copy import deepcopy
 from collections import OrderedDict
 import numpy
-from .utilities import ReaderWriter, HOSemi_AStarSearcher, create_directory, vectorized_logsumexp, generate_partitions
+from .utilities import ReaderWriter, HOSemi_AStarSearcher, create_directory, vectorized_logsumexp, \
+                       generate_partitions, generate_partition_boundaries
 
 class HOSemiCRFModelRepresentation(object):
     def __init__(self):
@@ -483,15 +484,15 @@ class HOSemiCRFModelRepresentation(object):
         filtered_activestates = {}
         
         # generate partition boundaries
-        partitions = []
-        for i in range(self.max_patt_len+1):
-            partitions += generate_partitions(curr_boundary, self.L, i, {}, {}, None)
+        depth_node_map = {}
+        generate_partitions(curr_boundary, self.L, self.max_patt_len, {}, depth_node_map, None)
+        partition_boundaries = generate_partition_boundaries(depth_node_map)
         for z_len in activated_states:
             if(z_len == 1):
                 continue
-            for partition in partitions:
-                start_pos = len(partition) - z_len
-                if(start_pos >= 0):
+            if(z_len in partition_boundaries):
+                partitions = partition_boundaries[z_len]
+                for partition in partitions:
                     bound_check = True
                     for bound in partition:
                         if(bound not in accum_active_states):
