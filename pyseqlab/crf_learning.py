@@ -255,7 +255,8 @@ class Learner(object):
         self.crf_model.weights = w_hat
         if(save_model):
             # pickle the model
-            self.crf_model.save_model(file_name = os.path.join(model_dir, model_name))
+            modelparts_dir = create_directory("model_parts", model_dir)
+            self.crf_model.save_model(modelparts_dir)
             
         # cleanup the instance variables
         self.cleanup()

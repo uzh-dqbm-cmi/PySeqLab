@@ -7,7 +7,7 @@ import numpy
 
 from pyseqlab.utilities import TemplateGenerator, DataFileParser, create_directory
 from pyseqlab.attributes_extraction import SequenceStruct, NERSegmentAttributeExtractor
-from pyseqlab.features_extraction import FOFeatureExtractor, HOFeatureExtractor, SeqsRepresentation, FeatureFilter
+from pyseqlab.features_extraction import FOFeatureExtractor, HOFeatureExtractor, SeqsRepresenter, FeatureFilter
 from pyseqlab.fo_crf_model import FirstOrderCRF, FirstOrderCRFModelRepresentation
 from pyseqlab.ho_crf_model import HOCRF, HOCRFModelRepresentation
 from pyseqlab.hosemi_crf_model import HOSemiCRF, HOSemiCRFModelRepresentation
@@ -46,7 +46,7 @@ class TestCRFModel(object):
         
         attr_extractor = NERSegmentAttributeExtractor()
         f_extractor = fextractor_class(templateXY, templateY, attr_extractor.attr_desc)
-        seq_representer = SeqsRepresentation(attr_extractor, f_extractor)
+        seq_representer = SeqsRepresenter(attr_extractor, f_extractor)
         for i in range(len(seqs)):
             seqs_dict[i+1] = deepcopy(seqs[i-1])
         seqs_info = seq_representer.prepare_seqs(seqs_dict, corpus_name, working_dir, unique_id)
@@ -108,19 +108,25 @@ class TestCRFModel(object):
 
         seqs_id = self._seqs_id
         seqs_info = self._seqs_info
-        seq_representer = self._seq_representer
         model = self._model
-        
+        crf_model = self._crf_model
+        print(crf_model.seqs_info == seqs_info)
         globalfeatures_len = len(model.modelfeatures_codebook)
-        
-        seqs_activefeatures = seq_representer.get_seqs_modelactivefeatures(seqs_id, seqs_info)
         activefeatures_len = 0
         f = {}
-        for seq_id, seq_activefeatures in seqs_activefeatures.items():
+        for seq_id in seqs_id:
+#             print(seqs_info[seq_id])
+#             print(seqs_info[seq_id] == crf_model.seqs_info[seq_id])
+            crf_model.load_activefeatures(seq_id)
+#             print("crf.seqs_info ", crf_model.seqs_info[seq_id])
+#             print("seqs_info ", seqs_info[seq_id])
+            seq_activefeatures = crf_model.seqs_info[seq_id]["activefeatures"]
             for features_dict in seq_activefeatures.values():
                 for z_patt in features_dict:
                     for windx in features_dict[z_patt]:
                         f[windx] = 1
+            crf_model.clear_cached_info([seq_id])
+#             print(seqs_info[seq_id])
         activefeatures_len += len(f)
                     
         statement = ""
@@ -131,10 +137,6 @@ class TestCRFModel(object):
         else:
             statement = "pass"
         print(statement)
-        
-    def find_wrong_templates(self, seqs):
-        # identify if wrong templates exist while using y and f_xy as feature templates
-        self.test_workflow(seqs, self.test_feature_extraction)
 
 
 def read_data(file_path, header):
@@ -190,8 +192,7 @@ def run_conll00_seqs():
     template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram', templateXY)
     templateY = {'Y':()}
     filter_obj = None
-    return(seqs[:5], templateY, templateXY, filter_obj)
-    
+    return(seqs[:100], templateY, templateXY, filter_obj)
 
 def test_crfs(model_type, scaling_method, optimization_options, run_config, test_type):
     if(model_type == "HOSemi"):
@@ -210,6 +211,7 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config, test
     seqs, f_y, f_xy, filter_obj = run_config()
     crf_tester = TestCRFModel(f_y, f_xy, crf_model, model_repr, fextractor, scaling_method, optimization_options, filter_obj)
     crf_tester.test_workflow(seqs)
+    
     if(test_type == 'forward-backward'):
         # test forward backward computation
         crf_tester.test_forward_backward_computation()
@@ -219,7 +221,23 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config, test
     elif(test_type == "model learning"):
         # test model learning
         crf_tester.test_model_validity()
+    elif(test_type == "feature extraction"):
+        crf_tester.test_feature_extraction()
     return(crf_tester._crf_model)
+
+def profile_test(model_type, scaling_method, optimization_options, run_config, test_type):
+    import cProfile
+    local_def = {'model_type':model_type,
+                 'scaling_method':scaling_method, 
+                 'optimization_options':optimization_options,
+                 'run_config':run_config,
+                 'test_type':test_type
+                }
+    global_def = {'test_crfs':test_crfs}
+    profiling_dir = create_directory('profiling', root_dir)
+    cProfile.runctx('test_crfs(model_type, scaling_method, optimization_options, run_config, test_type)',
+                    global_def, local_def, filename = os.path.join(profiling_dir, "profile_out"))
+    
 
 if __name__ == "__main__":
     pass

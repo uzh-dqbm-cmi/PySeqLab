@@ -1,8 +1,9 @@
 '''
 @author: ahmed allam <ahmed.allam@yale.edu>
 '''
+import os
 from collections import defaultdict
-from pyseqlab.utilities import SequenceStruct
+from pyseqlab.utilities import SequenceStruct, ReaderWriter
 
 
 class AttributeScaler(object):
@@ -26,7 +27,13 @@ class AttributeScaler(object):
                 attr_max = scaling_info[attr_name]['max']
                 for boundary in boundaries:
                     seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_max)/attr_max + 1
-        
+    def save(self, folder_dir):
+        save_info = {'AS_scalinginfo': self.scaling_info,
+                     'AS_method':self.method
+                    }
+        for name in save_info:
+            ReaderWriter.dump_data(save_info[name], os.path.join(folder_dir, name))   
+
 class NERSegmentAttributeExtractor(object):
     """class implements observation functions that generates attributes from tokens/observations"""
     def __init__(self):

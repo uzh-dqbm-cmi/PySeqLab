@@ -41,11 +41,11 @@ class FirstOrderCRFModelRepresentation(object):
         self.modelfeatures = modelfeatures
         self.modelfeatures_codebook = self.get_modelfeatures_codebook()
         self.Y_codebook = self.get_modelstates_codebook(states)
-        self.Y_codebook_rev = self.get_Y_codebook_reversed()
         self.L = L
         self.generate_instance_properties()
     
     def generate_instance_properties(self):
+        self.Y_codebook_rev = self.get_Y_codebook_reversed()
         self.Z_codebook = self.get_Z_pattern()
         self.Z_lendict, self.Z_elems, self.Z_numchar = self.get_Z_elems_info()
         self.patts_len = set(self.Z_lendict.values())
@@ -211,11 +211,20 @@ class FirstOrderCRFModelRepresentation(object):
         return(len(self.modelfeatures_codebook))
     def get_num_states(self):
         return(len(self.Y_codebook))
+    
+    def save(self, folder_dir):
+        model_info = {'MR_modelfeatures':self.modelfeatures, 
+                      'MR_modelfeaturescodebook':self.modelfeatures_codebook, 
+                      'MR_Ycodebook':self.Y_codebook,
+                      'MR_L':self.L
+                      }
+        for name in model_info:
+            ReaderWriter.dump_data(model_info[name], os.path.join(folder_dir, name))
 
 class FirstOrderCRF(object):
     """ First order CRF
     """
-    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk=6):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk=0):
         self.model = model
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
@@ -388,10 +397,13 @@ class FirstOrderCRF(object):
         return(beta) 
 
     
-    def save_model(self, file_name):
+    def save_model(self, folder_dir):
         # to clean things before pickling the model
         self.seqs_info.clear() 
-        ReaderWriter.dump_data(self, file_name)
+        self.seqs_representer.save(folder_dir)
+        self.model.save(folder_dir)
+        # save weights
+        ReaderWriter.dump_data(self.weights, os.path.join(folder_dir, "weights"))
         
     def _load_alpha(self, w, seq_id):
         seq_info = self.seqs_info[seq_id]

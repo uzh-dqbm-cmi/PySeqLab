@@ -511,6 +511,15 @@ class HOSemiCRFModelRepresentation(object):
                             if(check):                        
                                 filtered_activestates[z_len].add(z_patt)
         return(filtered_activestates)
+    
+    def save(self, folder_dir):
+        model_info = {'MR_modelfeatures':self.modelfeatures, 
+                      'MR_modelfeaturescodebook':self.modelfeatures_codebook, 
+                      'MR_Ycodebook':self.Y_codebook,
+                      'MR_L':self.L
+                      }
+        for name in model_info:
+            ReaderWriter.dump_data(model_info[name], os.path.join(folder_dir, name))
 
 class HOSemiCRF(object):
     def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 4):
@@ -922,10 +931,14 @@ class HOSemiCRF(object):
         elif(target == "X"):
             return(seq.X)
          
-    def save_model(self, file_name):
+    
+    def save_model(self, folder_dir):
         # to clean things before pickling the model
         self.seqs_info.clear() 
-        ReaderWriter.dump_data(self, file_name)
+        self.seqs_representer.save(folder_dir)
+        self.model.save(folder_dir)
+        # save weights
+        ReaderWriter.dump_data(self.weights, os.path.join(folder_dir, "weights"))
     
 
     def decode_seqs(self, decoding_method, out_dir, **kwargs):

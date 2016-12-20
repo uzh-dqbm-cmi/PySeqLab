@@ -389,12 +389,13 @@ class HOFeatureExtractor(object):
         feature_val = sum(attributes) 
         return({feature_name:feature_val})
     
-    #TO remove and only depend on ReaderWriter class to dump and read pickled objects
-    def dump_features(self, seq_file, seq_features):
-        """store the features of the current sequence"""
-        print("pickling table: {}\n".format(seq_file))
-        with open(seq_file, 'wb') as f:
-            pickle.dump(seq_features, f)
+    def save(self, folder_dir):
+        """store the templates used -- templateX and templateY"""
+        save_info = {'FE_templateX': self.template_X,
+                     'FE_templateY': self.template_Y
+                    }
+        for name in save_info:
+            ReaderWriter.dump_data(save_info[name], os.path.join(folder_dir, name))
         
 
 class FOFeatureExtractor(object):
@@ -763,10 +764,19 @@ class FOFeatureExtractor(object):
 
     def _represent_real_attr(self, attributes, feature_name):
         feature_val = sum(attributes) 
-        return({feature_name:feature_val})    
+        return({feature_name:feature_val})   
+     
+    def save(self, folder_dir):
+        """store the templates used -- templateX and templateY"""
+        save_info = {'FE_templateX': self.template_X,
+                     'FE_templateY': self.template_Y
+                    }
+        for name in save_info:
+            ReaderWriter.dump_data(save_info[name], os.path.join(folder_dir, name))
 
+        
 
-class SeqsRepresentation(object):
+class SeqsRepresenter(object):
     def __init__(self, attr_extractor, fextractor):
         self.attr_extractor = attr_extractor
         self.feature_extractor = fextractor
@@ -1146,8 +1156,13 @@ class SeqsRepresentation(object):
         
         return(imposter_gfeatures, y_imposter_boundaries)
 
-
-
+    def save(self, folder_dir):
+        # save essential info about feature extractor
+        self.feature_extractor.save(folder_dir)
+        if(self.attr_scaler):
+            self.attr_scaler.save(folder_dir)
+        
+        
 
 class FeatureFilter(object):
     # to improve feature filter by using the properties of Counter (i.e. most_common)
