@@ -399,9 +399,10 @@ class HOFeatureExtractor(object):
         
 
 class FOFeatureExtractor(object):
-    """ Generic feature extractor class that contains feature functions/templates for first order sequence models """
-    # currently it supports adding start state
-    # to consider adding support for stop state
+    """ Generic feature extractor class that contains feature functions/templates for first order sequence models 
+    
+        it supports the addition of start_state and potentially stop_state in the future release
+    """
     def __init__(self, templateX, templateY, attr_desc, start_state = True):
         self.template_X = templateX
         self.template_Y = templateY

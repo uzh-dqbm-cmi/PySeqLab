@@ -841,7 +841,7 @@ def vectorized_logsumexp(vec):
             res = max_a
     return(res)
     
-def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextractor_class, fextractor_class, seqrepresenter_class):
+def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class=None):
     #read the model file
     
     ycodebook = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_Ycodebook"))
@@ -868,6 +868,13 @@ def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextra
     # generate sequence representer
     new_seqrepr = seqrepresenter_class(new_attrextractor, new_fextractor)
     
+    # generate attribute scaler if applicable
+    if(ascaler_class):
+        scaling_info = ReaderWriter.read_data(os.path.join(modelparts_dir, "AS_scalinginfo"))
+        method = ReaderWriter.read_data(os.path.join(modelparts_dir, "AS_method"))
+        new_attrscaler = ascaler_class(scaling_info, method)
+        new_seqrepr.attr_scaler = new_attrscaler
+
     # generate crf instance
     new_crfmodel = model_class(new_mrepr, new_seqrepr, {})
     new_crfmodel.weights = ReaderWriter.read_data(os.path.join(modelparts_dir, "weights"))
