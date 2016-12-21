@@ -522,7 +522,7 @@ class HOSemiCRFModelRepresentation(object):
             ReaderWriter.dump_data(model_info[name], os.path.join(folder_dir, name))
 
 class HOSemiCRF(object):
-    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 4):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 5):
         self.model = model
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
@@ -541,7 +541,7 @@ class HOSemiCRF(object):
         self.beam_size = len(self.model.P_codebook)
 
     def cached_entitites(self, load_info_fromdisk):
-        ondisk_info = ["activefeatures", "l_segfeatures", "seg_features", "activated_states", "globalfeatures_per_boundary", "globalfeatures", "Y"]
+        ondisk_info = ["activefeatures", "seg_features", "activated_states", "globalfeatures_per_boundary", "globalfeatures", "Y"]
         def_cached_entities = ondisk_info[:load_info_fromdisk]
         inmemory_info = ["alpha", "Z", "psi_potential", "beta", "P_marginal"]
         def_cached_entities += inmemory_info

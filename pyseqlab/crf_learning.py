@@ -1032,7 +1032,10 @@ class Learner(object):
             # compute the average gradient 
             mu_grad = numpy.zeros(len(w_tilda_c), dtype = "longdouble")
             # compute average gradient
+            left = N
             for seq_id in train_seqs_id:
+                left -= 1
+                print("average gradient phase: {} seqs left".format(left))
                 seq_grad = crf_model.compute_seq_gradient(w_tilda_c, seq_id)
                 windx = list(seq_grad.keys())
                 fval = list(seq_grad.values())
