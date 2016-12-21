@@ -8,8 +8,8 @@ from copy import deepcopy
 from datetime import datetime
 from collections import Counter
 import numpy
-from pyseqlab.utilities import ReaderWriter, create_directory, generate_datetime_str
-from pyseqlab.attributes_extraction import AttributeScaler
+from .utilities import ReaderWriter, create_directory, generate_datetime_str
+from .attributes_extraction import AttributeScaler
 
 
 class HOFeatureExtractor(object):

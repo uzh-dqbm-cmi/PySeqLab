@@ -3,7 +3,7 @@
 '''
 import os
 from collections import defaultdict
-from pyseqlab.utilities import SequenceStruct, ReaderWriter
+from .utilities import SequenceStruct, ReaderWriter
 
 
 class AttributeScaler(object):

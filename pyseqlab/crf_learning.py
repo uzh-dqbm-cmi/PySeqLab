@@ -929,8 +929,8 @@ class Learner(object):
                 elif(learning_rate_schedule == "constant"):
                     eta = t0
                     
-                print("eta {}".format(eta))
-                print(seq_id)
+#                 print("eta {}".format(eta))
+#                 print(seq_id)
                 
                 seq_loglikelihood = crf_model.compute_seq_loglikelihood(w, seq_id)
                 seqs_loglikelihood_vec[seqs_id_mapper[seq_id]] = seq_loglikelihood
@@ -1025,7 +1025,7 @@ class Learner(object):
         self._exitloop = False
         
         for s in range(num_epochs):
-            print("we are in stage {}".format(s))
+            print("stage {}".format(s))
             w_tilda_c = w_tilda_p
             
             # ###################################
@@ -1048,8 +1048,8 @@ class Learner(object):
                 
             for t in range(m):
                 seq_id = numpy.random.choice(train_seqs_id, 1)[0]
-                print("eta {}".format(eta))
-                print(seq_id)
+#                 print("eta {}".format(eta))
+#                 print(seq_id)
                 print("we are in round {} out of {}".format(t+1, m))
                 
                 seq_loglikelihood = crf_model.compute_seq_loglikelihood(w, seq_id)

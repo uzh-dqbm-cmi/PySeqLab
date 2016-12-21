@@ -9,7 +9,6 @@ from copy import deepcopy
 from itertools import combinations
 import warnings
 import numpy
-from _operator import pos
 
 warnings.filterwarnings('error')
 
