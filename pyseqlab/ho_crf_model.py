@@ -491,6 +491,8 @@ class HOCRFModelRepresentation(object):
 #         print("activefeatures {}".format(activefeatures))         
         return(activefeatures)
     
+
+    
     def find_activated_states(self, seg_features, allowed_z_len):
         modelfeatures_inverted = self.modelfeatures_inverted
         active_states = {}
@@ -616,7 +618,7 @@ class HOCRF(object):
         for z in active_features:
             w_indx = list(active_features[z].keys())
             f_val = list(active_features[z].values())
-            potential = numpy.inner(w[w_indx], f_val)
+            potential = numpy.dot(w[w_indx], f_val)
             # get all pky's in coded format where z maintains a suffix relation with them
             pky_c_list = z_pky[z]
             f_potential[pky_c_list] += potential
@@ -636,7 +638,7 @@ class HOCRF(object):
         
         accum_activestates = {}
         activefeatures_perboundary = {}
-        
+        fpotential_perboundary = {}
         for j in range(1, T+1):
             boundary = (j, j)
             # identify active features
@@ -644,12 +646,13 @@ class HOCRF(object):
             activefeatures_perboundary[boundary] = active_features
             # compute f_potential
             f_potential = self.compute_fpotential(w, active_features)
+            fpotential_perboundary[boundary] = f_potential
             for pi in pi_pky_codebook:
                 if(j >= pi_lendict[pi]):
                     vec = f_potential[pi_pky_codebook[pi][0]] + alpha[j-1, pi_pky_codebook[pi][1]]
                     alpha[j, P_codebook[pi]] = vectorized_logsumexp(vec)
         self.seqs_info[seq_id]['activefeatures_per_boundary'] = activefeatures_perboundary
-        print("activefeatures ", activefeatures_perboundary)
+        self.seqs_info[seq_id]['fpotential'] = fpotential_perboundary
         return(alpha)
    
     
@@ -725,6 +728,53 @@ class HOCRF(object):
         self.seqs_info[seq_id]["loglikelihood"] = loglikelihood
 
         return(loglikelihood)
+    
+    
+    def compute_seq_gradient(self, w, seq_id):
+        """ 
+           compute the gradient of conditional log-likelihood with respect to the parameters vector w
+           \frac{\partial}{\partial w} p(Y|X;w)
+           
+           Params:
+           -------
+           w: vector representing current weights -- array shape (J,) where J is the total number of features
+           seq_id: id of the current sequence being evaluated -- string
+        """
+#         print("-"*40)
+#         print("... Evaluating compute_seq_gradient() ...")
+
+        # we need alpha, beta, global features and active features  to be ready
+        l = OrderedDict()
+        l['globalfeatures'] = (seq_id, False)
+        l['activefeatures'] = (seq_id, )
+        l['alpha'] = (w, seq_id)
+        self.check_cached_info(seq_id, l)
+        
+        P_marginals = self.compute_marginals(seq_id)
+        self.seqs_info[seq_id]["P_marginal"] = P_marginals
+        
+        f_expectation = self.compute_feature_expectation(seq_id)
+        gfeatures = self.seqs_info[seq_id]["globalfeatures"]
+        globalfeatures = self.represent_globalfeature(gfeatures, None)
+#         print("seq id {}".format(seq_id))
+#         print("len(f_expectation) {}".format(len(f_expectation)))
+#         print("len(globalfeatures) {}".format(len(globalfeatures)))
+        
+
+        if(len(f_expectation) > len(globalfeatures)):
+            missing_features = f_expectation.keys() - globalfeatures.keys()
+            addendum = {w_indx:0 for w_indx in missing_features}
+            globalfeatures.update(addendum)
+            print("missing features len(f_expectation) > len(globalfeatures)")
+
+#         print("P_marginals {}".format(P_marginals))
+#         print("f_expectation {}".format(f_expectation))
+#         print("globalfeatures {}".format(globalfeatures))
+        
+        grad = {}
+        for w_indx in f_expectation:
+            grad[w_indx]  = globalfeatures[w_indx] - f_expectation[w_indx]
+        return(grad)
     
     def compute_seqs_loglikelihood(self, w, seqs_id):
         seqs_loglikelihood = 0
