@@ -334,14 +334,16 @@ class HOSemiCRFModelRepresentation(object):
                     if(check):
                         si_y_tup = siy_components[siy]
                         if(si_y_tup in si_y_suffix):
-                            si_y_suffix[si_y_tup].append(sk)
+                            prev_sk = si_y_suffix[si_y_tup]
+                            len_prev_sk = si_numchar[prev_sk]
+                            if(len_sk > len_prev_sk):
+                                si_y_suffix[si_y_tup] = sk
                         else:
-                            si_y_suffix[si_y_tup] = [sk]
+                            si_y_suffix[si_y_tup] = sk
         
         #print("si_y_suffix {}".format(si_y_suffix))
-        si_y_suffix = self.keep_largest_suffix(si_y_suffix)
+#         si_y_suffix = self.keep_largest_suffix(si_y_suffix)
         #print("si_y_suffix {}".format(si_y_suffix))
-    
         b_transition = {}
         for (si,y), sk in si_y_suffix.items():
             elmkey = si + "|" + y
@@ -522,7 +524,7 @@ class HOSemiCRFModelRepresentation(object):
             ReaderWriter.dump_data(model_info[name], os.path.join(folder_dir, name))
 
 class HOSemiCRF(object):
-    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 5):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 4):
         self.model = model
         self.weights = numpy.zeros(model.num_features, dtype= "longdouble")
         self.seqs_representer = seqs_representer
@@ -634,22 +636,29 @@ class HOSemiCRF(object):
         alpha = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
         alpha[0,P_codebook[""]] = 0
         psi_potential = {}
-         
-        for j in range(1, T+1):
+                      
+        for j in range(1, T+1): 
+            accumulator = numpy.ones((len(P_codebook), L), dtype='longdouble') * -numpy.inf
+            for d in range(L):
+                u = j - d
+                if(u <= 0):
+                    break
+                v = j
+                if(activefeatures[u,v]):
+                    f_potential = self.compute_fpotential(w, activefeatures[u,v])
+                    psi_potential[u,v] = f_potential
+                    for pi in pi_pky_codebook:
+                        if(j>=pi_lendict[pi]):
+                            pi_c = P_codebook[pi]
+                            vec = f_potential[pi_pky_codebook[pi][0]] + alpha[u-1, pi_pky_codebook[pi][1]]
+                            accumulator[pi_c, d] = vectorized_logsumexp(vec)
             for pi in pi_pky_codebook:
-                if(j >= pi_lendict[pi]):
-                    accumulator = numpy.ones(L, dtype='longdouble') * -numpy.inf
-                    for d in range(L):
-                        u = j - d
-                        v = j
-                        if(u <= 0):
-                            break
-                        f_potential = self.compute_fpotential(w, activefeatures[u,v])
-                        psi_potential[u,v] = f_potential
-                        vec = f_potential[pi_pky_codebook[pi][0]] + alpha[u-1, pi_pky_codebook[pi][1]]
-                        accumulator[d] = vectorized_logsumexp(vec)
-                    
-                    alpha[j, P_codebook[pi]] = vectorized_logsumexp(accumulator) 
+                if(j>=pi_lendict[pi]):
+                    pi_c = P_codebook[pi]
+                    if(L>1):
+                        alpha[j, pi_c] = vectorized_logsumexp(accumulator[pi_c, :])
+                    else:
+                        alpha[j, pi_c] = accumulator[pi_c, 0]
         
         self.seqs_info[seq_id]['psi_potential'] = psi_potential
         return(alpha)
@@ -680,18 +689,24 @@ class HOSemiCRF(object):
         beta = numpy.ones((T+2,len(S_codebook)), dtype='longdouble') * (-numpy.inf)
         beta[T+1,] = 0
         for j in reversed(range(1, T+1)):
-            for si in si_siy_codebook:
-                accumulator = numpy.ones(L, dtype='longdouble') * -numpy.inf
-                for d in range(L):
-                    u = j 
-                    v = j + d
-                    if(v > T):
-                        break
+            accumulator = numpy.ones((len(S_codebook), L), dtype='longdouble') * -numpy.inf
+            for d in range(L):
+                u = j 
+                v = j + d
+                if(v > T):
+                    break
+                if(activefeatures[u,v]):
                     b_potential = self.compute_bpotential(w, activefeatures[u,v])
-                    vec = b_potential[si_siy_codebook[si][0]] + beta[v+1, si_siy_codebook[si][1]]
-                    accumulator[d] = vectorized_logsumexp(vec)
-
-                beta[j, S_codebook[si]] = vectorized_logsumexp(accumulator)
+                    for si in si_siy_codebook:
+                        si_c = S_codebook[si]
+                        vec = b_potential[si_siy_codebook[si][0]] + beta[v+1, si_siy_codebook[si][1]]
+                        accumulator[si_c, d] = vectorized_logsumexp(vec)   
+            for si in si_siy_codebook:
+                si_c = S_codebook[si]
+                if(L>1):
+                    beta[j, si_c] = vectorized_logsumexp(accumulator[si_c, :])
+                else:
+                    beta[j, si_c] = accumulator[si_c, :]
                     
         return(beta)
 
@@ -1059,10 +1074,10 @@ class HOSemiCRF(object):
                     break
                 v = j
                 boundary = (u, v)
+                active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
+                # vector of size len(pky)
+                f_potential = self.compute_fpotential(w, active_features)
                 for pi in pi_pky_codebook:
-                    active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
-                    # vector of size len(pky)
-                    f_potential = self.compute_fpotential(w, active_features)
                     vec = f_potential[pi_pky_codebook[pi][0]] + delta[u-1, pi_pky_codebook[pi][1]]
                     pi_c = P_codebook[pi]
                     pi_mat[pi_c, d] = numpy.max(vec)
@@ -1086,14 +1101,15 @@ class HOSemiCRF(object):
                 argmax_indx = numpy.argmax(pi_mat[pi_c, :])     
                 pk_c, y = backpointer[argmax_indx, pi_c] 
                 back_track[j, pi_c] = (argmax_indx, pk_c, y)
-            if(beam_size < P_len):
+                
+            # in case we are using viterbi for learning    
+            if(y_ref and beam_size < P_len):    
                 topk_states = self.prune_states(delta[j, :], beam_size)           
-                if(y_ref):
-                    if(y_ref[j-1] not in topk_states):
-                        viol_index.append(j)
-                        if(stop_off_beam):
-                            T = j
-                            break
+                if(y_ref[j-1] not in topk_states):
+                    viol_index.append(j)
+                    if(stop_off_beam):
+                        T = j
+                        break
 
         if(K == 1):
             # decoding the sequence

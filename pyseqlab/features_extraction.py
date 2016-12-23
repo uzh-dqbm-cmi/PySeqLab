@@ -978,7 +978,7 @@ class SeqsRepresenter(object):
                 parts = y_patt.split("|")
                 for state in parts:
                     Y_states[state] = 1       
-                                     
+                   
         # apply a filter 
         if(filter_obj):
             # this will trim unwanted features from modelfeatures dictionary

@@ -139,12 +139,11 @@ class TestCRFModel(object):
         print(statement)
 
 
-def read_data(file_path, header):
+def read_data(file_path, header, sep=" "):
     parser = DataFileParser()
-    parser.read_file(file_path, header = header)
+    parser.read_file(file_path, header = header, column_sep = sep)
     seqs = parser.seqs
     return(seqs)
-    
 
 def load_segments():
     seqs = []

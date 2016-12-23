@@ -9,7 +9,7 @@ from copy import deepcopy
 from itertools import combinations
 import warnings
 import numpy
-
+from scipy.misc import logsumexp
 warnings.filterwarnings('error')
 
 class SequenceStruct():
@@ -188,7 +188,7 @@ class DataFileParser():
             Y = []
             for line in file_obj:
                 counter += 1
-                line = line.rstrip("\n")
+                line = line.rstrip()
 #                 print(line)
                 if line:
 #                     print(line)
@@ -839,7 +839,10 @@ def vectorized_logsumexp(vec):
         except Warning:
             res = max_a
     return(res)
-    
+
+# def vectorized_logsumexp(vec):
+#     return(logsumexp(vec))
+
 def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class=None):
     #read the model file
     
