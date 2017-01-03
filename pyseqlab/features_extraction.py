@@ -2,7 +2,6 @@
 @author: ahmed allam <ahmed.allam@yale.edu>
 '''
 
-import pickle
 import os
 from copy import deepcopy
 from datetime import datetime
@@ -11,9 +10,33 @@ import numpy
 from .utilities import ReaderWriter, create_directory, generate_datetime_str
 from .attributes_extraction import AttributeScaler
 
-
-class HOFeatureExtractor(object):
-    """ Generic feature extractor class that contains feature functions/templates """
+class FeatureExtractor(object):
+    r"""Generic feature extractor class that contains feature functions/templates 
+    
+       Args:
+           templateX: dictionary specifying template to follow for observation features extraction
+                      it has the form: {attr_name: {x_offset:tuple(y_offsets)}}
+                      e.g. {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
+                                            
+           templateY: dictionary specifying template to follow for y pattern features extraction
+                      it has the form: {Y: tuple(y_offsets)}  
+                      e.g. {'Y': ((0,), (-1,0), (-2,-1,0))}
+           attr_desc: dictionary containing description and the encoding of the attributes/observations
+                      e.g. attr_desc['w'] = {'description':'the word/token','encoding':'binary'}
+                      for more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
+            
+       Attributes:
+           template_X: dictionary specifying template to follow for observation features extraction
+                      it has the form: {attr_name: {x_offset:tuple(y_offsets)}}
+                      e.g. {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
+           template_Y: dictionary specifying template to follow for y pattern features extraction
+                      it has the form: {Y: tuple(y_offsets)}  
+                      e.g. {'Y': ((0,), (-1,0), (-2,-1,0))}
+           attr_desc: dictionary containing description and the encoding of the attributes/observations
+                      e.g. attr_desc['w'] = {'description':'the word/token','encoding':'binary'}
+                      for more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
+            
+    """
     def __init__(self, templateX, templateY, attr_desc):
         self.template_X = templateX
         self.template_Y = templateY
@@ -24,9 +47,15 @@ class HOFeatureExtractor(object):
         return self._template_X
     @template_X.setter
     def template_X(self, template):
-        """ example of template X to be processed:
-            template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-                       = {attr_name: {x_offset:tuple(y_offsets)}}
+        r"""setup/verify template_X
+        
+           Args:
+               template: dictionary specifying template to follow for observation features extraction
+        
+           Example:: 
+           
+               template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
+                          = {attr_name: {x_offset:tuple(y_offsets)}}
         """
         if(type(template) == dict):
             self._template_X = {}
@@ -54,9 +83,16 @@ class HOFeatureExtractor(object):
         return self._template_Y
     @template_Y.setter
     def template_Y(self, template):
-        """ example of template Y to be processed:
-            template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
-                       = {Y: tuple(y_offsets)}
+        r"""setup/verify template_X
+        
+           Args:
+               template: dictionary specifying template to follow for y pattern features extraction
+        
+           Example:: 
+           
+               template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
+                          = {Y: tuple(y_offsets)}
+
         """
         if(type(template) == dict):
             self._template_Y = {}
@@ -73,7 +109,12 @@ class HOFeatureExtractor(object):
                 self._template_Y['Y'] = ()
 
     def _validate_template(self, template):
-        """template is a tuple (i.e. (-2,-1,0)"""
+        """validate passed template
+        
+           Args:
+               template: a tuple comprising the order of y pattern (i.e. (-2,-1,0))
+               
+        """
         check = True
         if(len(template) > 1):
             for i in range(len(template)-1):
@@ -90,6 +131,15 @@ class HOFeatureExtractor(object):
                     
                 
     def extract_seq_features_perboundary(self, seq, seg_features=None):
+        """extract features (observation and y pattern features) per boundary
+        
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               
+           Keywords Arguments:
+               seg_features: optional dictionary of observation features
+               
+        """
         # this method is used to extract features from sequences with known labels
         # (i.e. we know the Y labels and boundaries)
         Y = seq.Y
@@ -117,6 +167,16 @@ class HOFeatureExtractor(object):
 
     
     def aggregate_seq_features(self, features, boundaries):
+        """aggregate features across all boundaries
+        
+           it is usually used to aggregate features in the dictionary obtainted from
+           :func:`extract_seq_features_perboundary()` function
+           
+           Args:
+               features: dictionary of sequence features per boundary
+               boundaries: list of boundaries where detected features are aggregated
+               
+        """
         # summing up all local features across all boundaries
         seq_features = {}
         for boundary in boundaries:
@@ -135,8 +195,14 @@ class HOFeatureExtractor(object):
 #         return(seq_features)
     
     def extract_features_Y(self, seq, boundary, templateY):
-        """ template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
-                       = {Y: tuple(y_offsets)}        
+        """extract y pattern features for a given sequence and template Y
+        
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               boundary: tuple (u,v) representing current boundary
+               templateY: dictionary specifying template to follow for extraction
+                          it has the form: {Y: tuple(y_offsets)}  
+                          e.g. {'Y': ((0,), (-1,0), (-2,-1,0))}
         """
         template_Y = templateY['Y']
 
@@ -178,8 +244,12 @@ class HOFeatureExtractor(object):
         return(y_patt_features)
     
     def extract_features_X(self, seq, boundary):
-        """template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-           boundary is a tuple (u,v) indicating the beginning and end of the current segment
+        """extract observation features for a given sequence at a specified boundary
+        
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               boundary: tuple (u,v) representing current boundary
+        
         """
         # get template X
         template_X = self.template_X
@@ -233,8 +303,24 @@ class HOFeatureExtractor(object):
 
     
     def extract_features_XY(self, seq, boundary, seg_features = None):
-        """ template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-            template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
+        """extract/join observation features with y pattern features as specified :attr:`template_X` 
+        
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               boundary: tuple (u,v) representing current boundary
+               
+           Keywords Arguments:
+               seg_features: optional dictionary of observation features
+               
+           Example::
+           
+               template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
+               Using template_X the function will extract all unigram features of the observation 'w' (0, ) 
+               and join it with:
+                   - zero-order y pattern features (0,)
+                   - first-order y pattern features (-1, 0)
+                   - second-order y pattern features (-2, -1, 0)
+               template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
         """
         if(not seg_features):
             seg_feat_templates = self.extract_features_X(seq, boundary)
@@ -261,9 +347,12 @@ class HOFeatureExtractor(object):
         return(xy_features)
     
     def lookup_features_X(self, seq, boundary):
-        """template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-           boundary is a tuple (u,v) indicating the beginning and end of the current segment
-           This method is used to lookup features using varying boundaries (i.e. g(X, u, v))
+        """lookup observation features for a given sequence using varying boundaries (i.e. g(X, u, v))
+        
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               boundary: tuple (u,v) representing current boundary
+               
         """
         # get template X
         template_X = self.template_X
@@ -312,6 +401,12 @@ class HOFeatureExtractor(object):
         return(seg_features)
 
     def flatten_segfeatures(self, seg_features):
+        """flatten observation features dictionary
+        
+           Args:
+               seg_features: dictionary of observation features
+
+        """
         flat_segfeatures = {}
         for attr_name in seg_features:
             for offset in seg_features[attr_name]:
@@ -319,6 +414,15 @@ class HOFeatureExtractor(object):
         return(flat_segfeatures)
         
     def lookup_seq_modelactivefeatures(self, seq, model, learning=False):
+        """lookup/search model active features for a given sequence using varying boundaries (i.e. g(X, u, v))
+           
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               model: a model representation instance of the CRF class (i.e. the class having `ModelRepresentation` suffix)
+            
+           Keyword Arguments:
+               learning: optional boolean indicating if this function is used wile learning model parameters
+        """
         # segment length
         L = model.L
         T = seq.T
@@ -378,6 +482,8 @@ class HOFeatureExtractor(object):
     ########################################################
 
     def _represent_binary_attr(self, attributes, feature_name):
+        """function to represent binary attributes 
+        """
 #         #print("attributes ",attributes)
 #         #print("featurename ", feature_name)
         feature_val = '|'.join(attributes)
@@ -386,6 +492,8 @@ class HOFeatureExtractor(object):
         return({feature:1})
 
     def _represent_real_attr(self, attributes, feature_name):
+        """function to represent real/continuous attributes
+        """
         feature_val = sum(attributes) 
         return({feature_name:feature_val})
     
@@ -396,74 +504,63 @@ class HOFeatureExtractor(object):
                     }
         for name in save_info:
             ReaderWriter.dump_data(save_info[name], os.path.join(folder_dir, name))
-        
 
-class FOFeatureExtractor(object):
-    """ Generic feature extractor class that contains feature functions/templates for first order sequence models 
+
+class HOFeatureExtractor(FeatureExtractor):
+    """Feature extractor class for higher order CRF models """
+    def __init__(self, templateX, templateY, attr_desc):
+        super().__init__(templateX, templateY, attr_desc)
+
+class FOFeatureExtractor(FeatureExtractor):
+    r"""Feature extractor class for first order CRF models 
     
-        it supports the addition of start_state and potentially stop_state in the future release
+        it supports the addition of start_state and **potentially** stop_state in the future release
+        
+        Args:
+            templateX: dictionary specifying template to follow for observation features extraction
+                       it has the form: {attr_name: {x_offset:tuple(y_offsets)}}
+                       e.g. {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
+                                            
+            templateY: dictionary specifying template to follow for y pattern features extraction
+                       it has the form: {Y: tuple(y_offsets)}  
+                       e.g. {'Y': ((0,), (-1,0), (-2,-1,0))}
+                       
+            attr_desc: dictionary containing description and the encoding of the attributes/observations
+                       e.g. attr_desc['w'] = {'description':'the word/token','encoding':'binary'}
+                       for more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
+            
+            start_state: boolean indicating if __START__ state is required in the model
+            
+        Attributes:
+            templateX: dictionary specifying template to follow for observation features extraction
+                       it has the form: {attr_name: {x_offset:tuple(y_offsets)}}
+                       e.g. {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
+                                            
+            templateY: dictionary specifying template to follow for y pattern features extraction
+                       it has the form: {Y: tuple(y_offsets)}  
+                       e.g. {'Y': ((0,), (-1,0), (-2,-1,0))}
+                       
+            attr_desc: dictionary containing description and the encoding of the attributes/observations
+                       e.g. attr_desc['w'] = {'description':'the word/token','encoding':'binary'}
+                       for more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
+            
+            start_state: boolean indicating if __START__ state is required in the model
+    
+        .. note::
+       
+           The addition of this class is to add support for __START__ and potentially __STOP__ states
+          
     """
     def __init__(self, templateX, templateY, attr_desc, start_state = True):
-        self.template_X = templateX
-        self.template_Y = templateY
-        self.attr_desc = attr_desc
+        super().__init__(templateX, templateY, attr_desc)
         self.start_state = start_state
-        
-    @property
-    def template_X(self):
-        return self._template_X
-    @template_X.setter
-    def template_X(self, template):
-        """ example of template X to be processed:
-            template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-                       = {attr_name: {x_offset:tuple(y_offsets)}}
-        """
-        if(type(template) == dict):
-            self._template_X = {}
-            self.y_offsets = set()
-            self.x_featurenames = {}
-            for attr_name, templateX in template.items():
-                self._template_X[attr_name] = {}
-                self.x_featurenames[attr_name] = {}
-                for offset_x, offsets_y in templateX.items():
-                    s_offset_x = tuple(sorted(offset_x))
-                    feature_name = '|'.join([attr_name + "[" + str(ofst_x) + "]"  for ofst_x in s_offset_x])
-                    self.x_featurenames[attr_name][offset_x] = feature_name
-                    unique_dict = {}
-                    for offset_y in offsets_y:
-                        s_offset_y = tuple(sorted(offset_y))
-                        check = self._validate_template(s_offset_y)
-                        if(check):
-                            unique_dict[s_offset_y] = 1
-                            self.y_offsets.add(s_offset_y)
-                    if(unique_dict):
-                        self._template_X[attr_name][s_offset_x] = tuple(unique_dict.keys())
-
-    @property
-    def template_Y(self):
-        return self._template_Y
-    @template_Y.setter
-    def template_Y(self, template):
-        """ example of template Y to be processed:
-            template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
-                       = {Y: tuple(y_offsets)}
-        """
-        if(type(template) == dict):
-            self._template_Y = {}
-            unique_dict = {}
-            offsets_y = template['Y']
-            for offset_y in offsets_y:
-                s_offset_y = tuple(sorted(offset_y))
-                check = self._validate_template(s_offset_y)
-                if(check):
-                    unique_dict[s_offset_y] = 1
-            if(unique_dict):
-                self._template_Y['Y'] = tuple(unique_dict.keys())
-            else:
-                self._template_Y['Y'] = ()
                 
     def _validate_template(self, template):
-        """template is a tuple (i.e. (-1,0)"""
+        """validate passed template
+        
+           Args:
+               template: a tuple comprising the order of y pattern (i.e. (-2,-1,0))
+        """
         valid_offsets = {(0,), (-1,0)}
         if(template in valid_offsets):
             check = True
@@ -472,49 +569,15 @@ class FOFeatureExtractor(object):
         
         return(check)
     
-    def extract_seq_features_perboundary(self, seq, seg_features=None):
-        # this method is used to extract features from sequences with known labels
-        # (i.e. we know the Y labels and boundaries)
-        Y = seq.Y
-        features = {}
-        for boundary in Y:
-            xy_feat = self.extract_features_XY(seq, boundary, seg_features)
-            y_feat = self.extract_features_Y(seq, boundary, self.template_Y)
-            y_feat = y_feat['Y']
-            #print("boundary {}".format(boundary))
-            #print("boundary {}".format(boundary))
-            #print("y_feat {}".format(y_feat))
-            #print("xy_feat {}".format(xy_feat))
-            #TOUPDATEEEEE
-            for offset_tup_y in y_feat:
-                for y_patt in y_feat[offset_tup_y]:
-                    if(y_patt in xy_feat):
-                        xy_feat[y_patt].update(y_feat[offset_tup_y])
-                    else:
-                        xy_feat[y_patt] = y_feat[offset_tup_y]
-            features[boundary] = xy_feat
-#             #print("features {}".format(features[boundary]))
-#             #print("*"*40)
-                
-        return(features)
-
-    
-    def aggregate_seq_features(self, features, boundaries):
-        # summing up all local features across all boundaries
-        seq_features = {}
-        for boundary in boundaries:
-            xy_features = features[boundary]
-            for y_patt in xy_features:
-                if(y_patt in seq_features):
-                    seq_features[y_patt].update(xy_features[y_patt])
-#                     seq_features[y_patt] + xy_features[y_patt]
-                else:
-                    seq_features[y_patt] = Counter(xy_features[y_patt])
-        return(seq_features)
-    
     def extract_features_Y(self, seq, boundary, templateY):
-        """ template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
-                       = {Y: tuple(y_offsets)}        
+        """extract y pattern features for a given sequence and template Y
+        
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               boundary: tuple (u,v) representing current boundary
+               templateY: dictionary specifying template to follow for extraction
+                          it has the form: {Y: tuple(y_offsets)}  
+                          e.g. {'Y': ((0,), (-1,0)}
         """
         template_Y = templateY['Y']
 
@@ -552,146 +615,17 @@ class FOFeatureExtractor(object):
 
         return(y_patt_features)
     
-    def extract_features_X(self, seq, boundary):
-        """template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-           boundary is a tuple (u,v) indicating the beginning and end of the current segment
-        """
-        # get template X
-        template_X = self.template_X
-        attr_desc = self.attr_desc
-        x_featurenames = self.x_featurenames
-        # current boundary begin and end
-        u, v = boundary
-
-#         #print("positions {}".format(positions))
-        seg_features = {}
-        for attr_name in template_X:
-#             #print("attr_name {}".format(attr_name))
-            # check the type of attribute
-            if(attr_desc[attr_name]["encoding"] == "binary"):
-                represent_attr = self._represent_binary_attr
-            else:
-                represent_attr = self._represent_real_attr
-            
-            feat_template = {}
-            for offset_tup_x in template_X[attr_name]:
-                attributes = []
-#                 #print("feature_name {}".format(feature_name))
-                for offset_x in offset_tup_x:
-#                     #print("offset_x {}".format(offset_x))
-                    if(offset_x > 0):
-                        pos = (v + offset_x, v + offset_x)
-                    elif(offset_x < 0):
-                        pos = (u + offset_x, u + offset_x)
-                    else:
-                        pos = (u, v)
-                   
-                    if(pos in seq.seg_attr):
-                        attributes.append(seq.seg_attr[pos][attr_name])
-#                         #print("attributes {}".format(attributes))
-                    else:
-                        attributes = []
-                        break
-                if(attributes):
-#                     feat_template[offset_tup_x] = represent_attr(attributes, feature_name)
-                    feat_template[offset_tup_x] = represent_attr(attributes, x_featurenames[attr_name][offset_tup_x])
-            seg_features[attr_name] = feat_template
-#         
-#         #print("X"*40)
-#         #print("boundary {}".format(boundary))
-#         for attr_name, f_template in seg_features.items():
-#             for offset, features in f_template.items():
-#                 #print("{} -> {}".format(offset, features))
-#         #print("X"*40)
-
-        return(seg_features)
-
-    
-    def extract_features_XY(self, seq, boundary, seg_features = None):
-        """ template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-            template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
-        """
-        if(not seg_features):
-            seg_feat_templates = self.extract_features_X(seq, boundary)
-        else:
-            seg_feat_templates = seg_features[boundary]
-        y_feat_template = self.extract_features_Y(seq, boundary, {'Y':self.y_offsets})
-        y_feat_template = y_feat_template['Y']
-        templateX = self.template_X
-
-#         #print("seg_feat_templates {}".format(seg_feat_templates))
-        xy_features = {}
-        for attr_name, seg_feat_template in seg_feat_templates.items():
-            for offset_tup_x in seg_feat_template:
-                for offset_tup_y in templateX[attr_name][offset_tup_x]:
-                    if(offset_tup_y in y_feat_template):
-                        for y_patt in y_feat_template[offset_tup_y]:
-                            if(y_patt in xy_features):
-                                xy_features[y_patt].update(seg_feat_template[offset_tup_x])
-                            else:
-                                xy_features[y_patt] = seg_feat_template[offset_tup_x]
-#                         #print("xy_features {}".format(xy_features))
-        return(xy_features)
-    
-    def lookup_features_X(self, seq, boundary):
-        """template_X = {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-           boundary is a tuple (u,v) indicating the beginning and end of the current segment
-           This method is used to lookup features using varying boundaries (i.e. g(X, u, v))
-        """
-        # get template X
-        template_X = self.template_X
-        attr_desc = self.attr_desc
-        x_featurenames = self.x_featurenames
-        # current boundary begin and end
-        u = boundary[0]
-        v = boundary[-1]
-        
-#         #print("positions {}".format(positions))
-        seg_features = {}
-        for attr_name in template_X:
-#             #print("attr_name {}".format(attr_name))
-            # check the type of attribute
-            if(attr_desc[attr_name]["encoding"] == "binary"):
-#                 aggregate_attr = self._aggregate_binary_attr
-                represent_attr = self._represent_binary_attr
-            else:
-#                 aggregate_attr = self._aggregate_real_attr
-                represent_attr = self._represent_real_attr
-            
-            for offset_tup_x in template_X[attr_name]:
-                attributes = []
-#                 feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
-#                 #print("feature_name {}".format(feature_name))
-                for offset_x in offset_tup_x:
-#                     #print("offset_x {}".format(offset_x))
-                    if(offset_x > 0):
-                        pos = (v + offset_x, v + offset_x)
-                    elif(offset_x < 0):
-                        pos = (u + offset_x, u + offset_x)
-                    else:
-                        pos = (u, v)
-#                     #print("pos {}".format(pos))
-                    
-                    if(pos in seq.seg_attr):
-                        attributes.append(seq.seg_attr[pos][attr_name])
-#                         #print("attributes {}".format(attributes))
-                    else:
-                        attributes = []
-                        break
-                if(attributes):
-                    seg_features.update(represent_attr(attributes, x_featurenames[attr_name][offset_tup_x]))
-
-#         #print("seg_features lookup {}".format(seg_features))
-        return(seg_features)
-
-    def flatten_segfeatures(self, seg_features):
-        flat_segfeatures = {}
-        for attr_name in seg_features:
-            for offset in seg_features[attr_name]:
-                flat_segfeatures.update(seg_features[attr_name][offset])
-        return(flat_segfeatures)
         
     def lookup_seq_modelactivefeatures(self, seq, model, learning=False):
+        """lookup/search model active features for a given sequence using varying boundaries (i.e. g(X, u, v))
+           
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               model: a model representation instance of the CRF class (i.e. the class having `ModelRepresentation` suffix)
+            
+           Keyword Arguments:
+               learning: optional boolean indicating if this function is used wile learning model parameters
+        """
         # segment length
         L = model.L
         T = seq.T
@@ -749,35 +683,24 @@ class FOFeatureExtractor(object):
         #^print("seg_features from feature_extractor ", seg_features)
 
         return(activated_states, seg_features, l_segfeatures)
-    
-    
-    ########################################################
-    # functions used to represent real and binary attributes
-    ########################################################
-
-    def _represent_binary_attr(self, attributes, feature_name):
-#         #print("attributes ",attributes)
-#         #print("featurename ", feature_name)
-        feature_val = '|'.join(attributes)
-#         feature = '{}={}'.format(feature_name, feature_val)
-        feature = feature_name + "=" + feature_val
-        return({feature:1})
-
-    def _represent_real_attr(self, attributes, feature_name):
-        feature_val = sum(attributes) 
-        return({feature_name:feature_val})   
-     
-    def save(self, folder_dir):
-        """store the templates used -- templateX and templateY"""
-        save_info = {'FE_templateX': self.template_X,
-                     'FE_templateY': self.template_Y
-                    }
-        for name in save_info:
-            ReaderWriter.dump_data(save_info[name], os.path.join(folder_dir, name))
-
         
 
 class SeqsRepresenter(object):
+    """Sequence representer class that prepares, pre-process and transform sequences for learning/decoding tasks
+    
+       Args:
+           attr_extractor: instance of attribute extractor class such as :class:`NERSegmentAttributeExtractor`
+                           it is used to apply defined observation functions generating features for the observations
+           fextractor: instance of feature extractor class such as :class:`FeatureExtractor`
+                       it is used to extract features from the observations and generated observation features using the observation functions
+       
+       Attributes:
+           attr_extractor: instance of attribute extractor class such as :class:`NERSegmentAttributeExtractor`
+           fextractor: instance of feature extractor class such as :class:`FeatureExtractor`
+           attr_scaler: instance of scaler class :class:`AttributeScaler`
+                        it is used for scaling features that not binary (using standardization or rescaling) 
+                        
+    """
     def __init__(self, attr_extractor, fextractor):
         self.attr_extractor = attr_extractor
         self.feature_extractor = fextractor
@@ -792,8 +715,31 @@ class SeqsRepresenter(object):
         self._feature_extractor = deepcopy(fextractor)
     
     def prepare_seqs(self, seqs_dict, corpus_name, working_dir, unique_id = True):
-        """ seqs_dict: dictionary containing  sequences and corresponding ids where each sequence is an instance of the SequenceStrcut() class
-            corpus_name: string specifying the name of the corpus -- it will be used as corpus folder name
+        r"""prepare sequences to be used in the CRF models
+        
+           Main task:
+               - generate attributes (i.e. apply observation functions) on the sequence
+               - create a directory for every sequence where we save the relevant data
+               - create and return seqs_info dictionary comprising info about the prepared sequences
+        
+           Args:
+               seqs_dict: dictionary containing  sequences and corresponding ids where 
+                          each sequence is an instance of the :class:`SequenceStrcut` class
+               corpus_name: string specifying the name of the corpus that will be used as corpus folder name
+               working_dir: string representing the directory where the parsing and saving info on disk will occur
+               unique_id: boolean indicating if the generated root folder will include a generated id
+               
+           Returns:
+               seqs_info: dictionary comprising the the info about the prepared sequences
+
+           Example::
+           
+               seqs_info = {'seq_id':{'globalfeatures_dir':directory,
+                                      'T': length of sequence
+                                      'L': length of the longest segment
+                                     }
+                                    ....
+                            }
         """
         attr_extractor = self.attr_extractor
         
@@ -830,7 +776,20 @@ class SeqsRepresenter(object):
         return(seqs_info)
 
     def preprocess_attributes(self, seqs_id, seqs_info, method = "rescaling"):
-        """process attributes
+        r"""preprocess sequences by generating attributes for segments with L >1 
+        
+           Main task:
+               - generate attributes (i.e. apply observation functions) on segments (i.e. L>1)
+               - scale non binary attributes and building the relevant scaling info needed
+               - create a directory for every sequence where we save the relevant data
+        
+           Args:
+               seqs_id: list of sequence ids to be processed
+               seqs_info: dictionary comprising the the info about the prepared sequences
+
+           Keyword Arguments:
+                method: string determining the type of scaling (if applicable)
+                        it supports {standardization, rescaling}
         """
         attr_extractor = self.attr_extractor
         grouped_attr = attr_extractor.group_attributes()
@@ -900,6 +859,12 @@ class SeqsRepresenter(object):
             ReaderWriter.log_progress(line, log_file)
         
     def scale_attributes(self, seqs_id, seqs_info):
+        """scale non binary attributes 
+        
+           Args:
+               seqs_id: list of sequence ids to be processed
+               seqs_info: dictionary comprising the the info about the prepared sequences
+        """
         attr_scaler = self.attr_scaler
         if(attr_scaler):
             for seq_id in seqs_id:
@@ -910,11 +875,22 @@ class SeqsRepresenter(object):
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
 
     def extract_seqs_globalfeatures(self, seqs_id, seqs_info):
-        """ - Function that parses each sequence and generates global feature  F_j(X,Y). 
-            - For each sequence we obtain a set of generated global feature functions where each
-              F_j(X,Y)) represents the sum of the value of its corresponding low-level/local feature function
-             f_j(X,t,y_t,y_tminus1) (i.e. F_j(X,Y) = \sum_{t=1}^{T+1} f_j(X,t, y_t, y_tminus1) )
-            - It saves all the results on disk
+        r"""extract globalfeatures (i.e. F(X,Y)) from every sequence
+        
+            Main task:
+                - parses each sequence and generates global feature :math:`F_j(X,Y) = \sum_{t=1}^{T}f_j(X,Y)` 
+                - for each sequence we obtain a set of generated global feature functions where each
+                  :math:`F_j(X,Y)` represents the sum of the value of its corresponding low-level/local feature function
+                  :math:`f_j(X,Y)` (i.e. :math:`F_j(X,Y) = \sum_{t=1}^{T+1} f_j(X,Y)`)
+                - saves all the results on disk
+        
+            Args:
+                seqs_id: list of sequence ids to be processed
+                seqs_info: dictionary comprising the the info about the prepared sequences
+               
+            .. note::
+             
+               it requires that the sequences have been already parsed and preprocessed (if applicable)
         """
         feature_extractor = self.feature_extractor
         
@@ -945,14 +921,31 @@ class SeqsRepresenter(object):
         ReaderWriter.log_progress(line, log_file)
         
     def create_model(self, seqs_id, seqs_info, model_repr_class, filter_obj = None):
-        """ we use the sequences assigned  in the training set to build the model
-            To construct the model, this function performs the following:
-           - Takes the union of the detected global feature functions F_j(X,Y) for each chosen parsed sequence
-             from the training set to form the set of model features
-           - Construct the tag set Y_set (i.e. possible tags assumed by y_t) using the chosen parsed sequences
-             from the training data set
+        r"""aggregate all identified features in the training sequences to build one model
+        
+           Main task:
+               - use the sequences assigned  in the training set to build the model
+               - takes the union of the detected global feature functions F_j(X,Y) for each chosen parsed sequence
+                 from the training set to form the set of model features
+               - construct the tag set Y_set (i.e. possible tags assumed by y_t) using the chosen parsed sequences
+                 from the training data set
+               - determine the longest segment length (if applicable)
+               - apply feature filter (if applicable)
+               
+           Args:
+               seqs_id: list of sequence ids to be processed
+               seqs_info: dictionary comprising the the info about the prepared sequences
+               model_repr_class: class name of model representation (i.e. class that has suffix
+                                 `ModelRepresentation` such as :class:`HOCRFModelRepresentation`)
+                                 
+           Keyword Arguments:
+               filter_obj: optional instance of :class:`FeatureFilter` class to apply filter
              
-           NOTE: This function requires that the sequences have been already parsed and global features were generated
+           .. note::
+             
+              it requires that the sequences have been already parsed and global features were generated
+              using :func:`extract_seqs_globalfeatures`
+              
         """
         Y_states = {}
         modelfeatures = {}
@@ -987,7 +980,7 @@ class SeqsRepresenter(object):
             
         # create model representation
         model = model_repr_class()
-        model.create_model(modelfeatures, Y_states, L)
+        model.setup_model(modelfeatures, Y_states, L)
 
         end_time = datetime.now()
 
@@ -1006,6 +999,31 @@ class SeqsRepresenter(object):
         return(model)
 
     def extract_seqs_modelactivefeatures(self, seqs_id, seqs_info, model, output_foldername, learning=False):
+        """identify for every sequence model active states and features
+        
+           Main task:
+               - generate attributes for all segments with length 1 to maximum length defined in the model
+                 it is an optional step and only applied in case of having segmentation problems
+               - generate segment features, potential activated states and a representation of segment features
+                 to be used potentially while learning
+               - dump all info on disk
+               
+           Args:
+               seqs_id: list of sequence ids to be processed
+               seqs_info: dictionary comprising the the info about the prepared sequences
+               model: an instance of model representation class (i.e. class that has suffix
+                      `ModelRepresentation` such as :class:`HOCRFModelRepresentation`)
+               output_foldername: string representing the name of the root folder to be created 
+                                  for containing all saved info
+                                 
+           Keyword Arguments:
+               learning: boolean indicating if this function used for the purpose of learning (model weights optimization)
+             
+           .. note::
+             
+              seqs_info dictionary will be updated by including the directory of the saved generatd info
+              
+        """
         # get the root_dir
         seq_id = seqs_id[0]
         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
@@ -1045,7 +1063,17 @@ class SeqsRepresenter(object):
         ReaderWriter.log_progress(line, log_file)
     
     def _lookup_seq_attributes(self, seq, L):
-        # generate the missing attributes if the segment length is greater than 1
+        """generate the missing attributes if the segment length is greater than 1
+        
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               L: longest segment defined in the model
+               
+           .. note::
+              
+              sequence :attr:`seg_attr` attribute might be update if L > 1  
+        """
+        # 
         attr_extractor = self.attr_extractor
         attr_scaler = self.attr_scaler
         T = seq.T
@@ -1062,21 +1090,61 @@ class SeqsRepresenter(object):
             
     
     def get_seq_activatedstates(self, seq_id, seqs_info):
+        """retrieve identified activated states that were saved on disk using `seqs_info`
+        
+           Args:
+               seqs_id: list of sequence ids to be processed
+               seqs_info: dictionary comprising the the info about the prepared sequences
+    
+           .. note::
+           
+              this data was generated using :func:`extract_seqs_modelactivefeatures`
+               
+        """
         seq_dir = seqs_info[seq_id]["activefeatures_dir"]
         activated_states = ReaderWriter.read_data(os.path.join(seq_dir,"activated_states"))
         return(activated_states)
     
     def get_seq_segfeatures(self, seq_id, seqs_info):
+        """retrieve segment features that were extracted and saved on disk using `seqs_info`
+        
+           Args:
+               seqs_id: list of sequence ids to be processed
+               seqs_info: dictionary comprising the the info about the prepared sequences
+               
+           .. note::
+           
+              this data was generated using :func:`extract_seqs_modelactivefeatures`
+               
+        """
         seq_dir = seqs_info[seq_id]["activefeatures_dir"]
         seg_features = ReaderWriter.read_data(os.path.join(seq_dir, "seg_features"))
         return(seg_features)
     
     def get_seq_lsegfeatures(self, seq_id, seqs_info):
+        """retrieve segment features that were extracted with a modified representation for the purpose of parameter learning
+        
+           Args:
+               seqs_id: list of sequence ids to be processed
+               seqs_info: dictionary comprising the the info about the prepared sequences
+               
+           .. note::
+           
+              this data was generated using :func:`extract_seqs_modelactivefeatures`
+               
+        """
         seq_dir = seqs_info[seq_id]["activefeatures_dir"]
         seg_features = ReaderWriter.read_data(os.path.join(seq_dir, "l_segfeatures"))
         return(seg_features)
     
     def get_seq_activefeatures(self, seq_id, seqs_info):
+        """retrieve sequence model active features that are identified
+        
+           Args:
+               seqs_id: list of sequence ids to be processed
+               seqs_info: dictionary comprising the the info about the prepared sequences
+        """
+
         seq_dir = seqs_info[seq_id]["activefeatures_dir"]
         try:
             activefeatures = ReaderWriter.read_data(os.path.join(seq_dir, "activefeatures"))
@@ -1088,7 +1156,15 @@ class SeqsRepresenter(object):
             return(activefeatures)
         
     def get_seq_globalfeatures(self, seq_id, seqs_info, per_boundary=True):
-        """it retrieves the features available for the current sequence (i.e. F(X,Y) for all j \in [1...J] 
+        r"""retrieves the global features available for a given sequence (i.e. :math:`F(X,Y)` for all :math:`j \in [1...J]` ) 
+        
+           Args:
+               seqs_id: list of sequence ids to be processed
+               seqs_info: dictionary comprising the the info about the prepared sequences
+           
+           Keyword Arguments:
+               per_boundary: boolean specifying if the global features representation
+                             should be per boundary or aggregated across the whole sequence
         """
         seq_dir = seqs_info[seq_id]['globalfeatures_dir']
         if(per_boundary):
@@ -1099,12 +1175,36 @@ class SeqsRepresenter(object):
         return(gfeatures)
     
     def aggregate_gfeatures(self, gfeatures, boundaries):
+        """aggregate global features using specified list of boundaries
+        
+           Args:
+               gfeatures: dictionary representing the extracted sequence features (i.e F(X, Y))
+               boundaries: list of boundaries to use for aggregating global features
+        """
         feature_extractor = self.feature_extractor
         # gfeatures is assumed to be represented by boundaries
         gfeatures = feature_extractor.aggregate_seq_features(gfeatures, boundaries)
         return(gfeatures)
     
     def represent_gfeatures(self, gfeatures, model, boundaries=None):
+        """represent extracted sequence global features 
+        
+           two representation could be applied:
+               - (1) features identified by boundary (i.e. f(X,Y))
+               - (2) features identified and aggregated across all positions in the sequence (i.e. F(X, Y))
+                
+
+           Args:
+               gfeatures: dictionary representing the extracted sequence features (i.e F(X, Y))
+               model: an instance of model representation class (i.e. class that has suffix
+                      ModelRepresentation such as :class:`HOCRFModelRepresentation`)
+                      
+           Keyword Args:
+               boundaries: if specified (i.e. list of boundaries), then the required representation
+                           is global features per boundary (i.e. option (1))
+                           else (i.e. None or empty list), then the required representation is the
+                           aggregated global features (option(2))
+        """ 
         feature_extractor = self.feature_extractor
         # if boundaries is specified, then gfeatures is assumed to be represented by boundaries
         if(boundaries):
@@ -1115,14 +1215,33 @@ class SeqsRepresenter(object):
     
     @staticmethod
     def load_seq(seq_id, seqs_info):
+        """load dumped sequences on disk
+        
+           Args:
+               seqs_info: dictionary comprising the the info about the prepared sequences
+        """
         seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
         seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb")
         return(seq)
             
     def get_imposterseq_globalfeatures(self, seq_id, seqs_info, y_imposter, seg_other_symbol = None):
-        """to be used for processing a sequence, generating global features and return back without storing on disk
-            Function that parses a sequence and generates global feature  F_j(X,Y)
-            without saving intermediary results on disk
+        """get an imposter decoded sequence 
+        
+           Main task:
+               - to be used for processing a sequence, generating global features and 
+                 return back without storing/saving intermediary results on disk
+        
+           Args:
+               seqs_id: list of sequence ids to be processed
+               seqs_info: dictionary comprising the the info about the prepared sequences
+               y_imposter: list of labels (y tags) decoded using a decoder
+            
+           Keyword Arguments:
+               seg_other_symbol: in case of segmentation, this represents the non-entity symbol 
+                                 label used. Otherwise, it is None (default) which translates to 
+                                 be sequence labeling problem
+        
+
         """
         feature_extractor = self.feature_extractor
         attr_extractor = self.attr_extractor
@@ -1158,7 +1277,11 @@ class SeqsRepresenter(object):
         return(imposter_gfeatures, y_imposter_boundaries)
 
     def save(self, folder_dir):
-        # save essential info about feature extractor
+        """save essential info about feature extractor
+        
+           Args:
+               folder_dir: string representing directory where files are pickled/dumped
+        """
         self.feature_extractor.save(folder_dir)
         if(self.attr_scaler):
             self.attr_scaler.save(folder_dir)
@@ -1166,17 +1289,35 @@ class SeqsRepresenter(object):
         
 
 class FeatureFilter(object):
-    # to improve feature filter by using the properties of Counter (i.e. most_common)
+    r"""class for applying filters by y pattern or feature counts
+    
+       Args:
+           filter_info: dictionary that contains type of filter to be applied 
+           
+       Attributes:
+           filter_info: dictionary that contains type of filter to be applied 
+           rel_func: dictionary of function map
+       
+       Example::
+       
+           filter_info dictionary has three keys:
+               - `filter_type` to define the type of filter either {count or pattern}
+               - `filter_val` to define either the y pattern or threshold count
+               - `filter_relation` to define how the filter should be applied
+               
+            
+           *count filter*: 
+               - filter_info = {'filter_type': 'count', 'filter_val':5, 'filter_relation':'<'}
+                 this filter would delete all features that have count less than five
+                 
+           *pattern filter*:
+               - filter_info = {'filter_type': 'pattern', 'filter_val': ["O|L", "L|L"], 'filter_relation':'in'}
+                 this filter would delete all features that have associated y pattern ["O|L", "L|L"]
+
+    """
+    
     def __init__(self, filter_info):
-        """ filter_info : dictionary that contains type filter to be applied 
-                          it has the following key:values
-                          filter_type : string in (count, pattern)
-                          filter_val : if filter_type is count, provide a threshold (integer value)
-                                       else, provide a list of z patterns 
-                          filter_relation: define how to delete/apply filter
-            e.g. count filter => filter_info = {'filter_type': 'count', 'filter_val':5, 'filter_relation':'<'}
-                 pattern filter => filter_info = {'filter_type': 'pattern', 'filter_val': ["O|L", "L|L"], 'filter_relation':'='}
-        """
+
         self.filter_info = filter_info
         self.rel_func = {"=":self._equal_rel,
                          "<=":self._lequal_rel,
@@ -1187,6 +1328,14 @@ class FeatureFilter(object):
                          "not in":self._notin_rel}
         
     def apply_filter(self, featuresum_dict):
+        """apply define filter on model features dictionary
+        
+           Args:
+               featuresum_dict: dictoinary that represents model features
+                                similar to `modelfeatures` attribute in one of 
+                                model representation instances
+                                
+        """
         filtered_dict = deepcopy(featuresum_dict)
         filter_info = self.filter_info
         rel_func = self.rel_func

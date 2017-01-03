@@ -7,15 +7,41 @@ from .utilities import SequenceStruct, ReaderWriter
 
 
 class AttributeScaler(object):
+    """attribute scalar class to scale/standardize continuous/real attributes/features
+    
+       Args:
+           scaling_info: dictionary comprising the relevant info for performing standardization
+           method: string defining the method of scaling {rescaling, standardization}
+           
+       Attributes:
+           scaling_info: dictionary comprising the relevant info for performing standardization
+           method: string defining the method of scaling {rescaling, standardization}    
+           
+       Example::
+       
+           in case of *standardization*:
+               - scaling_info has the form: scaling_info[attr_name] = {'mean':value,'sd':value}
+           in case of *rescaling*
+               - scaling_info has the form: scaling_info[attr_name] = {'max':value}
+           
+                        
+    """
     def __init__(self, scaling_info, method):
         self.scaling_info = scaling_info
         self.method = method
         
     def scale_real_attributes(self, seq, boundaries):
+        """scale real/continuous attributes of a sequence for a list of boundaries
+        
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               boundaries: list of boundaries [(1,1), (2,2),...,]
+               
+        """
         scaling_info = self.scaling_info
         method = self.method
         seg_attr = seq.seg_attr
-        print("scaling_info {}".format(scaling_info))
+
         if(method == "standardization"):
             for attr_name in scaling_info:
                 attr_mean = scaling_info[attr_name]['mean']
@@ -27,7 +53,13 @@ class AttributeScaler(object):
                 attr_max = scaling_info[attr_name]['max']
                 for boundary in boundaries:
                     seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_max)/attr_max + 1
+    
     def save(self, folder_dir):
+        """save relevant info about the scaler on disk
+        
+           Args:
+               folder_dir: string representing directory where files are pickled/dumped
+        """
         save_info = {'AS_scalinginfo': self.scaling_info,
                      'AS_method':self.method
                     }
@@ -35,12 +67,26 @@ class AttributeScaler(object):
             ReaderWriter.dump_data(save_info[name], os.path.join(folder_dir, name))   
 
 class NERSegmentAttributeExtractor(object):
-    """class implements observation functions that generates attributes from tokens/observations"""
+    """class implementing observation functions that generates attributes from tokens/observations
+       
+       Args:
+           attr_desc: dictionary defining the atomic observation/attribute names including
+                      the encoding of such attribute (i.e. {real, binary}}
+           seg_attr:  dictionary comprising the extracted attributes per each boundary of a sequence
+    
+       Attributes:
+           attr_desc: dictionary defining the atomic observation/attribute names including
+                      the encoding of such attribute (i.e. {real, binary}}
+           seg_attr:  dictionary comprising the extracted attributes per each boundary of a sequence
+
+    """
     def __init__(self):
         self.attr_desc = self.generate_attributes_desc()
         self.seg_attr = {}
     
     def generate_attributes_desc(self):
+        """define attributes by including description and encoding of each observation or observation feature  
+        """
         attr_desc = {}
         attr_desc['w'] = {'description':'the word/token',
                           'encoding':'binary'
@@ -60,7 +106,7 @@ class NERSegmentAttributeExtractor(object):
         return(attr_desc)
     
     def group_attributes(self):
-        """function to group attributes based on the encoding type (i.e. real vs. binary)"""
+        """group attributes based on the encoding type (i.e. real versus binary)"""
         attr_desc = self.attr_desc
         grouped_attr = {}
         for attr_name in attr_desc:
@@ -72,6 +118,19 @@ class NERSegmentAttributeExtractor(object):
         return(grouped_attr)
  
     def generate_attributes(self, seq, boundaries):
+        """generate attributes of the sequence observations in a specified list of boundaries
+        
+           Args:
+               seq: a sequence instance of :class:`SequenceStrcut`
+               boundaries: list of boundaries [(1,1), (2,2),...,]
+               
+           .. note::
+           
+              the generated attributes are saved first in :attr:`seg_attr` and then passed to 
+              the **`seq.seg_attr`**. In other words, at the end :attr:`seg_att` is always cleared
+              
+        
+        """
         X = seq.X
         observed_attrnames = list(X[1].keys())
         # segment attributes dictionary
@@ -103,12 +162,30 @@ class NERSegmentAttributeExtractor(object):
         
             
     def _create_segment(self, X, boundary, attr_names, sep = " "):
+        """identify segment based on atomic attributes/observation
+        
+           Args:
+               X: an attribute of an instance (:attr:`seq.X`) of :class:`SequenceStruct` representing
+                  dictionary of observations in each boundary
+               boundary: tuple (u,v) representing current boundary
+               attr_names: list of names of the atomic observations/attributes
+               sep: separator (by default is the space)
+               
+        """
         self.seg_attr[boundary] = {}
         for attr_name in attr_names:
             segment_value = self._get_segment_value(X, boundary, attr_name)
             self.seg_attr[boundary][attr_name] = "{}".format(sep).join(segment_value)
             
     def _get_segment_value(self, X, boundary, target_attr):
+        """retrieve segment value in a boundary for a speicfied attribute
+        
+           Args:
+               X: an attribute of an instance (:attr:`seq.X`) of :class:`SequenceStruct` representing
+                  dictionary of observations in each boundary
+               boundary: tuple (u,v) representing current boundary
+               target_attr: string representing the field name of attribute
+        """
         u = boundary[0]
         v = boundary[1]
         segment = []
@@ -117,7 +194,11 @@ class NERSegmentAttributeExtractor(object):
         return(segment)
     
     def get_shape(self, boundary):
-        """ boundary is tuple (u,v) that marks beginning and end of a segment"""
+        """get shape of segment
+        
+           Args:
+               boundary: tuple (u,v) that marks beginning and end of a segment
+        """
         segment = self.seg_attr[boundary]['w']
         res = ''
         for char in segment:
@@ -133,6 +214,11 @@ class NERSegmentAttributeExtractor(object):
         self.seg_attr[boundary]['shape'] = res
             
     def get_degenerateshape(self, boundary):
+        """get degenerate shape of segment
+        
+           Args:
+               boundary: tuple (u,v) that marks beginning and end of a segment
+        """
         segment = self.seg_attr[boundary]['shape']
         track = ''
         for char in segment:
@@ -141,6 +227,11 @@ class NERSegmentAttributeExtractor(object):
         self.seg_attr[boundary]['shaped'] = track
         
     def get_seg_length(self, boundary):
+        """get the length of a segment
+        
+           Args:
+               boundary: tuple (u,v) that marks beginning and end of a segment
+        """
         # begin and end of a boundary
         u = boundary[0]
         v = boundary[-1]
@@ -148,6 +239,12 @@ class NERSegmentAttributeExtractor(object):
         self.seg_attr[boundary]['seg_len'] = seg_len
             
     def get_num_chars(self, boundary, filter_out = " "):
+        """get the number of characters of a segment
+        
+           Args:
+               boundary: tuple (u,v) that marks beginning and end of a segment
+               filter_out: string the default separator between attributes
+        """
         segment = self.seg_attr[boundary]['w']
         filtered_segment = segment.split(sep = filter_out)
         num_chars = 0
@@ -156,8 +253,17 @@ class NERSegmentAttributeExtractor(object):
         self.seg_attr[boundary]['seg_numchars'] = num_chars
             
     def get_seg_bagofattributes(self, boundary, attr_names, sep = " "):
-        # implements the bag-of-attributes concept within a segment 
-        # it can be used with attributes that have binary_encoding type set equal True
+        """implements the bag-of-attributes concept within a segment 
+
+           Args:
+               boundary: tuple (u,v) representing current boundary
+               attr_names: list of names of the atomic observations/attributes
+               sep: separator (by default is the space)
+               
+           .. note::
+               it can be used **only** with attributes that have binary_encoding type set equal True
+           
+        """
         prefix = 'bag_of_attr'
         attr_desc = self.attr_desc
         # generate bag of attributes properties in every segment

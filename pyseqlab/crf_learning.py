@@ -425,6 +425,7 @@ class Learner(object):
         line += "Number of seconds spent: {} \n".format(delta_time.total_seconds())
         ReaderWriter.log_progress(line, log_file)
         self._elapsed_time = datetime.now()
+        print("iteration ", self._iter_count)
 
 
     
@@ -441,6 +442,9 @@ class Learner(object):
         return(viol_pos, viol_boundindex)
     
     def _compute_seq_decerror(self, y_ref, y_imposter, viol_pos):
+        print("yref ", y_ref)
+        print("y_imposter ", y_imposter)
+        print("viol_pos ", viol_pos)
         T = len(y_ref[:viol_pos])
         #^print("T ", T)
         #^print("viol_pos ", viol_pos)

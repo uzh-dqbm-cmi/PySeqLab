@@ -12,22 +12,32 @@ import numpy
 from scipy.misc import logsumexp
 warnings.filterwarnings('error')
 
+
 class SequenceStruct():
-    def __init__(self, X, Y, seg_other_symbol = None):
-        """class for representing each sequence in the data
-           Y: list containing the sequence of states (i.e. ['P','O','O','L','L'])
+    r"""class for representing each sequence/segment
+    
+       Args:
+           Y: list containing the sequence of states/labels (i.e. ['P','O','O','L','L'])
            X: list containing dictionary elements of observation sequences and/or features of the input
-              (i.e. [{'w':Michael', 'shape':'Xx+'}, 
-                     {'w':'is', 'shape':'x+'}, 
-                     {'w':':'in', 'shape':'x+'}, 
-                     {'w':'New', 'shape':'Xx+'},
-                     {'w':'Haven', 'shape':'Xx+'}]
-               where w is the word as input and shape is the collapsed shape of the word (Upper or lower case))
-           seg_other_symbol: If it is specified, then the task is a segmentation problem 
-                              (in this case we need to specify the non-entity/other element)
-                              else if it is None (default), then it is considered as sequence labeling problem
- 
-        """
+           seg_other_symbol: string or None (default), if specified then the task is a segmentation problem 
+                             where it represents the non-entity symbol else (None) then it is considered 
+                             as sequence labeling problem
+        
+       Attributes:
+           Y: list containing the sequence of states/labels (i.e. ['P','O','O','L','L'])
+           X: list containing dictionary elements of observation sequences and/or features of the input
+           seg_other_symbol: string or None(default), if specified then the task is a segmentation problem 
+                             where it represents the non-entity symbol else (None) then it is considered 
+                             as sequence labeling problem
+           T: length of a sequence (i.e. len(X))
+           seg_attr: dictionary comprising the extracted attributes per each boundary of a sequence
+           L: longest length of an identified segment in the sequence
+           flat_y: list of labels/tags 
+           y_sboundaries: sorted list of boundaries of the :attr:`Y` of the sequence
+           y_range: range of the sequence
+    
+    """
+    def __init__(self, X, Y, seg_other_symbol = None):
         self.seg_attr = {}
         self.X = X
         self.Y = (Y, seg_other_symbol)
@@ -38,8 +48,16 @@ class SequenceStruct():
         return(self._X)
     @X.setter
     def X(self, l):
-        """input is a list of elements (i.e. X =  [{'w':'Michael'}, {'w':'is'}, {'w':'in'}, {'w':'New'}, {'w':'Haven'}])
-           output is a dict  {1:{'w':'Michael'},
+        """setup the observation sequence 
+           
+           Args:
+               l: a list of elements (i.e. X =  [{'w':'Michael'}, {'w':'is'}, {'w':'in'}, {'w':'New'}, {'w':'Haven'}])
+           
+           
+           Example::
+           
+               the output X becomes:
+                            {1:{'w':'Michael'},
                              2:{'w':'is'}, 
                              3:{'w':'in'}, 
                              4:{'w':'New'},
@@ -61,10 +79,17 @@ class SequenceStruct():
         return(self._Y)
     @Y.setter
     def Y(self, elmtup):
-        """input is a tuple consisting of :
-                Y: a list of elements (i.e. Y = ['P','O','O','L','L']) that represents the labels of the elements in X
-                non_entity_symbol: is the label which represents the Other category (i.e. non entity element which is 'O' in above example)
-           output is {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
+        """setup the label sequence
+        
+           Args:
+               elmtup: tuple consisting of:
+                       - **Y** a list of elements (i.e. Y = ['P','O','O','L','L']) 
+                         representing the labels of the elements in X
+                       - **non_entity_symbol** which represents the Other category (i.e. non entity element which is 'O' in above example)
+           
+           Example::
+           
+               Y after the transformation becomes {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
         """
         try:
             Y_ref, non_entity_symb = elmtup
@@ -99,7 +124,7 @@ class SequenceStruct():
                                 if(diff > 1):
                                     boundary = (indx_stack[0], indx_stack[-1])
                                     self._Y[boundary] = label
-                                    l = indx_stack[-1] - indx_stack[0]
+                                    l = indx_stack[-1] - indx_stack[0] + 1
                                     if(l > L):
                                         L = l
                                     indx_stack = [indx]
@@ -108,7 +133,7 @@ class SequenceStruct():
                         if(indx_stack):
                             boundary = (indx_stack[0], indx_stack[-1])
                             self._Y[boundary] = label
-                            l = indx_stack[-1] - indx_stack[0]
+                            l = indx_stack[-1] - indx_stack[0] + 1
                             if(l > L):
                                 L = l
                             indx_stack = [indx]
@@ -140,8 +165,14 @@ class SequenceStruct():
 #         self.x_boundaries = self.get_x_boundaries()
 
     def flatten_y(self, Y):
-        """ input Y is {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
-            output is  ['P','O','O','L','L']
+        """flatten the :attr:`Y` attribute 
+        
+           Args:
+               Y: dictionary of this form {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
+           
+           Example:
+               
+               flattened y becomes ['P','O','O','L','L']
         """
         s_boundaries = sorted(Y)
         flat_y = []
@@ -151,20 +182,23 @@ class SequenceStruct():
         return(flat_y)
   
     def get_y_boundaries(self):
+        """return the sorted boundaries of the labels of the sequence"""
         return(sorted(self.Y.keys()))
     
     def get_x_boundaries(self):
+        """return the boundaries of the observation sequence"""
         boundaries = []
         for u in self.X:
             boundaries.append((u, u))
         return(boundaries)
     
 class DataFileParser():
-    """ 
-        class to parse a data file that includes the training data consisting of:
-        label sequences Y
-        Observation sequences X (each type of observation sequences is represented in a separate column)
-        IMPORTANT: label sequences are the LAST column in the file (i.e. X_a X_b Y)
+    """class to parse a data file comprising the training/testing data
+    
+       Attributes:
+           seqs: list comprising of sequences that are instances of :class:`SequenceStrcut` class
+           header: list of attribute names read from the file
+
     """
     def __init__(self):
         # list that will hold the sequences, each is an instance of SequenceStruct() class
@@ -172,10 +206,30 @@ class DataFileParser():
         self.header = []
         
     def read_file(self, file_path, header, y_ref = True, seg_other_symbol = None, column_sep = " "):
-        """ header: specifying how the header is reported in the file containing the sequences
-                       'main' -> one header in the beginning of the file
-                       'per_sequence' -> a header for every sequence
-                       list of keywords as header (i.e. ['w', 'part_of_speech'])
+        r"""read and parse a file the contains the sequences following a predfiened format
+        
+           the file should contain label and observation tracks each separated in a column 
+           
+           .. note::
+        
+              label column is the **LAST** column in the file (i.e. X_a X_b Y)
+                
+           Args:
+               file_path: string representing the file path to the data file
+               header: specifies how the header is reported in the file containing the sequences
+                       options include:
+                           - 'main' -> one header in the beginning of the file
+                           - 'per_sequence' -> a header for every sequence
+                           - list of keywords as header (i.e. ['w', 'part_of_speech'])
+                           
+           Keyword Arguments:
+               y_ref: boolean specifying if the reference label column in the data file
+               seg_other_sybmol: string or None(default), if specified then the task is a segmentation problem 
+                                 where it represents the non-entity symbol else (None) then it is considered 
+                                 as sequence labeling problem
+               column_sep: separator used between the columns in the file
+               
+
         """
         if(y_ref):
             update_seq = self.update_XY
@@ -251,13 +305,20 @@ class DataFileParser():
         
 
     def update_XY(self, X, Y):
+        """update sequence observations and corresponding labels"""
         X.append(self.parse_line(self._xarg))
         Y.append(self._y)
     
     def update_X(self, X, Y):
+        """update sequence observations"""
         X.append(self.parse_line(self._xarg))
                 
     def parse_line(self, x_arg):
+        """parse the read line
+        
+           Args:
+               x_arg: tuple of observation columns
+        """
         # fill the sequences X and Y with observations and tags respectively
         header = self.header
         x = {}
@@ -266,10 +327,16 @@ class DataFileParser():
         return(x)
 
     def parse_header(self, x_arg):
+        """parse header
+        
+           Args:
+               x_arg: tuple of attribute/observation names 
+        """
         seq_header = [input_src for input_src in x_arg]
         self.header = seq_header
 
     def print_seqs(self):
+        """print parsed sequences"""
         seqs = self.seqs
         for i in range(len(seqs)):
             seq = seqs[i]
@@ -281,30 +348,65 @@ class DataFileParser():
         self.seqs = []
 
 class ReaderWriter(object):
+    """class for dumping, reading and logging data"""
     def __init__(self):
         pass
     @staticmethod
     def dump_data(data, file_name, mode = "wb"):
+        """dump data by pickling 
+        
+           Args:
+               data: data to be pickled
+               file_name: file path where data will be dumped
+               mode: specify writing options i.e. binary or unicode
+        """
         with open(file_name, mode) as f:
             pickle.dump(data, f, protocol = 4) 
     @staticmethod  
     def read_data(file_name, mode = "rb"):
+        """read dumped/pickled data
+        
+           Args:
+               file_name: file path where data will be dumped
+               mode: specify writing options i.e. binary or unicode
+        """
         with open(file_name, mode) as f:
             data = pickle.load(f)
         return(data)
+    
     @staticmethod
     def log_progress(line, outfile, mode="a"):
+        """write data to a file
+        
+           Args:
+               line: string representing data to be written out
+               outfile: file path where data will be written/logged
+               mode: specify writing options i.e. append, write
+        """
         with open(outfile, mode) as f:
             f.write(line)
 
 
-
-##########################
-# A* searcher to be used with viterbi algorithm to generate k-decoded list
-########################
 import heapq
 
 class AStarNode(object):
+    """class representing A* node to be used with A* searcher and viterbi for generating k-decoded list
+    
+       Args:
+           cost: float representing the score/unnormalized probability of a sequence up to given position
+           position: integer representing the current position in the sequence
+           pi_c: prefix or state code of the label
+           label: label of the current position in a sequence
+           frwdlink: a link to :class:`AStarNode` node
+    
+       Attributes:
+           cost: float representing the score/unnormalized probability of a sequence up to given position
+           position: integer representing the current position in the sequence
+           pi_c: prefix or state code of the label
+           label: label of the current position in a sequence
+           frwdlink: a link to :class:`AStarNode` node
+           
+    """
     def __init__(self, cost, position, pi_c, label, frwdlink):
         self.cost = cost
         self.position = position
@@ -313,6 +415,7 @@ class AStarNode(object):
         self.frwdlink = frwdlink
         
     def print_node(self):
+        """print the info about a node"""
         statement = "cost: {}, position: {}, pi_code: {}, label: {}, ".format(self.cost, self.position, self.pi_c, self.label)
         if(self.frwdlink):
             statement += "forward_link: {}".format(self.frwdlink)
@@ -321,24 +424,57 @@ class AStarNode(object):
         print(statement)
         
 class AStarAgenda(object):
+    """class containing a heap where instances of :class:`AStarNode` class will be pushed 
+    
+       the push operation will use the score matrix (built using viterbi algorithm)
+       representing the unnormalized probability of the sequences ending at every position 
+       with the different available prefixes/states
+    
+       Attributes:
+           qagenda: queue where instances of :class:`AStarNode` are pushed
+           entry_count: counter that keeps track of the entries and associate each entry(node)
+                        with a unique number. It is useful for resolving nodes with equal costs
+        
+    """
     def __init__(self):
         self.qagenda = []
         self.entry_count = 0
 
     def push(self, astar_node, cost):
+        """push instance of :class:`AStarNode` with its associated cost to the heap
+        
+           Args:
+               astar_node: instance of :class:`AStarNode` class
+               cost: float representing the score/unnormalized probability of a sequence up to given position
+        """
         heapq.heappush(self.qagenda, (-cost, self.entry_count, astar_node))
         self.entry_count += 1
 
     def pop(self):
+        """pop nodes with highest score from the heap
+        """
         astar_node = heapq.heappop(self.qagenda)[-1]
         return(astar_node)
     
 class FO_AStarSearcher(object):
-    def __init__(self, Y_codebook, Y_codebook_rev):
-        self.Y_codebook = Y_codebook
+    """A* star searcher associated with first-order CRF model such as :class:`FirstOrderCRF`
+       
+       Args:
+           Y_codebook_rev: a reversed version of dictionary comprising the set of states each assigned a unique code
+           
+       Attributes:
+           Y_codebook_rev: a reversed version of dictionary comprising the set of states each assigned a unique code
+    """
+    def __init__(self, Y_codebook_rev):
         self.Y_codebook_rev = Y_codebook_rev
 
     def infer_labels(self, top_node, back_track):
+        """decode sequence by inferring labels
+        
+           Args:
+               top_node: instance of :class:`AStarNode` class
+               back_track: dictionary containing back pointers built using dynamic programming algorithm
+        """
         Y_codebook_rev = self.Y_codebook_rev
         # decoding the sequence
         #print("we are decoding")
@@ -364,6 +500,19 @@ class FO_AStarSearcher(object):
         return(Y_decoded)
     
     def search(self, alpha, back_track, T, K):
+        """A* star searcher uses the score matrix  (built using viterbi algorithm) to decode top-K list of sequences
+        
+           Args:
+               alpha: score matrix build using the viterbi algorithm
+               back_track: back_pointers dictionary tracking the best paths to every state
+               T: last decoded position of a sequence (in this context, it is the alpha.shape[0])
+               K: number of top decoded sequences to be returned
+               
+           Returns:
+               topk_list: top-K list of decoded sequences
+           
+        
+        """
         # push the best astar nodes to the queue (i.e. the states at time T)
         q = AStarAgenda()
         r = set()
@@ -424,18 +573,42 @@ class FO_AStarSearcher(object):
             return(topk_list)
 
 class HO_AStarSearcher(object):
-    def __init__(self, P_codebook, P_codebook_rev, pi_elems):
-        self.P_codebook = P_codebook
+    """A* star searcher associated with higher-order CRF model such as :class:`HOCRFAD`
+       
+       Args:
+          P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
+                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+          P_elems: dictionary comprising the composing elements of every prefix in the `P` set
+                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+
+       Attributes:
+          P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
+                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+          P_elems: dictionary comprising the composing elements of every prefix in the `P` set
+                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+    """
+    def __init__(self, P_codebook_rev, P_elems):
         self.P_codebook_rev = P_codebook_rev
-        self.pi_elems = pi_elems
+        self.P_elems = P_elems
         
     def get_node_label(self, pi_code):
+        """get the the label/state given a prefix code
+        
+           Args:
+               pi_code: prefix code which is an element of :attr:`P_codebook_rev`
+        """
+        
         pi = self.P_codebook_rev[pi_code]
-        y =  self.pi_elems[pi][-1]
+        y =  self.P_elems[pi][-1]
         return(y)
 
     def infer_labels(self, top_node, back_track):
-        P_codebook = self.P_codebook
+        """decode sequence by inferring labels
+        
+           Args:
+               top_node: instance of :class:`AStarNode` class
+               back_track: dictionary containing back pointers tracking the best paths to every state
+        """
         P_codebook_rev = self.P_codebook_rev
         # decoding the sequence
         #print("we are decoding")
@@ -448,10 +621,10 @@ class HO_AStarSearcher(object):
         #print("t={}, p_T_code={}, p_T={}, y_T ={}".format(T, p_T_code, p_T, y_T))
         t = pos - 1
         while t>0:
-            p_tplus1 = Y_decoded[-1][0]
-            p_t, y_t = back_track[t+1, P_codebook[p_tplus1]]
+            p_tplus1_c = Y_decoded[-1][0]
+            p_t_c, y_t = back_track[t+1, p_tplus1_c]
             #print("t={}, (t+1, p_t_code)=({}, {})->({},{})".format(t, t+1, P_codebook[p_tplus1], p_t, y_t))
-            Y_decoded.append((p_t, y_t))
+            Y_decoded.append((p_t_c, y_t))
             t -= 1
         Y_decoded.reverse()
         Y_decoded = [y for (__, y) in Y_decoded]
@@ -464,12 +637,24 @@ class HO_AStarSearcher(object):
         return(Y_decoded)
     
     def search(self, alpha, back_track, T, K):
+        """A* star searcher uses the score matrix  (built using viterbi algorithm) to decode top-K list of sequences
+        
+           Args:
+               alpha: score matrix build using the viterbi algorithm
+               back_track: back_pointers dictionary tracking the best paths to every state
+               T: last decoded position of a sequence (in this context, it is the alpha.shape[0])
+               K: number of top decoded sequences to be returned
+               
+           Returns:
+               topk_list: top-K list of decoded sequences
+           
+        
+        """
         # push the best astar nodes to the queue (i.e. the pi's at time T)
         q = AStarAgenda()
         r = set()
         c = 0
         P_codebook_rev = self.P_codebook_rev
-        P_codebook = self.P_codebook
         # create nodes from the pi's at time T
         for pi_c in P_codebook_rev:
             cost = alpha[T, pi_c]
@@ -489,8 +674,7 @@ class HO_AStarSearcher(object):
                 track.append(top_node)
                 
                 for i in reversed(range(2, top_node.position+1)):
-                    best_prev_pi, best_y = back_track[i, top_node.pi_c]
-                    best_prev_pi_c = P_codebook[best_prev_pi]
+                    best_prev_pi_c, best_y = back_track[i, top_node.pi_c]
                     pos = i - 1
                     for prev_pi_c in P_codebook_rev:
                         # create a new astar node
@@ -523,17 +707,41 @@ class HO_AStarSearcher(object):
             return(topk_list)
         
 class HOSemi_AStarSearcher(object):
-    def __init__(self, P_codebook, P_codebook_rev, pi_elems):
-        self.P_codebook = P_codebook
+    """A* star searcher associated with higher-order CRF model such as :class:`HOSemiCRFAD`
+       
+       Args:
+          P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
+                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+          P_elems: dictionary comprising the composing elements of every prefix in the `P` set
+                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+
+       Attributes:
+          P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
+                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+          P_elems: dictionary comprising the composing elements of every prefix in the `P` set
+                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+    """
+    def __init__(self, P_codebook_rev, pi_elems):
         self.P_codebook_rev = P_codebook_rev
         self.pi_elems = pi_elems
         
     def get_node_label(self, pi_code):
+        """get the the label/state given a prefix code
+        
+           Args:
+               pi_code: prefix code which is an element of :attr:`P_codebook_rev`
+        """
         pi = self.P_codebook_rev[pi_code]
         y =  self.pi_elems[pi][-1]
         return(y)
 
     def infer_labels(self, top_node, back_track):
+        """decode sequence by inferring labels
+        
+           Args:
+               top_node: instance of :class:`AStarNode` class
+               back_track: dictionary containing back pointers tracking the best paths to every state
+        """
         # decoding the sequence
         #print("we are decoding")
         #top_node.print_node()
@@ -551,7 +759,7 @@ class HOSemi_AStarSearcher(object):
             new_d, new_pt_c, new_yt = back_track[t, pt_c]
             for _ in range(new_d+1):
                 Y_decoded.append(yt)
-            t = t - d -1
+            t = t - new_d -1
             pt_c = new_pt_c
             yt = new_yt
         Y_decoded.reverse()   
@@ -564,6 +772,19 @@ class HOSemi_AStarSearcher(object):
         return(Y_decoded)
     
     def search(self, alpha, back_track, T, K):
+        """A* star searcher uses the score matrix  (built using viterbi algorithm) to decode top-K list of sequences
+        
+           Args:
+               alpha: score matrix build using the viterbi algorithm
+               back_track: back_pointers dictionary tracking the best paths to every state
+               T: last decoded position of a sequence (in this context, it is the alpha.shape[0])
+               K: number of top decoded sequences to be returned
+               
+           Returns:
+               topk_list: top-K list of decoded sequences
+           
+        
+        """
         # push the best astar nodes to the queue (i.e. the pi's at time T)
         q = AStarAgenda()
         r = set()
@@ -622,15 +843,45 @@ class HOSemi_AStarSearcher(object):
             #print('r ', r)
             #print('topk ', topk_list)
             return(topk_list)
-        
-#######################
-# template generating utility functions
-#######################
+
 class TemplateGenerator(object):
+    """template generator class for feature/function template generation
+    """
+
     def __init__(self):
         pass
     
     def generate_template_XY(self, attr_name, x_spec, y_spec, template):
+        r"""generate template XY for the feature extraction
+        
+           Args:
+               attr_name: string representing the attribute name of the atomic observations/tokens
+               x_spec: tuple of the form  (n-gram, range)
+                       that is we can specify the n-gram features required in a specific range
+                       for an attr_name 
+               y_spec: string specifying how to join/combine the features on the X observation level
+                       with labels on the Y level
+               template: dictionary that accumulates the generated feature template for all attributes
+               
+           Example:
+           
+               suppose we have `word` attribute reference by 'w' and we need to use the current word
+               with the current label (i.e. unigram of words with unigrams of labels) in a range of (0,1)
+            
+               ::
+               
+                   templateXY = {}
+                   generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram', templateXY)
+               
+               we can also specify a bigram features at the labels level
+               
+               ::
+               
+                   generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram', templateXY)
+               
+           .. note ::
+              this can be applied for every attribute name and accumulated in the `template` dictionary
+        """
         ngram_options, wsize = x_spec
         templateX = self._traverse_x(attr_name, ngram_options, wsize)
         templateY = self.generate_template_Y(y_spec)
@@ -639,6 +890,13 @@ class TemplateGenerator(object):
         self._update_template(template, templateXY)
         
     def _update_template(self, template, templateXY):  
+        """update the accumulated template with the current generated templateXY
+        
+           Args:
+               template: dictionary of the accumulated template for the different offsets
+                         and attribute names
+               templateXY: dictionary of the form {attr_name:{x_offset:(y_offsets)}}
+        """
         for attr_name in templateXY:
             if(attr_name in template):
                 for x_offset in templateXY[attr_name]:
@@ -647,6 +905,15 @@ class TemplateGenerator(object):
                 template[attr_name] = templateXY[attr_name] 
                              
     def _traverse_x(self, attr_name, ngram_options, wsize):
+        """generate template on the X observation level only
+        
+           Args:
+               attr_name: string representing the attribute name of the atomic observations/tokens
+               ngram_options: string specifying the n-grams (i.e. '1-gram') it also supports multiple
+                              specification such as '1-gram:2-gram' where each is separated by a colon
+               wsize: a range specifying the window size where the template operates
+               
+        """
         options = ngram_options.split(":")
         l = list(wsize)
         template = {attr_name:{}}
@@ -658,6 +925,13 @@ class TemplateGenerator(object):
         return(template)
     
     def generate_template_Y(self, ngram_options):
+        """generate template on the Y labels level
+        
+           Args:
+               ngram_options: string specifying the n-grams (i.e. '1-gram') it also supports multiple
+                              specification such as '1-gram:2-gram' where each is separated by a colon
+               
+        """
         template = {'Y':[]}
         options = ngram_options.split(":")
         for option in options:
@@ -667,6 +941,7 @@ class TemplateGenerator(object):
     
     @staticmethod
     def _traverse_y(max_order, accumulative = True):
+        """generate the y template"""
         attr_name = 'Y'
         template = {attr_name:[]}
         if(accumulative):
@@ -683,13 +958,38 @@ class TemplateGenerator(object):
     
     @staticmethod
     def _mix_template_XY(templateX, templateY):
+        """mix and join the template on the X observation level with the Y level
+           
+           Args:
+               templateX: dictionary of the form {attr_name:{x_offset:None}}
+                          e.g. {'w': {(0,): None}}
+               templateY: dictionary of the form {'Y':[y_offset]}
+                          e.g. {'Y': [(0,), (-1, 0)]}
+           .. note::
+           
+              - x_offset is a tuple of offsets representing the ngram options needed 
+                such as (0,) for unigram and (-1,0) bigram using the previous token
+                
+              - y_offset is a tuple of offsets representing the ngram options needed 
+                such as (0,) for unigram and (-1,0) bigram using the previous state and
+                (-2,-1,0) using the previous two states
+        """
+        print("templateX ", templateX)
+        print("templateY ", templateY)
         template_XY = deepcopy(templateX)
         for attr_name in template_XY:
             for offset_x in template_XY[attr_name]:
                 template_XY[attr_name][offset_x] = tuple(templateY['Y'])
         return(template_XY)
+    
     @staticmethod
     def generate_ngram(l, n):
+        """n-gram generator based on the length of the window and the ngram option
+        
+           Args:
+               l: list of positions of the range representing the window size (i.e. list(wsize))
+               n: integer representing the n-gram option (i.e. 1 for unigram, 2 for bigram, etc..)
+        """
         ngram_list = []
         for i in range(0, len(l)):
             elem = tuple(l[i:i+n])
@@ -698,8 +998,15 @@ class TemplateGenerator(object):
             ngram_list.append(elem)
             
         return(ngram_list)
+    
     @staticmethod
     def generate_combinations(n):
+        """generates all possible combinations based on the maximum number of ngrams n
+        
+           Args:
+               n: integer specifying the maximum/greatest ngram option
+               
+        """
         option_names = []
         start = 1
         for i in range(start, n+1):
@@ -738,7 +1045,7 @@ class BoundNode(object):
         return(id(self))
     
 def generate_partitions(boundary, L, patt_len, bound_node_map, depth_node_map, parent_node, depth=1):
-    """ generate all possible partitions within the range of segment length and model order"""
+    """generate all possible partitions within the range of segment length and model order"""
     if(depth >= patt_len):
         return
 

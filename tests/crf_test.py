@@ -8,10 +8,13 @@ import numpy
 from pyseqlab.utilities import TemplateGenerator, DataFileParser, create_directory
 from pyseqlab.attributes_extraction import SequenceStruct, NERSegmentAttributeExtractor
 from pyseqlab.features_extraction import FOFeatureExtractor, HOFeatureExtractor, SeqsRepresenter, FeatureFilter
-from pyseqlab.fo_crf_model import FirstOrderCRF, FirstOrderCRFModelRepresentation
-from pyseqlab.ho_crf_model import HOCRF, HOCRFModelRepresentation
-from pyseqlab.hosemi_crf_model import HOSemiCRF, HOSemiCRFModelRepresentation
+from pyseqlab.fo_crf import FirstOrderCRF, FirstOrderCRFModelRepresentation
+from pyseqlab.ho_crf import HOCRF, HOCRFModelRepresentation
+from pyseqlab.hosemi_crf import HOSemiCRF, HOSemiCRFModelRepresentation
 from pyseqlab.crf_learning import Learner
+from pyseqlab.ho_crf_ad import HOCRFADModelRepresentation, HOCRFAD
+from pyseqlab.hosemi_crf_ad import HOSemiCRFADModelRepresentation, HOSemiCRFAD
+
 
 
 root_dir = os.path.dirname(os.path.realpath(__file__))
@@ -31,7 +34,6 @@ class TestCRFModel(object):
     def test_workflow(self, seqs):
         """ testing scenarios of mixing different templates
         """
-    #     numpy.random.seed(1)
         corpus_name = "reference_corpus"
         working_dir = create_directory("working_dir", self.root_dir)
         self._working_dir = working_dir
@@ -103,7 +105,7 @@ class TestCRFModel(object):
             lines += "avg_fexp_diff {}\n".format(avg_fexp_diff)
             lines += "#"*40 + "\n"
             print(lines)
-
+                    
     def test_feature_extraction(self):
 
         seqs_id = self._seqs_id
@@ -149,10 +151,10 @@ def load_segments():
     seqs = []
     X = [{'w':'I'}, {'w':'live'}, {'w':'in'}, {'w':'New'}, {'w':'Haven'}]
     Y = ['P', 'O', 'O', 'L', 'L']
-    seqs.append(SequenceStruct(X, Y))
+    seqs.append(SequenceStruct(X, Y, "O"))
     X = [{'w':'Connecticut'}, {'w':'is'}, {'w':'in'}, {'w':'the'}, {'w':'United'},{'w':'States'}, {'w':'of'}, {'w':'America'}]
     Y = ['L', 'O', 'O', 'O', 'L', 'L', 'L', 'L']
-    seqs.append(SequenceStruct(X, Y))
+    seqs.append(SequenceStruct(X, Y, "O"))
     return(seqs)
 
 def run_segments():
@@ -188,19 +190,27 @@ def run_conll00_seqs():
     template_generator = TemplateGenerator()
     templateXY = {}
     # generating template for attr_name = w
-    template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram', templateXY)
+    template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram:3-gram', templateXY)
     templateY = {'Y':()}
     filter_obj = None
-    return(seqs[:100], templateY, templateXY, filter_obj)
+    return(seqs[:10], templateY, templateXY, filter_obj)
 
 def test_crfs(model_type, scaling_method, optimization_options, run_config, test_type):
     if(model_type == "HOSemi"):
         crf_model = HOSemiCRF 
         model_repr = HOSemiCRFModelRepresentation
         fextractor = HOFeatureExtractor
+    elif(model_type == "HOSemi_AD"):
+        crf_model = HOSemiCRFAD 
+        model_repr = HOSemiCRFADModelRepresentation
+        fextractor = HOFeatureExtractor
     elif(model_type == "HO"):
         crf_model = HOCRF 
         model_repr = HOCRFModelRepresentation
+        fextractor = HOFeatureExtractor
+    elif(model_type == "HO_AD"):
+        crf_model = HOCRFAD
+        model_repr = HOCRFADModelRepresentation
         fextractor = HOFeatureExtractor
     elif(model_type == "FO"):
         crf_model = FirstOrderCRF 
@@ -222,6 +232,9 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config, test
         crf_tester.test_model_validity()
     elif(test_type == "feature extraction"):
         crf_tester.test_feature_extraction()
+            
+    crf_tester._crf_model.seqs_info.clear()
+
     return(crf_tester._crf_model)
 
 def profile_test(model_type, scaling_method, optimization_options, run_config, test_type):
