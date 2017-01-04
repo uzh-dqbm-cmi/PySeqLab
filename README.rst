@@ -6,4 +6,4 @@ PySeqLab is an open source package for performing supervised learning in structu
 Documentation
 =============
 
-Documentation and tutorials are available through `readthedocs website <http://pyseqlab.readthedocs.io/en/latest/`.
+Documentation and tutorials are available through `readthedocs website <http://pyseqlab.readthedocs.io/en/latest/>`__.
