@@ -11,9 +11,9 @@ from pyseqlab.features_extraction import FOFeatureExtractor, HOFeatureExtractor,
 from pyseqlab.fo_crf import FirstOrderCRF, FirstOrderCRFModelRepresentation
 from pyseqlab.ho_crf import HOCRF, HOCRFModelRepresentation
 from pyseqlab.hosemi_crf import HOSemiCRF, HOSemiCRFModelRepresentation
-from pyseqlab.crf_learning import Learner
 from pyseqlab.ho_crf_ad import HOCRFADModelRepresentation, HOCRFAD
 from pyseqlab.hosemi_crf_ad import HOSemiCRFADModelRepresentation, HOSemiCRFAD
+from pyseqlab.crf_learning import Learner
 
 
 
@@ -221,7 +221,7 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config, test
     crf_tester = TestCRFModel(f_y, f_xy, crf_model, model_repr, fextractor, scaling_method, optimization_options, filter_obj)
     crf_tester.test_workflow(seqs)
     
-    if(test_type == 'forward-backward'):
+    if(test_type == 'forward backward'):
         # test forward backward computation
         crf_tester.test_forward_backward_computation()
     elif(test_type == "gradient"):
