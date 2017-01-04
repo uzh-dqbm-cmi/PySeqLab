@@ -729,8 +729,8 @@ class SeqsRepresenter(object):
                working_dir: string representing the directory where the parsing and saving info on disk will occur
                unique_id: boolean indicating if the generated root folder will include a generated id
                
-           Returns:
-               seqs_info: dictionary comprising the the info about the prepared sequences
+           Return:
+               seqs_info (dictionary): dictionary comprising the the info about the prepared sequences
 
            Example::
            

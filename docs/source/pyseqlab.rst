@@ -28,26 +28,50 @@ pyseqlab.features_extraction module
     :undoc-members:
     :show-inheritance:
 
-pyseqlab.fo_crf_model module
-----------------------------
+pyseqlab.fo_crf module
+----------------------
 
-.. automodule:: pyseqlab.fo_crf_model
+.. automodule:: pyseqlab.fo_crf
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyseqlab.ho_crf_model module
-----------------------------
+pyseqlab.ho_crf module
+----------------------
 
-.. automodule:: pyseqlab.ho_crf_model
+.. automodule:: pyseqlab.ho_crf
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyseqlab.hosemi_crf_model module
+pyseqlab.ho_crf_ad module
+-------------------------
+
+.. automodule:: pyseqlab.ho_crf_ad
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pyseqlab.hosemi_crf module
+--------------------------
+
+.. automodule:: pyseqlab.hosemi_crf
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pyseqlab.hosemi_crf_ad module
+-----------------------------
+
+.. automodule:: pyseqlab.hosemi_crf_ad
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pyseqlab.linear_chain_crf module
 --------------------------------
 
-.. automodule:: pyseqlab.hosemi_crf_model
+.. automodule:: pyseqlab.linear_chain_crf
     :members:
     :undoc-members:
     :show-inheritance:

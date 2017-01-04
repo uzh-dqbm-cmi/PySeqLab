@@ -165,9 +165,10 @@ class HOCRFModelRepresentation(HOCRFADModelRepresentation):
 class HOCRF(HOCRFAD):
     """higher-order CRF model 
     
-       currently it supports *only* search-based training methods such as `COLLINS-PERCEPTRON` or `SAPO`
-       it implements the model discussed in:
-       https://papers.nips.cc/paper/3815-conditional-random-fields-with-high-order-features-for-sequence-labeling.pdf
+        - currently it supports *only* search-based training methods such as `COLLINS-PERCEPTRON` or `SAPO`
+        - it implements the model discussed in:
+          https://papers.nips.cc/paper/3815-conditional-random-fields-with-high-order-features-for-sequence-labeling.pdf
+    
     """
     def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 3):
         super().__init__(model, seqs_representer, seqs_info, load_info_fromdisk) 
@@ -220,12 +221,15 @@ class HOCRF(HOCRFAD):
         return(beta)
     
     def compute_seq_gradient(self, w, seq_id):
-        """.. warning::
+        """sequence gradient computation
         
-              :class:`HOCRF` currently **does not support** gradient based training
+           .. warning::
+        
+              the :class:`HOCRF` currently **does not support** gradient based training.
               Use search based training methods such as `COLLINS-PERCEPTRON` or `SAPO`
+              
               this class is used for demonstration of the computation of the backward matrix
-              using suffix relation as outlined in 
+              using suffix relation as outlined in:
               https://papers.nips.cc/paper/3815-conditional-random-fields-with-high-order-features-for-sequence-labeling.pdf
         """
         try:
