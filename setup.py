@@ -7,12 +7,12 @@ from setuptools import setup
 
 # package description
 # to change into .rst file
-expl_files = ['README.md']
+expl_files = ['README.rst']
 long_description = '\n'.join([open(f, 'r').read() for f in expl_files])
 
 if __name__ == "__main__":
     setup(name='PySeqLab',
-          version="1.3.0",
+          version="1.4.0",
           description='A package for performing structured prediction (i.e.sequence labeling and segmentation).',
           long_description=long_description,
           author="Ahmed Allam",
