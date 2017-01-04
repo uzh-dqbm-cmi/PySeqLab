@@ -8,6 +8,11 @@ For any questions, please email
 For reporting bugs or issues, please refer to bitbucket issue tracker
 `Issue Tracker <https://bitbucket.org/A_2/pyseqlab/issues>`__.
 
+Funding and Support
+--------------------------------------------------------------------------------
+
+This work is supported by grant number P2TIP1-161635 awarded by the `Swiss National Science Foundation <http://snf.ch/>`__.
+
 Citation
 --------------------------------------------------------------------------------
 
