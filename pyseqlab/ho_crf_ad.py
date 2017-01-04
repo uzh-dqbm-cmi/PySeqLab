@@ -5,8 +5,8 @@
 
 
 import numpy
-from pyseqlab.hosemi_crf_ad import HOSemiCRFADModelRepresentation, HOSemiCRFAD
-from pyseqlab.utilities import HO_AStarSearcher, vectorized_logsumexp
+from .hosemi_crf_ad import HOSemiCRFADModelRepresentation, HOSemiCRFAD
+from .utilities import HO_AStarSearcher, vectorized_logsumexp
 
 class HOCRFADModelRepresentation(HOSemiCRFADModelRepresentation):
     """Model representation that will hold data structures to be used in :class:`HOCRFAD` class
