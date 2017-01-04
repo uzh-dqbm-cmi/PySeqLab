@@ -20,5 +20,5 @@ PySeqLab an open source Python package for sequence labeling and segmentation.
 License
 --------------------------------------------------------------------------------
 
-This work is open source and distributed under the MIT license `MIT license <https://opensource.org/licenses/MIT>`__.
+This work is open source and distributed under the `MIT license <https://opensource.org/licenses/MIT>`__.
 See the ``license.txt`` file accompanying the package.
