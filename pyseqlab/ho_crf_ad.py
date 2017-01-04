@@ -31,7 +31,7 @@ class HOCRFADModelRepresentation(HOSemiCRFADModelRepresentation):
         Z_elems = self.Z_elems
         filtered_activestates = {}
         __, pos = boundary
-        
+
         for z_len in activated_states:
             if(z_len == 1):
                 continue
@@ -54,7 +54,7 @@ class HOCRFADModelRepresentation(HOSemiCRFADModelRepresentation):
         return(filtered_activestates)  
                         
 class HOCRFAD(HOSemiCRFAD):
-    """higher-order CRF model 
+    """higher-order CRF model that uses algorithmic differentiation in gradient computation
     
       Args:
           model: an instance of :class:`HOCRFADModelRepresentation` class

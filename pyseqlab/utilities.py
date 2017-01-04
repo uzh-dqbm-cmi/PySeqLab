@@ -7,9 +7,9 @@ import shutil
 from datetime import datetime
 from copy import deepcopy
 from itertools import combinations
+import heapq
 import warnings
 import numpy
-from scipy.misc import logsumexp
 warnings.filterwarnings('error')
 
 
@@ -206,28 +206,28 @@ class DataFileParser():
         self.header = []
         
     def read_file(self, file_path, header, y_ref = True, seg_other_symbol = None, column_sep = " "):
-        r"""read and parse a file the contains the sequences following a predfiened format
+        r"""read and parse a file the contains the sequences following a predefined format
         
-           the file should contain label and observation tracks each separated in a column 
+            the file should contain label and observation tracks each separated in a column 
            
-           .. note::
+            .. note::
         
-              label column is the **LAST** column in the file (i.e. X_a X_b Y)
+               label column is the **LAST** column in the file (i.e. X_a X_b Y)
                 
-           Args:
-               file_path: string representing the file path to the data file
-               header: specifies how the header is reported in the file containing the sequences
-                       options include:
-                           - 'main' -> one header in the beginning of the file
-                           - 'per_sequence' -> a header for every sequence
-                           - list of keywords as header (i.e. ['w', 'part_of_speech'])
+            Args:
+                file_path: string representing the file path to the data file
+                header: specifies how the header is reported in the file containing the sequences
+                        options include:
+                        - 'main' -> one header in the beginning of the file
+                        - 'per_sequence' -> a header for every sequence
+                        - list of keywords as header (i.e. ['w', 'part_of_speech'])
                            
-           Keyword Arguments:
-               y_ref: boolean specifying if the reference label column in the data file
-               seg_other_sybmol: string or None(default), if specified then the task is a segmentation problem 
-                                 where it represents the non-entity symbol else (None) then it is considered 
-                                 as sequence labeling problem
-               column_sep: separator used between the columns in the file
+            Keyword Arguments:
+                y_ref: boolean specifying if the reference label column in the data file
+                seg_other_sybmol: string or None(default), if specified then the task is a segmentation problem 
+                                  where it represents the non-entity symbol else (None) then it is considered 
+                                  as sequence labeling problem
+                column_sep: separator used between the columns in the file
                
 
         """
@@ -387,7 +387,6 @@ class ReaderWriter(object):
             f.write(line)
 
 
-import heapq
 
 class AStarNode(object):
     """class representing A* node to be used with A* searcher and viterbi for generating k-decoded list
@@ -1030,22 +1029,45 @@ class TemplateGenerator(object):
         return(config_combinations)
     
 class BoundNode(object):
+    """boundary entity class used when generating all possible partitions within specified constraint
+    
+       Args:
+           parent: instance of :class:`BoundNode` 
+           boundary: tuple (u,v) representing the current boundary
+    """
     def __init__(self, parent, boundary):
         self.parent = parent
         self.boundary = boundary
         self.children = []
         
     def add_child(self, child):
+        """add link to the child nodes"""
         self.children.append(child)
     
     def get_child(self):
+        """retrieve child nodes"""
         return(self.children.pop())
     
     def get_signature(self):
+        """retrieve the id of the node"""
         return(id(self))
     
 def generate_partitions(boundary, L, patt_len, bound_node_map, depth_node_map, parent_node, depth=1):
-    """generate all possible partitions within the range of segment length and model order"""
+    """generate all possible partitions within the range of segment length and model order
+    
+       it transforms the partitions into a tree of nodes starting from the root node
+       that uses `boundary` argument in its construction
+       
+       Args:
+           boundary: tuple (u,v) representing the current boundary in a sequence
+           L: integer representing the maximum length a segment could be constructed
+           patt_len: integer representing the maximum model order
+           bound_node_map: dictionary that keeps track of all possible partitions represented as
+                           instances of :class:`BoundNode`
+           depth_node_map: dictionary that arranges the generated nodes by their depth in the tree
+           parent_node: instance of :class:`BoundNode` or None in case of the root node
+           depth: integer representing the maximum depth of the tree to be reached before stopping 
+    """
     if(depth >= patt_len):
         return
 
@@ -1086,6 +1108,12 @@ def generate_partitions(boundary, L, patt_len, bound_node_map, depth_node_map, p
         generate_partitions(upd_boundary, L, patt_len, bound_node_map, depth_node_map, child, depth)
         
 def generate_partition_boundaries(depth_node_map):
+    """generate partitions of the boundaries generated in :func:`generate_partitions` function
+    
+       Args:
+           depth_node_map: dictionary that arranges the generated nodes by their depth in the tree
+                           it is constructed using :func:`generate_partitions` function
+    """
     g = {}
     depths = sorted(depth_node_map, reverse=True)
     
@@ -1115,7 +1143,15 @@ def delete_file(filepath):
         os.remove(filepath)
                 
 def create_directory(folder_name, directory = "current"):
-    """ function to create directory/folder if it does not exist and returns the path of the directory"""
+    """create directory/folder (if it does not exist) and returns the path of the directory
+    
+       Args:
+           folder_name: string representing the name of the folder to be created
+       
+       Keyword Arguments:
+           directory: string representing the directory where to create the folder
+                      if `current` then the folder will be created in the current directory
+    """
     if directory == "current":
         path_current_dir = os.path.dirname(__file__)
     else:
@@ -1126,6 +1162,7 @@ def create_directory(folder_name, directory = "current"):
     return(path_new_dir)
 
 def generate_datetime_str():
+    """generate string composed of the date and time"""
     datetime_now = datetime.now()
     datetime_str = "{}_{}_{}-{}_{}_{}_{}".format(datetime_now.year,
                                                  datetime_now.month,
@@ -1139,6 +1176,11 @@ def generate_datetime_str():
 
 
 def vectorized_logsumexp(vec):
+    """vectorized version of log sum exponential operation
+    
+       Args:
+           vec: numpy vector where entries are in the log domain
+    """
     with numpy.errstate(invalid='warn'):
         max_a = numpy.max(vec)
         try:
@@ -1151,7 +1193,18 @@ def vectorized_logsumexp(vec):
 #     return(logsumexp(vec))
 
 def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class=None):
-    #read the model file
+    """to update/regenerate CRF models using the save parts/components
+    
+       Args:
+           modelparts_dir: string representing the directory where model parts are saved
+           modelrepr_class: name of the model representation class to be used which has 
+                            suffix `ModelRepresentation` such as :class:`HOCRFADModelRepresentation`
+           model_class: name of the CRF model class such as :class:`HOCRFAD`
+           aextractor_class: name of the attribute extractor class such as :class:`NERSegmentAttributeExtractor`
+           fextractor_class: name of the feature extractor class used such as :class:`HOFeatureExtractor`
+           seqrepresenter_class: name of the sequence representer class such as :class:`SeqsRepresenter`
+           ascaler_class: name of the attribute scaler class such as :class:`AttributeScaler`
+    """
     
     ycodebook = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_Ycodebook"))
     mfeatures  = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_modelfeatures"))
@@ -1189,10 +1242,36 @@ def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextra
     new_crfmodel.weights = ReaderWriter.read_data(os.path.join(modelparts_dir, "weights"))
     return(new_crfmodel)
 
-##################
-# utility functions for splitting, grouping dataset
-#################
+
 def split_data(seqs_id, options):
+    r"""utility function for splitting dataset (i.e. training/testing and cross validation)
+    
+       Args:
+           options: dictionary comprising of the options on how to split data
+           
+       Example:
+           To perform cross validation, we need to specify
+               - cross-validation for the `method`
+               - the number of folds for the `k_fold`
+               
+           ::
+               
+               options = {'method':'cross-validation',
+                          'k_fold':number
+                         }
+                         
+           To perform random splitting, we need to specify
+               - random for the `method`
+               - number of splits for the `num_splits`
+               - size of the training set in percentage for the `trainset_size`
+               
+           ::
+               
+               options = {'method':'random',
+                          'num_splits':number,
+                          'trainset_size':percentage
+                         }
+    """
     N = len(seqs_id)
     data_split = {}
     method = options.get('method')
@@ -1237,12 +1316,24 @@ def split_data(seqs_id, options):
             
     return(data_split)
 
-#########################################
-## split data based on seqs length -
-## we need to execute the three functions in order:
-## (1) group_seqs_by_length, (2) weighted_sample, (3) aggregate_weightedsample
-#########################################
+
+"""split data based on sequences length
+   we need to execute the three functions in order:
+       (1) :func:`group_seqs_by_length`
+       (2) :func:`weighted_sample`
+       (3) :func:`aggregate_weightedsample`
+"""
 def group_seqs_by_length(seqs_info):
+    """group sequences by their length
+    
+       Args:
+           seqs_info: dictionary comprsing info about the sequences
+                      it has this form {seq_id:{T:length of sequence}}
+                      
+       .. note::
+       
+          sequences that are with unique sequence length are grouped together as singeltons
+    """
     grouped_seqs = {}
     for seq_id, seq_info in seqs_info.items():
         T = seq_info["T"]
@@ -1261,6 +1352,14 @@ def group_seqs_by_length(seqs_info):
     return(grouped_seqs)
     
 def weighted_sample(grouped_seqs, trainset_size):
+    """get a random split of the grouped sequences
+    
+       Args:
+           grouped_seqs: dictionary of the grouped sequences based on their length
+                         it is obtained using :func:`group_seqs_by_length` function
+           trainset_size: integer representing the size of the training set in percentage
+           
+    """
     options = {'method':'random', 'num_splits':1, 'trainset_size':trainset_size}
     wsample = {}
     for group_var, seqs_id in grouped_seqs.items():
@@ -1270,6 +1369,12 @@ def weighted_sample(grouped_seqs, trainset_size):
     return(wsample)
 
 def aggregate_weightedsample(w_sample):
+    """represent the random picked sample for training/testing
+     
+       Args:
+           w_sample: dictionary representing a random split of the grouped sequences
+                     by their length. it is obtained using :func:`weighted_sample` function
+    """
     wdata_split= {"train":[],
                   "test": []}
     for grouping_var in w_sample:

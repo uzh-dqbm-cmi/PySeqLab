@@ -8,67 +8,108 @@ import numpy
 from .utilities import ReaderWriter, create_directory, generate_datetime_str, vectorized_logsumexp
 
 class Learner(object):
+    """learner used for training CRF models supporting search- and gradient-based learning methods
+    
+       Args:
+           crf_model: an instance of CRF models such as :class:`HOCRFAD`
+       
+       Keyword Arguments:
+           crf_model: an instance of CRF models such as :class:`HOCRFAD`
+           training_description: dictionary that will include the training specification
+                                 of the model
+
+    """
     def __init__(self, crf_model):
         self.crf_model = crf_model
         self.training_description = None
     
     def train_model(self, w0, seqs_id, optimization_options, working_dir, save_model = True):
-        """ Available options based on the selected method
-             optimization_options:
-                            1- {'method': SGA-ADADELTA
-                              'regularization_type': {'l1', 'l2'}
-                               regularization_value: float
-                               num_epochs: int
-                              'tolerance': float
-                              'rho': float
-                              'epsilon': float
-                              }
-                            1- {'method': SGA
-                              'regularization_type': {'l1', 'l2'}
-                               'regularization_value': float
-                               num_epochs: int
-                              'tolerance': float
-                              'learning_rate_schedule': one of ("bottu", "exponential_decay", "t_inverse", "constant")
-                              't0': float
-                              'alpha': float
-                              'eta0': float
-                              }
-                               
-                            2- {'method': Newton-CG
-                              'regularization_type': 'l2'
-                               regularization_value: float
-                              'disp': False,
-                              'xtol': 1e-05,
-                              'eps': 1.4901161193847656e-08, 
-                              'return_all': False,
-                              'maxiter': None,
-                              'norm': inf
-                              }
-                              
-                            3- {'method': CG, BFGS
-                              'regularization_type': 'l2'
-                               regularization_value: float
-                              'disp': False,
-                              'gtol': 1e-05,
-                              'eps': 1.4901161193847656e-08, 
-                              'return_all': False,
-                              'maxiter': None,
-                              'norm': inf
-                              }
-                              
-                            4- {'method': L-BFGS-B
-                              'regularization_type': 'l2'
-                               regularization_value: float
-                              'disp': False
-                              'maxls': 20,
-                              'iprint': -1,
-                              'gtol': 1e-05,
-                              'eps': 1e-08, 
-                              'maxiter': 15000, 
-                              'ftol': 2.220446049250313e-09, 
-                              'maxcor': 10, 
-                              'maxfun': 15000
-                              }
+        r"""the **MAIN** method for training models using the various options available
+        
+           Args:
+               w0: numpy vector representing initial weights for the parameters
+               seqs_id: list of integers representing the sequence ids
+               optimization_options: dictionary specifying the training method
+               working_dir: string representing the directory where the model data
+                            and generated files will be saved
+                            
+           Keyword Arguments:
+               save_model: boolean specifying if to save the final model
+               
+           Example:
+               
+               The available options for training are:
+                   - `SGA` for stochastic gradient ascent
+                   - `SGA-ADADELTA` for stochastic gradient ascent using ADADELTA approach
+                   - `BFGS` or `L-BFGS-B` for optimization using second order information (hessian matrix)
+                   - `SVRG` for stochastic variance reduced gradient method
+                   - `COLLINS-PERCEPTRON` for structured perceptron
+                   - `SAPO` for Search-based Probabilistic Online Learning Algorithm (SAPO) (an adapted version)
+               
+           For example possible specification of the optimization options are:
+               
+               ::
+               
+                    1) {'method': 'SGA-ADADELTA'
+                       'regularization_type': {'l1', 'l2'}
+                       'regularization_value': float
+                       'num_epochs': integer
+                       'tolerance': float
+                       'rho': float
+                       'epsilon': float
+                      }
+                      
+                      
+                   2) {'method': 'SGA' or 'SVRG'
+                       'regularization_type': {'l1', 'l2'}
+                       'regularization_value': float
+                       'num_epochs': integer
+                       'tolerance': float
+                       'learning_rate_schedule': one of ("bottu", "exponential_decay", "t_inverse", "constant")
+                       't0': float
+                       'alpha': float
+                       'eta0': float
+                      }
+                                   
+                                  
+                   3) {'method': 'L-BFGS-B' or 'BFGS'
+                       'regularization_type': 'l2'
+                       'regularization_value': float
+                       'disp': False
+                       'maxls': 20,
+                       'iprint': -1,
+                       'gtol': 1e-05,
+                       'eps': 1e-08, 
+                       'maxiter': 15000, 
+                       'ftol': 2.220446049250313e-09, 
+                       'maxcor': 10, 
+                       'maxfun': 15000
+                       }
+                
+                
+                   4) {'method': 'COLLINS-PERCEPTRON'
+                       'regularization_type': {'l1', 'l2'}
+                       'regularization_value': float
+                       'num_epochs': integer
+                       'update_type':{'early', 'max-fast', 'max-exhaustive', 'latest'}
+                       'shuffle_seq': boolean
+                       'beam_size': integer
+                       'avg_scheme': {'avg_error', 'avg_uniform'}
+                       'tolerance': float
+                      }
+                      
+                      
+                   5) {'method': 'SAPO'
+                       'regularization_type': {'l2'}
+                       'regularization_value': float
+                       'num_epochs': integer
+                       'update_type':'early'
+                       'shuffle_seq': boolean
+                       'beam_size': integer
+                       'topK': integer
+                       'tolerance': float
+                      }
+                         
         """
 
         pop_keys = set()
@@ -263,6 +304,7 @@ class Learner(object):
    
             
     def _report_training(self):
+        """report training by logging the description to a file"""
         method = self.training_description["method"]
         regularization_type = self.training_description["regularization_type"]
         # regularization parameter lambda
@@ -316,6 +358,12 @@ class Learner(object):
         ReaderWriter.log_progress(line, log_file)
         
     def _check_reldiff(self, x, y):
+        """calculate relative difference between two numbers
+           
+           Ars:
+               x: float
+               y: float
+        """
         tolerance = self.training_description["tolerance"]
         if(numpy.abs(y)<=tolerance):
             self._exitloop = True
@@ -328,11 +376,15 @@ class Learner(object):
                 else:
                     self._exitloop = False 
 
-        #############################
-        # optimize using scipy optimize function
-        #############################
+
     def _optscipy_seqs_loglikelihood(self, w, seqs_id):
-        """compute seqs loglikelihood when using the BFGS and L-BFGS-B optimization options"""
+        """compute seqs loglikelihood when using the BFGS and L-BFGS-B optimization options
+        
+           Args:
+               w: weight vector (numpy vector)
+               seqs_id: list of integers representing ids assigned to the sequence
+        
+        """
         crf_model = self.crf_model
         seqs_loglikelihood = crf_model.compute_seqs_loglikelihood(w, seqs_id)
         # clear cached info 
@@ -345,9 +397,16 @@ class Learner(object):
         # since the optimization will be based on minimization, hence we multiply by -1
         seqs_loglikelihood = seqs_loglikelihood * -1
         return(seqs_loglikelihood)
-    
+
+
     def _optscipy_seqs_gradient(self, w, seqs_id):
-        """compute seqs gradient when using the BFGS and L-BFGS-B optimization options"""
+        """compute seqs gradient when using the BFGS and L-BFGS-B optimization options
+        
+           Args:
+               w: weight vector (numpy vector)
+               seqs_id: list of integers representing ids assigned to the sequence
+        
+        """
         crf_model = self.crf_model
         seqs_grad = crf_model.compute_seqs_gradient(w, seqs_id)
         # clear cached info 
@@ -361,12 +420,14 @@ class Learner(object):
     
   
     def _optimize_scipy(self, w, train_seqs_id):
-        """ estimate the parameters w of the model
-            it uses optimize.minimize() function from the scipy package
-            Params:
-            -------
-            w: initial weights vector
-            options: dictionary that contains the configuration/options to pass for minimize function
+        """estimate the parameters w of the model using `scipy optimize function`
+            
+           it uses `optimize.minimize()` function from the scipy package
+           
+           Args:
+               w: weight vector (numpy vector)
+               train_seqs_id: list of integers representing ids of the training sequences
+        
         """
         from scipy import optimize
         self._report_training() 
@@ -401,6 +462,13 @@ class Learner(object):
         return(w_hat)
     
     def _track_scipy_optimizer(self, w):
+        """track scipy optimization by logging each iteration 
+        
+           Args:
+               w: weight vector (numpy vector)
+
+        """
+        
         # increment iteration count
         self._iter_count += 1
         delta_time = datetime.now() - self._elapsed_time 
@@ -415,8 +483,9 @@ class Learner(object):
           
         """ use the below command >> to compute the sum of sequences' loglikelihood using the updated/current weights
             the sum should be decreasing after each iteration for successful training (used as diagnostics)
-            however it is expensive/costly to recompute;
-            >> seqs_loglikelihood = self._optscipy_seqs_loglikelihood(w, train_seqs_id)
+            however it is expensive/costly to recompute
+            
+            >>> seqs_loglikelihood = self._optscipy_seqs_loglikelihood(w, train_seqs_id)
         """
         model_dir = self.training_description["model_dir"]
         log_file = os.path.join(model_dir, "crf_training_log.txt")
@@ -430,6 +499,14 @@ class Learner(object):
 
     
     def _identify_violation_indx(self, viol_indx, y_ref_boundaries):
+        """determine the index where the violation occurs
+        
+           violation means when the reference state fall off the specified beam while decoding
+           
+           Args:
+               viol_indx: list of indices where violation occrured while decoding
+               y_ref_boundaries: boundaries of the labels/tags in the reference sequence
+        """
         # viol_index is 1-based indexing
         counter = 0
         for boundary in y_ref_boundaries:
@@ -442,6 +519,14 @@ class Learner(object):
         return(viol_pos, viol_boundindex)
     
     def _compute_seq_decerror(self, y_ref, y_imposter, viol_pos):
+        """compute the decoding error of a sequence
+        
+           Args:
+               y_ref: reference sequence list of labels 
+               y_imposter: imposter/decoded sequence list of labels
+               viol_pos: index where violation occurred, 
+                         it is identified using :func:`_identify_violation_indx` function
+        """
         print("yref ", y_ref)
         print("y_imposter ", y_imposter)
         print("viol_pos ", viol_pos)
@@ -455,11 +540,23 @@ class Learner(object):
         return(seq_err_count)
 
     def _unpack_windxfval(self, y_windxfval):
+        """unpack the weight indices and corresponding feature values 
+        
+           Args:
+               y_windxfval: dictionary where the keys are the weight indices of the features
+                            and values are the feature sum/count
+        """
         windx = list(y_windxfval.keys())
         fval = list(y_windxfval.values())
         return(windx, fval)
 
     def _find_update_violation(self, w, seq_id):
+        """determine the *best* imposter sequence for weight updates
+        
+           Args:
+               w: weight vector (numpy vector)
+               seq_id: integer representing unique id assigned to the sequence
+        """
         method = self.training_description['method']
         beam_size = self.training_description['beam_size']
         update_type = self.training_description['update_type']
@@ -567,6 +664,15 @@ class Learner(object):
 
         
     def _load_gfeatures(self, seq_id, gfeatures_type, y_imposters, ypos_indx, boundpos_indx):
+        """load the global features of the reference and imposter/decoded sequence
+        
+           Args:
+               seq_id: id of the sequence
+               gfeatures_type: determine the representation either aggregated or by boundary
+               y_imposters: list of imposter sequences
+               ypos_indx: index of the considered end of the label sequence
+               boundpos_indx: index of the boundary corresponding to the identified `ypos_indx`
+        """
         seg_other_symbol = self.training_description['seg_other_symbol']
         crf_model = self.crf_model
         seqs_info = crf_model.seqs_info
@@ -600,6 +706,16 @@ class Learner(object):
 
     
     def _update_weights_sapo(self, w, ref_unp_windxfval, imps_unp_windxfval, prob_vec):
+        """update weight vector for the SAPO method
+        
+           Args:
+               w: weight vector (numpy vector)
+               ref_unp_windxfval: dictionary (unpacked) representing the weight indices and corresponding feature sum/count
+                                  of the reference sequence
+               imps_unp_windxfval: list of dictionaries (unpacked) representing the weight indices and corresponding feature sum/count
+                                   of the imposter sequences
+               prob_vec: numpy vector representing the probability of each imposter sequence
+        """
         gamma = self.training_description['gamma']
         # update weights using the decoded sequences
         for i in range(len(imps_unp_windxfval)):
@@ -610,6 +726,13 @@ class Learner(object):
         w[windx] += gamma * numpy.asarray(fval)
 
     def _compute_probvec_sapo(self, w, imps_unp_windxfval):
+        """compute the probabilty of each imposter sequence in the SAPO algorithm
+        
+           Args:
+               w: weight vector (numpy vector)
+               imps_unp_windxfval: list of dictionaries (unpacked) representing the weight indices and corresponding feature sum/count
+                                   of the imposter sequences
+        """
         # normalize
         num_imposters = len(imps_unp_windxfval)
         ll_vec = numpy.zeros(num_imposters)
@@ -622,10 +745,16 @@ class Learner(object):
         return(prob_vec)
     
     def _sapo(self, w, train_seqs_id):
-        """ implements Search-based Probabilistic Online Learning Algorithm (SAPO)
-            see original paper https://arxiv.org/pdf/1503.08381v1.pdf
-            this implementation adapts it to 'violation-fixing' framework (i.e. inexact search is supported)
-            the regularization is based on averaging rather than l2 as it seems to be consistent during training while using exact or inexact search
+        """implements Search-based Probabilistic Online Learning Algorithm (SAPO)
+          
+           .. see:: original paper at https://arxiv.org/pdf/1503.08381v1.pdf
+           
+           this implementation adapts it to 'violation-fixing' framework (i.e. inexact search is supported)
+            
+           .. note:: 
+               
+              the regularization is based on averaging rather than l2 as it seems to be consistent during training
+              while using exact or inexact search
         """
         self._report_training()
         num_epochs = self.training_description["num_epochs"]
@@ -681,17 +810,29 @@ class Learner(object):
         return(w)      
     
     def _update_weights_perceptron(self, w, ref_unp_windxfval, imp_unp_windxfval):
+        """update weight vector for the COLLINS-PERCEPTRON method
+        
+           Args:
+               w: weight vector (numpy vector)
+               ref_unp_windxfval: dictionary (unpacked) representing the weight indices and corresponding feature sum/count
+                                  of the reference sequence
+               imps_unp_windxfval: list of dictionaries (unpacked) representing the weight indices and corresponding feature sum/count
+                                   of the imposter sequences
+        """
         ref_windx, ref_fval = ref_unp_windxfval
         imp_windx, imp_fval = imp_unp_windxfval
         w[ref_windx] += ref_fval
         w[imp_windx] -= imp_fval
         
-    # needs still some work and fixing....
     def _structured_perceptron(self, w, train_seqs_id):
-        """ implements structured perceptron algorithm in particular the average perceptron that was
-            introduced by Michael Collins in 2002 (see his paper xx)
-            it also adds different averaging schemes for the learned weights 
+        """implements structured perceptron algorithm in particular the average perceptron 
+            
+           it was introduced by Michael Collins in 2002 (see his paper http://www.aclweb.org/anthology/W02-1001)
+           this implementation supports different averaging schemes for the weight learning
 
+           Args:
+               w: weight vector (numpy vector)
+               seqs_id: list of integers representing ids assigned to the sequence
         """
         self._report_training()
         num_epochs = self.training_description["num_epochs"]
@@ -757,6 +898,14 @@ class Learner(object):
         return(w)      
 
     def _track_perceptron_optimizer(self, w, k, avg_error_list):
+        """track search based optimized (such as SAPO and COLLINS-PERCEPTRON) by logging each iteration 
+        
+           Args:
+               w: weight vector (numpy vector)
+               k: current epoch
+               avg_error_list: list of the decoding errors in each previous epochs
+
+        """
         delta_time = datetime.now() - self._elapsed_time 
         self._check_reldiff(avg_error_list[-2], avg_error_list[-1])
         model_dir = self.training_description["model_dir"]
@@ -770,6 +919,14 @@ class Learner(object):
 
         
     def _sga_adadelta(self, w, train_seqs_id):
+        """implements stochastic gradient ascent using adaptive approach of ADADELTA 
+            
+           the original paper is found in https://arxiv.org/abs/1212.5701
+
+           Args:
+               w: weight vector (numpy vector)
+               train_seqs_id: list of integers representing ids assigned to the sequence
+        """
         self._report_training()
         crf_model = self.crf_model
         num_epochs = self.training_description["num_epochs"]
@@ -881,6 +1038,12 @@ class Learner(object):
         return(w)  
     
     def _sga_classic(self, w, train_seqs_id):
+        """implements stochastic gradient ascent
+            
+           Args:
+               w: weight vector (numpy vector)
+               train_seqs_id: list of integers representing ids assigned to the sequence
+        """
         self._report_training()
         crf_model = self.crf_model
         num_epochs = self.training_description["num_epochs"]
@@ -985,8 +1148,15 @@ class Learner(object):
         return(w)
 
     def _sga_svrg(self, w, train_seqs_id):
-        """ implements the stochastic variance reduced gradient
-            see Johnson R, Zhang T. Accelerating Stochastic Gradient Descent using  Predictive Variance Reduction. 
+        """implements the stochastic variance reduced gradient
+        
+           the original paper is Johnson R, Zhang T. Accelerating Stochastic Gradient Descent using  Predictive Variance Reduction.
+           https://papers.nips.cc/paper/4937-accelerating-stochastic-gradient-descent-using-predictive-variance-reduction.pdf
+           
+           Args:
+               w: weight vector (numpy vector)
+               train_seqs_id: list of integers representing ids assigned to the sequence
+           
         """
         
         num_epochs = self.training_description["num_epochs"]
@@ -1110,6 +1280,16 @@ class Learner(object):
         return(w)     
         
     def _apply_l1_penalty(self, w, q, u, w_indx):
+        """apply l1 regularization to the weights 
+        
+           it uses the approach of Tsuruoka et al. Stochastic gradient descent training for L1-regularized log-linear models with cumulative penalty
+           
+           Args:
+               w: weight vector (numpy vector)
+               q: total L1 penalty that current weights (corresponding to the features) did receive up to the current time
+               u: absolute value of total L1 penalty that each weight could receive up to the current time
+               w_indx: weight indices corresponding to the current feature under update
+        """
         for indx in w_indx:
             z = w[indx]
 #             print("z is {}".format(z))
@@ -1127,7 +1307,15 @@ class Learner(object):
 #             print("q[indx] becomes {}".format(q[indx]))
 
     def _track_sga_optimizer(self, w, seqs_loglikelihood, mean_loglikelihood, k):
+        """track stochastic gradient ascent optimizers by logging each iteration 
         
+           Args:
+               w: weight vector (numpy vector)
+               seqs_loglikelihood: numpy vector representing the average loglikelihood of batches of sequences
+               mean_loglikelihood: mean of the seqs_loglikelihood vector
+               k: current epoch
+
+        """
         delta_time = datetime.now() - self._elapsed_time 
         self._check_reldiff(mean_loglikelihood[-2], mean_loglikelihood[-1])
 #         
@@ -1176,9 +1364,7 @@ class Learner(object):
 
     
     def cleanup(self):
-        #---------------------
-        # End of training -- cleanup
-        #---------------------
+        """End of training -- cleanup"""
         # reset iteration counter
         self._iter_count = None
         # reset elapsed time between iterations
@@ -1187,12 +1373,30 @@ class Learner(object):
 
 
 class Evaluator(object):
+    """Evaluator class to evaluate performance of the models
+    
+       Args:
+           model_repr: the CRF model representation that has a suffix of `ModelRepresentation`
+                       such as :class:`HOCRFADModelRepresentation`
+       
+       Attributes:
+           model_repr: the CRF model representation that has a suffix of `ModelRepresentation`
+                       such as :class:`HOCRFADModelRepresentation`
+                       
+       .. note::
+       
+          this class does not support evaluation of segment learning since it is application-specific
+    """
     def __init__(self, model_repr):
-        """model_repr : the crf model representation 
-        (i.e. any instance of model class ending with ModelRepresentation such as HOSemiCRFModelRepresentation)"""
         self.model_repr = model_repr
         
     def transform_codebook(self, Y_codebook, prefixes):
+        """map states coded in BIO notation to their original states value
+        
+           Args:
+               Y_codebook: dictionary of states each assigned a unique integer
+               prefixes: tuple of prefix notation used such as ("B-","I-") for BIO 
+        """
         state_mapper = {}
         for state in Y_codebook:
             if(state != "O"):
@@ -1207,9 +1411,16 @@ class Evaluator(object):
         return(state_mapper)
                     
     def compute_model_performance(self, Y_seqs_dict, metric, output_file, states_notation):
-        """ tags that did not show up in the training data can not be counted in this process
-            In other words, the model cannot predict a tag that did not exist in the training data
-            hence we give one unique index for tags that did not occur in the training data such as len(Y_codebook)
+        r"""compute the performance of the model
+           
+           Args:
+               Y_seqs_dict: dictionary where each sequence has the reference label sequence
+                            and its corresponding predicted sequence. it has the following form
+                            {seq_id:{'Y_ref':[reference_ylabels], 'Y_pred':[predicted_ylabels]}}
+               metric: evaluation metric that could take one of {'f1', 'precision', 'recall', 'accuracy'}
+               output_file: file where to output the evaluation result
+               states_notation: notation used to code the state (i.e. BIO)
+          
         """
         Y_codebook = self.model_repr.Y_codebook
 
@@ -1282,6 +1493,17 @@ class Evaluator(object):
         return(perf_measure)
         
     def map_states_to_num(self, Y, state_mapper, transformed_codebook, M):
+        """map states to their code/number using the `Y_codebook`
+           
+           Args:
+               Y: list representing label sequence 
+               state_mapper: mapper between the old and new generated states generated from :func:`tranform_codebook` method
+               trasformed_codebook: the transformed codebook of the new identified states
+               M: number of states
+               
+           .. note:: we give one unique index for tags that did not occur in the training data such as len(Y_codebook)
+
+        """
 #         Y_coded = []
 #         for state in Y:
 #             mapped_state = state_mapper[state]
@@ -1294,7 +1516,14 @@ class Evaluator(object):
         return(Y_coded)
         
     def compute_tags_confusionmatrix(self, Y_ref, Y_pred, transformed_codebook_rev, M):
-        # compute confusion matrix on the level of the tag/state
+        """compute confusion matrix on the level of the tag/state
+        
+           Args:
+               Y_ref: list of reference label sequence (represented by the states code)
+               Y_pred: list of predicted label sequence (represented by the states code) 
+               transformed_codebook: the transformed codebook of the new identified states
+               M: number of states
+        """
         #^print("Y_ref coded ", Y_ref)
         #^print("Y_pred coded ", Y_pred)
         detected_statescode = set(Y_ref)
@@ -1316,6 +1545,7 @@ class Evaluator(object):
             tagslevel_performance[statecode] = numpy.array([[tag_tp, tag_fp], [tag_fn, tag_tn]])
             
         return(tagslevel_performance)
+    
 if __name__ == "__main__":
     pass
     

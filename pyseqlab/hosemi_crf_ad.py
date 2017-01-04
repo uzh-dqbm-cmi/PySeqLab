@@ -24,7 +24,6 @@ class HOSemiCRFADModelRepresentation(LCRFModelRepresentation):
                         {pi:{pky, (pk, y)}} where pi represents the longest prefix element in :attr:`P_codebook`
                         for pky (representing the concatenation of elements in :attr:`P_codebook` and :attr:`Y_codebook`)         
           pky_codebook: generate a codebook for the elements of the set PY (the product of set P and Y)
-          pky_codebook_rev: reversed codebook of :attr:`pky_codebook`
           pi_pky_map: a map between P elements and PY elements 
           z_pky_map: a map between elements of the Z set and PY set    
                      it has the form/template {ypattern:[pky_elements]}           
@@ -42,7 +41,6 @@ class HOSemiCRFADModelRepresentation(LCRFModelRepresentation):
         self.P_numchar = None
         self.f_transition = None
         self.pky_codebook = None
-        self.pky_codebook_rev = None
         self.pi_pky_map = None
         self.z_pky_map = None
         self.z_pi_piy_map = None
@@ -71,7 +69,6 @@ class HOSemiCRFADModelRepresentation(LCRFModelRepresentation):
         self.f_transition = self.get_forward_transition()
         
         self.pky_codebook = self.get_pky_codebook()
-        self.pky_codebook_rev = self.get_pky_codebook_rev()
         self.pi_pky_map = self.get_pi_pky_map()
         
         self.z_pky_map, self.z_pi_piy_map = self.map_pky_z()
@@ -195,13 +192,7 @@ class HOSemiCRFADModelRepresentation(LCRFModelRepresentation):
                 counter += 1
         return(pky_codebook)
     
-    def get_pky_codebook_rev(self):
-        """generate reversed codebook of :attr:`pky_codebook`
-        """
-        # to consider adding it as instance variable in the model representation
-        pky_codebook_rev = {code:pky for pky, code in self.pky_codebook.items()}
-        return(pky_codebook_rev)
-    
+
     def map_pky_z(self):
         """generate a map between elements of the Z set and PY set"""
         
@@ -267,6 +258,15 @@ class HOSemiCRFADModelRepresentation(LCRFModelRepresentation):
         return(pi_pky_map)
     
     def filter_activated_states(self, activated_states, accum_active_states, curr_boundary):
+        """filter/prune states and y features 
+        
+           Args:
+               activaed_states: dictionary containing possible active states/y features
+                                it has the form {patt_len:{patt_1, patt_2, ...}}
+               accum_active_states: dictionary of only possible active states by position
+                                    it has the form {pos_1:{state_1, state_2, ...}}
+               boundary: tuple (u,v) representing the current boundary in the sequence
+        """
         Z_elems = self.Z_elems
         filtered_activestates = {}
         
@@ -295,7 +295,7 @@ class HOSemiCRFADModelRepresentation(LCRFModelRepresentation):
         return(filtered_activestates)
                       
 class HOSemiCRFAD(LCRF):
-    """higher-order semi-CRF model 
+    """higher-order semi-CRF model that uses algorithmic differentiation in gradient computation
     
       Args:
           model: an instance of :class:`HOSemiCRFADModelRepresentation` class
