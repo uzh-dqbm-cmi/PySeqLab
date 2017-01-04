@@ -1,0 +1,24 @@
+Contact
+--------------------------------------------------------------------------------
+
+For any questions, please email
+`Ahmed Allam <mailto:ahmed.allam@yale.edu>`__  or
+`Michael Krauthammer <mailto:michael.krauthammer@yale.edu>`__.
+
+For reporting bugs or issues, please refer to bitbucket issue tracker
+`Issue Tracker <https://bitbucket.org/A_2/pyseqlab/issues>`__.
+
+Citation
+--------------------------------------------------------------------------------
+
+To cite PySeqLab in publications please use:
+
+**Allam A, Krauthammer M.**
+PySeqLab an open source Python package for sequence labeling and segmentation.
+*TBD*
+
+License
+--------------------------------------------------------------------------------
+
+This work is open source and distributed under the MIT license `MIT license <https://opensource.org/licenses/MIT>`__.
+See the ``license.txt`` file accompanying the package.

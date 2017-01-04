@@ -1,8 +1,6 @@
-pyseqlab package
+PySeqLab package
 ================
 
-Submodules
-----------
 
 pyseqlab.attributes_extraction module
 -------------------------------------
@@ -80,15 +78,6 @@ pyseqlab.utilities module
 -------------------------
 
 .. automodule:: pyseqlab.utilities
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-
-Module contents
----------------
-
-.. automodule:: pyseqlab
     :members:
     :undoc-members:
     :show-inheritance:

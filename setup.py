@@ -22,7 +22,7 @@ if __name__ == "__main__":
           download_url='https://bitbucket.org/A_2/pyseqlab/downloads',
           keywords='conditional random fields, structured prediction, bioinformatics',
           packages=["pyseqlab"],
-          install_requires=["numpy", "scipy>=0.13"],
+          install_requires=["numpy>=1.8.0", "scipy>=0.13"],
           classifiers=['Development Status :: 4 - Beta',
                        'Environment :: Console',
                        'Intended Audience :: Science/Research',

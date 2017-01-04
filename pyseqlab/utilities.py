@@ -165,12 +165,12 @@ class SequenceStruct():
 #         self.x_boundaries = self.get_x_boundaries()
 
     def flatten_y(self, Y):
-        """flatten the :attr:`Y` attribute 
+        r"""flatten the :attr:`Y` attribute 
         
            Args:
                Y: dictionary of this form {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
            
-           Example:
+           Example::
                
                flattened y becomes ['P','O','O','L','L']
         """
