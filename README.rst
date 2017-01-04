@@ -1,7 +1,5 @@
-# README #
+README
+======
 
-PySeqLab is a package for sequence labelling and segmentation learning tasks (i.e. structured prediction). It implements first-order and higher-order conditional random fields. Moreover, it implements first-order and higher-order semi-markov conditional random fields. 
+PySeqLab is an open source package for performing supervised learning in structured prediction tasks. It implements most known implementations of CRFs, that is discriminative models from (1) first-order to higher-order linear-chain CRFs, and from (2) first-order to higher-order semi-Markov CRFs (semi-CRFs). 
 
-### TODO ###
-
-Tweaking and code refactoring/improvements.
