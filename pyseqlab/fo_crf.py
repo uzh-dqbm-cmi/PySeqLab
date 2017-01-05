@@ -165,7 +165,8 @@ class FirstOrderCRF(LCRF):
                 y_p = Z_elems[y_patt][0]
                 y_c = Z_elems[y_patt][1]
                 potential_matrix[Y_codebook[y_p], Y_codebook[y_c]] += potential
-#         print("potential_matrix {}".format(potential_matrix))
+        print("potential_matrix {}".format(potential_matrix))
+
         return(numpy.exp(potential_matrix))
 
     def compute_forward_vec(self, w, seq_id):
@@ -210,7 +211,7 @@ class FirstOrderCRF(LCRF):
             potential_matrix = self.compute_potential(w, active_features[boundary])
             potentialmat_perboundary[boundary] = potential_matrix
             for j in range(M):
-                alpha[t+1, j] = numpy.sum(alpha[t, :]*potential_matrix[:, j])
+                alpha[t+1, j] = numpy.sum(alpha[t, :] * potential_matrix[:, j])
             # normalize
             c_t[t+1] = numpy.sum(alpha[t+1, :])
             alpha[t+1, :] /= c_t[t]
@@ -236,14 +237,14 @@ class FirstOrderCRF(LCRF):
         # number of possible states including the __START__ and __STOP__ states
         M = self.model.num_states
         beta = numpy.zeros((T+1, M), dtype = 'longdouble')
-        beta[T, :] = 1
+        beta[T, :] = 1/c_t[T]
         # get the potential matrix 
         potentialmat_perboundary = self.seqs_info[seq_id]["potentialmat_perboundary"]
         for t in reversed(range(1, T+1)):
             potential_matrix = potentialmat_perboundary[t,t]
             for i in range(M):
                 beta[t-1, i] = numpy.sum(potential_matrix[i, :] * beta[t, :])
-            beta[t-1, :] /= c_t[t]
+            beta[t-1, :] /= c_t[t-1]
 
         return(beta) 
 
@@ -484,9 +485,10 @@ class FirstOrderCRF(LCRF):
         print("beta {}".format(beta))
         print("c_t {}".format(c_t))
         print("prob {}".format(1/numpy.prod(c_t)))
+        print('log_alpha {}'.format(numpy.log(alpha)))
         
-        Z_alpha = vectorized_logsumexp(numpy.log(alpha[-1,:]))
-        Z_beta = numpy.log(numpy.max(beta[1, :]))
+        Z_alpha = alpha[-1,:]
+        Z_beta = beta[0, :]
         raw_diff = numpy.abs(Z_alpha - Z_beta)
         print("alpha[-1,:] = {}".format(alpha[-1,:]))
         print("beta[0,:] = {}".format(beta[0,:]))

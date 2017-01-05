@@ -187,6 +187,17 @@ def run_suppl_example(model_order):
     seq = load_suppl_example()
     return(seq, templateY, templateXY, filter_obj)
 
+def run_suppl_example_custom(model_order):
+    # model order by default is 2, hence the argument is ignored
+    template_generator = TemplateGenerator()
+    templateXY = {}
+    # generating template for attr_name = w
+    template_generator.generate_template_XY('w', ('1-gram', range(0,1)), '1-gram:2-gram', templateXY)
+    templateY = {'Y':()}
+    filter_obj = None
+    seq = load_suppl_example()
+    return(seq, templateY, templateXY, filter_obj)
+
 def run_conll00_seqs(model_order):
     data_file_path = os.path.join(root_dir, "dataset", "conll00", "train.txt")
     seqs = read_data(data_file_path, header = "main")
