@@ -214,7 +214,7 @@ class FirstOrderCRF(LCRF):
                 alpha[t+1, j] = numpy.sum(alpha[t, :] * potential_matrix[:, j])
             # normalize
             c_t[t+1] = numpy.sum(alpha[t+1, :])
-            alpha[t+1, :] /= c_t[t]
+            alpha[t+1, :] /= c_t[t+1]
             
         self.seqs_info[seq_id]['potentialmat_perboundary'] = potentialmat_perboundary
         self.seqs_info[seq_id]['c_t'] = c_t
@@ -274,20 +274,22 @@ class FirstOrderCRF(LCRF):
         potentialmat_perboundary = self.seqs_info[seq_id]["potentialmat_perboundary"]
         
         P_marginals = numpy.zeros((T+1, len(Z_codebook)), dtype='longdouble') 
-         
+        c_t = self.seqs_info[seq_id]['c_t']
         for j in range(1, T+1):
             potential_matrix = potentialmat_perboundary[j, j]
             for y_patt in Z_codebook:
 #                 print("y_patt {}".format(y_patt))
                 if(Z_len[y_patt] == 1):
                     y_c = Y_codebook[Z_elems[y_patt][0]]
-                    accumulator = alpha[j, y_c] + beta[j, y_c] - Z
+                    accumulator = alpha[j, y_c] * beta[j, y_c]
                 else:
                     # case of len(parts) = 2
                     y_b = Y_codebook[Z_elems[y_patt][0]]
                     y_c = Y_codebook[Z_elems[y_patt][1]]
-                    accumulator = alpha[j-1, y_b] + potential_matrix[y_b, y_c] + beta[j, y_c] - Z
-                P_marginals[j, Z_codebook[y_patt]] = numpy.exp(accumulator)
+                    accumulator = alpha[j-1, y_b] * potential_matrix[y_b, y_c] * beta[j, y_c]
+                P_marginals[j, Z_codebook[y_patt]] = accumulator 
+        print("p_marginals ", P_marginals)
+        print("sum by row  ", numpy.sum(P_marginals, axis = 1))
         return(P_marginals)
     
     def compute_feature_expectation(self, seq_id, P_marginals):
@@ -481,26 +483,36 @@ class FirstOrderCRF(LCRF):
         alpha = self.seqs_info[seq_id]["alpha"]
         beta = self.seqs_info[seq_id]["beta"]
         c_t = self.seqs_info[seq_id]['c_t']
+#         prod_alphabeta = alpha * beta
+#         print("numpy.sum(prod_alphabeta, axis=1) = ", numpy.sum(prod_alphabeta, axis=1))
+#         prob = 1/numpy.prod(c_t)
+#         print("prod c_t = ",prob)
+#         print("difference = ", prod_alphabeta - prob)
         print("alpha {}".format(alpha))
+        print("alpha sum by row ", numpy.sum(alpha, axis =1))
         print("beta {}".format(beta))
         print("c_t {}".format(c_t))
-        print("prob {}".format(1/numpy.prod(c_t)))
-        print('log_alpha {}'.format(numpy.log(alpha)))
         
-        Z_alpha = alpha[-1,:]
-        Z_beta = beta[0, :]
-        raw_diff = numpy.abs(Z_alpha - Z_beta)
-        print("alpha[-1,:] = {}".format(alpha[-1,:]))
-        print("beta[0,:] = {}".format(beta[0,:]))
-        print("Z_alpha : {}".format(Z_alpha))
-        print("Z_beta : {}".format(Z_beta))
-        print("Z_aplha - Z_beta {}".format(raw_diff))
- 
-        rel_diff = raw_diff/(Z_alpha + Z_beta)
-        print("rel_diff : {}".format(rel_diff))
-        self.clear_cached_info([seq_id])
-        print("seqs_info {}".format(self.seqs_info))
-        return((raw_diff, rel_diff))
+#         print("prob {}".format(prob))
+        print("prob_2 {}".format(numpy.sum(alpha[-1,:])))
+        print("beta max {}".format(max(beta[0,:])))
+#         print("alpha x beta = {}".format(alpha * beta/prob))
+#         print('log_alpha {}'.format(numpy.log(alpha)))
+#         
+#         Z_alpha = alpha[-1,:]
+#         Z_beta = beta[0, :]
+#         raw_diff = numpy.abs(Z_alpha - Z_beta)
+#         print("alpha[-1,:] = {}".format(alpha[-1,:]))
+#         print("beta[0,:] = {}".format(beta[0,:]))
+#         print("Z_alpha : {}".format(Z_alpha))
+#         print("Z_beta : {}".format(Z_beta))
+#         print("Z_aplha - Z_beta {}".format(raw_diff))
+#  
+#         rel_diff = raw_diff/(Z_alpha + Z_beta)
+#         print("rel_diff : {}".format(rel_diff))
+#         self.clear_cached_info([seq_id])
+#         print("seqs_info {}".format(self.seqs_info))
+#         return((raw_diff, rel_diff))
 if __name__ == "__main__":
     pass
     

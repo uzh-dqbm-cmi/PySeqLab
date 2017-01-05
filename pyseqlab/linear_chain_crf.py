@@ -643,7 +643,7 @@ class LCRF(object):
         seq_info = self.seqs_info[seq_id]
         seq_info["alpha"] = self.compute_forward_vec(w, seq_id)
         c_t = seq_info["c_t"]
-        seq_info["Z"] = -numpy.sum(c_t[1:])
+        seq_info["Z"] = -numpy.sum(numpy.log(c_t))
 
         #print("... Computing alpha probability ...")
     
