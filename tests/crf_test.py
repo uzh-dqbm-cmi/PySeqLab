@@ -198,7 +198,16 @@ def run_conll00_seqs(model_order):
     filter_obj = None
     return(seqs[:1], templateY, templateXY, filter_obj)
 
-
+def run_suppl_example_custom(model_order):
+    # model order by default is 2, hence the argument is ignored
+    template_generator = TemplateGenerator()
+    templateXY = {}
+    # generating template for attr_name = w
+    template_generator.generate_template_XY('w', ('1-gram', range(0,1)), '1-gram:2-gram', templateXY)
+    templateY = {'Y':()}
+    filter_obj = None
+    seq = load_suppl_example()
+    return(seq, templateY, templateXY, filter_obj)
 
 def test_crfs(model_type, scaling_method, optimization_options, run_config_option, test_type):
     if(model_type == "HOSemi"):
