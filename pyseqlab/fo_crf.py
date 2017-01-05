@@ -103,7 +103,7 @@ class FirstOrderCRF(LCRF):
         """construct list of names of cached entities in memory
         """
         def_cached_entities = super().cached_entitites(load_info_fromdisk)
-        inmemory_info = ["alpha", "Z", "beta", "potentialmat_perboundary"]
+        inmemory_info = ["alpha", "c_t", "Z", "beta", "potentialmat_perboundary"]
         def_cached_entities += inmemory_info
         return(def_cached_entities)
 
@@ -166,7 +166,7 @@ class FirstOrderCRF(LCRF):
                 y_c = Z_elems[y_patt][1]
                 potential_matrix[Y_codebook[y_p], Y_codebook[y_c]] += potential
 #         print("potential_matrix {}".format(potential_matrix))
-        return(potential_matrix)
+        return(numpy.exp(potential_matrix))
 
     def compute_forward_vec(self, w, seq_id):
         """compute the forward matrix (alpha matrix)
@@ -187,25 +187,36 @@ class FirstOrderCRF(LCRF):
         startstate_flag = model.startstate_flag
         active_features = self.seqs_info[seq_id]['activefeatures']
         potentialmat_perboundary = {}
-        alpha = numpy.ones((T+1, M), dtype='longdouble') * (-numpy.inf)
+        # scaling factors
+        c_t = numpy.zeros(T+1, dtype = "longdouble")
+        c_t[0] = 1
+        alpha = numpy.zeros((T+1, M), dtype='longdouble')
         
         if(startstate_flag):
-            alpha[0,0] = 0
+            alpha[0,0] = 1
+            
         # corner case at t = 1
         t = 1; i = 0
         boundary = (t,t)
         potential_matrix = self.compute_potential(w, active_features[boundary])
         potentialmat_perboundary[boundary] = potential_matrix
+        # normalize
         alpha[t, :] = potential_matrix[i, :]
+        c_t[t] = numpy.sum(alpha[t, :])
+        alpha[t, :] /= c_t[t]
         
         for t in range(1, T):
             boundary = (t+1, t+1)
             potential_matrix = self.compute_potential(w, active_features[boundary])
             potentialmat_perboundary[boundary] = potential_matrix
             for j in range(M):
-                alpha[t+1, j] = vectorized_logsumexp(alpha[t, :] + potential_matrix[:, j])
-                
+                alpha[t+1, j] = numpy.sum(alpha[t, :]*potential_matrix[:, j])
+            # normalize
+            c_t[t+1] = numpy.sum(alpha[t+1, :])
+            alpha[t+1, :] /= c_t[t]
+            
         self.seqs_info[seq_id]['potentialmat_perboundary'] = potentialmat_perboundary
+        self.seqs_info[seq_id]['c_t'] = c_t
         return(alpha)
   
     def compute_backward_vec(self, w, seq_id):
@@ -221,16 +232,18 @@ class FirstOrderCRF(LCRF):
         """
         # length of the sequence without the appended states __START__ and __STOP__
         T = self.seqs_info[seq_id]["T"]
+        c_t = self.seqs_info[seq_id]['c_t']
         # number of possible states including the __START__ and __STOP__ states
         M = self.model.num_states
-        beta = numpy.ones((T+1, M), dtype = 'longdouble') * (-numpy.inf)
-        beta[T, :] = 0
+        beta = numpy.zeros((T+1, M), dtype = 'longdouble')
+        beta[T, :] = 1
         # get the potential matrix 
         potentialmat_perboundary = self.seqs_info[seq_id]["potentialmat_perboundary"]
         for t in reversed(range(1, T+1)):
             potential_matrix = potentialmat_perboundary[t,t]
             for i in range(M):
-                beta[t-1, i] = vectorized_logsumexp(potential_matrix[i, :] + beta[t, :])
+                beta[t-1, i] = numpy.sum(potential_matrix[i, :] * beta[t, :])
+            beta[t-1, :] /= c_t[t]
 
         return(beta) 
 
@@ -466,12 +479,14 @@ class FirstOrderCRF(LCRF):
         
         alpha = self.seqs_info[seq_id]["alpha"]
         beta = self.seqs_info[seq_id]["beta"]
-        print("states codebook {}".format(self.model.Y_codebook))
+        c_t = self.seqs_info[seq_id]['c_t']
         print("alpha {}".format(alpha))
         print("beta {}".format(beta))
+        print("c_t {}".format(c_t))
+        print("prob {}".format(1/numpy.prod(c_t)))
         
-        Z_alpha = vectorized_logsumexp(alpha[-1,:])
-        Z_beta = numpy.max(beta[0, :])
+        Z_alpha = vectorized_logsumexp(numpy.log(alpha[-1,:]))
+        Z_beta = numpy.log(numpy.max(beta[1, :]))
         raw_diff = numpy.abs(Z_alpha - Z_beta)
         print("alpha[-1,:] = {}".format(alpha[-1,:]))
         print("beta[0,:] = {}".format(beta[0,:]))

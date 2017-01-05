@@ -547,7 +547,7 @@ class LCRF(object):
         l['alpha'] = (w, seq_id)
         
         self.check_cached_info(seq_id, l)
-        # get the p(X;w) -- probability of the sequence under parameter w
+        # get the log p(X;w) -- log probability of the sequence under parameter w
         Z = self.seqs_info[seq_id]["Z"]
         gfeatures = self.seqs_info[seq_id]["globalfeatures"]
         globalfeatures = self.represent_globalfeature(gfeatures, None)
@@ -642,7 +642,9 @@ class LCRF(object):
         """
         seq_info = self.seqs_info[seq_id]
         seq_info["alpha"] = self.compute_forward_vec(w, seq_id)
-        seq_info["Z"] = vectorized_logsumexp(seq_info["alpha"][-1,:])
+        c_t = seq_info["c_t"]
+        seq_info["Z"] = -numpy.sum(c_t[1:])
+
         #print("... Computing alpha probability ...")
     
     def _load_beta(self, w, seq_id):
