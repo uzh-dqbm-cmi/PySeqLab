@@ -1150,7 +1150,7 @@ class SeqsRepresenter(object):
             activefeatures = ReaderWriter.read_data(os.path.join(seq_dir, "activefeatures"))
         except FileNotFoundError:
             # consider logging the error
-            print("activefeatures_per_boundary file does not exist yet !!")
+            #print("activefeatures_per_boundary file does not exist yet !!")
             activefeatures = None
         finally:
             return(activefeatures)

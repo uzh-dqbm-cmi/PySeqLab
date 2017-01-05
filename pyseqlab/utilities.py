@@ -973,8 +973,6 @@ class TemplateGenerator(object):
                 such as (0,) for unigram and (-1,0) bigram using the previous state and
                 (-2,-1,0) using the previous two states
         """
-        print("templateX ", templateX)
-        print("templateY ", templateY)
         template_XY = deepcopy(templateX)
         for attr_name in template_XY:
             for offset_x in template_XY[attr_name]:
@@ -1175,22 +1173,33 @@ def generate_datetime_str():
 
 
 
+# def vectorized_logsumexp(vec):
+#     """vectorized version of log sum exponential operation
+#     
+#        Args:
+#            vec: numpy vector where entries are in the log domain
+#     """
+#     with numpy.errstate(invalid='warn'):
+#         max_a = numpy.max(vec)
+#         try:
+#             res = max_a + numpy.log(numpy.sum(numpy.exp(vec - max_a)))
+#         except Warning:
+#             res = max_a
+#     return(res)
+
 def vectorized_logsumexp(vec):
     """vectorized version of log sum exponential operation
-    
+     
        Args:
            vec: numpy vector where entries are in the log domain
     """
-    with numpy.errstate(invalid='warn'):
-        max_a = numpy.max(vec)
-        try:
-            res = max_a + numpy.log(numpy.sum(numpy.exp(vec - max_a)))
-        except Warning:
-            res = max_a
-    return(res)
+    max_a = numpy.max(vec)
+    if(max_a == -numpy.inf):
+        return(max_a)
+    else:
+        res = max_a + numpy.log(numpy.sum(numpy.exp(vec - max_a)))
+        return(res)
 
-# def vectorized_logsumexp(vec):
-#     return(logsumexp(vec))
 
 def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class=None):
     """to update/regenerate CRF models using the save parts/components

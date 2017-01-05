@@ -14,6 +14,7 @@ from pyseqlab.hosemi_crf import HOSemiCRF, HOSemiCRFModelRepresentation
 from pyseqlab.ho_crf_ad import HOCRFADModelRepresentation, HOCRFAD
 from pyseqlab.hosemi_crf_ad import HOSemiCRFADModelRepresentation, HOSemiCRFAD
 from pyseqlab.crf_learning import Learner
+from docutils.nodes import option
 
 
 
@@ -109,10 +110,10 @@ class TestCRFModel(object):
     def test_feature_extraction(self):
 
         seqs_id = self._seqs_id
-        seqs_info = self._seqs_info
+#         seqs_info = self._seqs_info
         model = self._model
         crf_model = self._crf_model
-        print(crf_model.seqs_info == seqs_info)
+#         print(crf_model.seqs_info == seqs_info)
         globalfeatures_len = len(model.modelfeatures_codebook)
         activefeatures_len = 0
         f = {}
@@ -137,7 +138,7 @@ class TestCRFModel(object):
         elif(activefeatures_len > globalfeatures_len):
             statement = "len(activefeatures) > len(modelfeatures)"
         else:
-            statement = "pass"
+            statement = "PASS"
         print(statement)
 
 
@@ -157,11 +158,12 @@ def load_segments():
     seqs.append(SequenceStruct(X, Y, "O"))
     return(seqs)
 
-def run_segments():
+
+def run_segments(model_order):
     template_generator = TemplateGenerator()
     templateXY = {}
     # generating template for attr_name = w
-    template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram', templateXY)
+    template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), model_order, templateXY)
     templateY = {'Y':()}
     filter_obj = None
     seq = load_segments()
@@ -173,7 +175,8 @@ def load_suppl_example():
     seq = SequenceStruct(X, Y)
     return([seq])
 
-def run_suppl_example():
+def run_suppl_example(model_order):
+    # model order by default is 2, hence the argument is ignored
     template_generator = TemplateGenerator()
     templateXY = {}
     # generating template for attr_name = w
@@ -184,18 +187,20 @@ def run_suppl_example():
     seq = load_suppl_example()
     return(seq, templateY, templateXY, filter_obj)
 
-def run_conll00_seqs():
+def run_conll00_seqs(model_order):
     data_file_path = os.path.join(root_dir, "dataset", "conll00", "train.txt")
     seqs = read_data(data_file_path, header = "main")
     template_generator = TemplateGenerator()
     templateXY = {}
     # generating template for attr_name = w
-    template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram:3-gram', templateXY)
+    template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), model_order, templateXY)
     templateY = {'Y':()}
     filter_obj = None
-    return(seqs[:10], templateY, templateXY, filter_obj)
+    return(seqs[:1], templateY, templateXY, filter_obj)
 
-def test_crfs(model_type, scaling_method, optimization_options, run_config, test_type):
+
+
+def test_crfs(model_type, scaling_method, optimization_options, run_config_option, test_type):
     if(model_type == "HOSemi"):
         crf_model = HOSemiCRF 
         model_repr = HOSemiCRFModelRepresentation
@@ -217,7 +222,8 @@ def test_crfs(model_type, scaling_method, optimization_options, run_config, test
         model_repr = FirstOrderCRFModelRepresentation
         fextractor = FOFeatureExtractor
     
-    seqs, f_y, f_xy, filter_obj = run_config()
+    run_config, model_order = run_config_option
+    seqs, f_y, f_xy, filter_obj = run_config(model_order)
     crf_tester = TestCRFModel(f_y, f_xy, crf_model, model_repr, fextractor, scaling_method, optimization_options, filter_obj)
     crf_tester.test_workflow(seqs)
     
@@ -249,7 +255,74 @@ def profile_test(model_type, scaling_method, optimization_options, run_config, t
     profiling_dir = create_directory('profiling', root_dir)
     cProfile.runctx('test_crfs(model_type, scaling_method, optimization_options, run_config, test_type)',
                     global_def, local_def, filename = os.path.join(profiling_dir, "profile_out"))
+  
+class TestOptions(object):
+
+    model_type = {'higher-order':('HO', 'HO_AD'),
+                  'higher-order-semi':('HOSemi', 'HOSemi_AD'),
+                  'first-order':('FO',)}
+    method = ('SGA', 'SGA-ADADELTA', 'SVRG', 'L-BFGS-B', 'BFGS', 'COLLINS-PERCEPTRON', 'SAPO')  
+    regularization_type = ('l1','l2')
+    regularization_value = range(0,11)
+    num_epochs = range(1,5)
+    update_type = ('early', 'max-fast', 'max-exhaustive')
+    beam_size = (-1, 1, 2, 3, 4, 5)
+    avg_scheme = ('avg_error', 'avg_uniform')
+    topK = range(1,6)
+    tolerance = 1e-6
+    def_options = {'model_type':model_type,
+                   'method':method,
+                   'regularization_type':regularization_type,
+                   'regularization_value':regularization_value,
+                   'num_epochs':num_epochs,
+                   'update_type':update_type,
+                   'beam_size':beam_size,
+                   'avg_scheme':avg_scheme,
+                   'topK':topK,
+                   'tolerance':tolerance
+                   }
+    def __init__(self):
+        pass
+        
+    def load_options(self, options):
+        chosen_options = {}
+        for option_name in options:
+            chosen_options[option_name] = self.def_options[option_name]
+        return(chosen_options)
+
+test_options = TestOptions()
+
+def feature_extraction_check():
+    # if everything is correct the print result for model should be PASS
+    options = test_options.load_options(('model_type',))
+    model_types = options['model_type']
+    scaling_method = "rescaling"
+    test_type = "gradient"
+    optimization_options = {}
+    for model_type in model_types:
+        if(model_type == 'higher-order'):
+            run_config = ((run_suppl_example, ''), (run_conll00_seqs, '1-gram:2-gram:3-gram'))  
+        elif(model_type == 'higher-order-semi'):
+            run_config = ((run_suppl_example, ''), (run_conll00_seqs, '1-gram:2-gram:3-gram'), (run_segments, '1-gram:2-gram:3-gram'))  
+        elif(model_type == 'first-order'):
+            run_config = ((run_conll00_seqs, '1-gram:2-gram'),)
+        for model_choice in model_types[model_type]:
+            if(test_type == 'gradient' and model_choice == 'HO'):
+                print('HO does not support gradient training -- use HO_AD instead')
+                continue
+            if(test_type == 'gradient' and model_choice == 'HOSemi'):
+                print('skipping HOSemi')
+                continue
+            for config in run_config:
+                print('model_type: {}, model_choice: {}, run_config: {}'.format(model_type, model_choice, config))
+                test_crfs(model_choice, scaling_method, optimization_options, config, test_type)
     
+def forward_backward_check():
+    pass
+def gradient_computation_check():
+    pass
+def model_learning_check():
+    pass
 
 if __name__ == "__main__":
     pass

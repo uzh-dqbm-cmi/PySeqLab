@@ -468,7 +468,6 @@ class LCRF(object):
                 # identify active features
                 active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
                 activefeatures_perboundary[boundary] = active_features
-        print("active features ", activefeatures_perboundary)
         return(activefeatures_perboundary)
 
                
@@ -1031,6 +1030,7 @@ class LCRF(object):
                seq_id: integer representing unique id assigned to the sequence
         
         """
+        print("checking gradient...")
         self.clear_cached_info([seq_id])
         epsilon = 1e-9
         # basis vector
@@ -1045,8 +1045,6 @@ class LCRF(object):
             grad[i] = (l_wplus - l) / epsilon
             ei[i] = 0
         estimated_grad = self.compute_seqs_gradient(w, [seq_id])
-        print("finite difference gradient: \n {}".format(grad))
-        print("Computed gradient: \n {}".format(estimated_grad))
         diff = numpy.absolute(-grad + estimated_grad)
         avg_diff = numpy.mean(diff)
         print("difference between both gradients: \n {}".format(diff))
