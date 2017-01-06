@@ -14,8 +14,6 @@ from pyseqlab.hosemi_crf import HOSemiCRF, HOSemiCRFModelRepresentation
 from pyseqlab.ho_crf_ad import HOCRFADModelRepresentation, HOCRFAD
 from pyseqlab.hosemi_crf_ad import HOSemiCRFADModelRepresentation, HOSemiCRFAD
 from pyseqlab.crf_learning import Learner
-from docutils.nodes import option
-
 
 
 root_dir = os.path.dirname(os.path.realpath(__file__))
@@ -301,13 +299,11 @@ class TestOptions(object):
 
 test_options = TestOptions()
 
-def feature_extraction_check():
+def run_test_checks(test_type, optimization_options):
     # if everything is correct the print result for model should be PASS
     options = test_options.load_options(('model_type',))
     model_types = options['model_type']
     scaling_method = "rescaling"
-    test_type = "gradient"
-    optimization_options = {}
     for model_type in model_types:
         if(model_type == 'higher-order'):
             run_config = ((run_suppl_example, ''), (run_conll00_seqs, '1-gram:2-gram:3-gram'))  
@@ -316,22 +312,23 @@ def feature_extraction_check():
         elif(model_type == 'first-order'):
             run_config = ((run_conll00_seqs, '1-gram:2-gram'),)
         for model_choice in model_types[model_type]:
-            if(test_type == 'gradient' and model_choice == 'HO'):
+            if(test_type in {'gradient', 'model learning'} and model_choice == 'HO'):
                 print('HO does not support gradient training -- use HO_AD instead')
-                continue
-            if(test_type == 'gradient' and model_choice == 'HOSemi'):
-                print('skipping HOSemi')
                 continue
             for config in run_config:
                 print('model_type: {}, model_choice: {}, run_config: {}'.format(model_type, model_choice, config))
                 test_crfs(model_choice, scaling_method, optimization_options, config, test_type)
     
 def forward_backward_check():
-    pass
+    run_test_checks('forward backward', {})
 def gradient_computation_check():
-    pass
+    run_test_checks('gradient', {})
 def model_learning_check():
-    pass
+    optimization_options = {'method': "L-BFGS-B",
+                            'regularization_type': 'l2',
+                            'regularization_value': 0
+                            }
+    run_test_checks('model learning', optimization_options)
 
 if __name__ == "__main__":
     pass

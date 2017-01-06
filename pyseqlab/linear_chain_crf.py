@@ -991,7 +991,6 @@ class LCRF(object):
                seq_id: integer representing unique id assigned to the sequence
                                           
         """
-        
         self.clear_cached_info([seq_id])
         # this will compute alpha and beta matrices and save them in seqs_info dict
         l = OrderedDict()
@@ -999,18 +998,15 @@ class LCRF(object):
         l['alpha'] = (w, seq_id)
         l['beta'] = (w, seq_id)
         self.check_cached_info(seq_id, l)
-        
+         
         alpha = self.seqs_info[seq_id]["alpha"]
         beta = self.seqs_info[seq_id]["beta"]
-        print("states codebook {}".format(self.model.Y_codebook))
-        print("alpha {}".format(alpha))
-        print("beta {}".format(beta))
-        
+         
         Z_alpha = vectorized_logsumexp(alpha[-1,:])
-        Z_beta = beta[1, 0]
+        Z_beta = numpy.min(beta[1, :])
         raw_diff = numpy.abs(Z_alpha - Z_beta)
+
         print("alpha[-1,:] = {}".format(alpha[-1,:]))
-        print("beta[0,:] = {}".format(beta[0,:]))
         print("beta[1,:] = {}".format(beta[1,:]))
         print("Z_alpha : {}".format(Z_alpha))
         print("Z_beta : {}".format(Z_beta))
@@ -1019,8 +1015,8 @@ class LCRF(object):
         rel_diff = raw_diff/(Z_alpha + Z_beta)
         print("rel_diff : {}".format(rel_diff))
         self.clear_cached_info([seq_id])
-        print("seqs_info {}".format(self.seqs_info))
-        return((raw_diff, rel_diff))   
+        #print("seqs_info {}".format(self.seqs_info))
+        return((raw_diff, rel_diff)) 
         
     def check_gradient(self, w, seq_id):
         """implementation of finite difference method similar to scipy.optimize.check_grad()
