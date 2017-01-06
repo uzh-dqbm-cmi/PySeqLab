@@ -5,7 +5,7 @@ For any questions, please email
 `Ahmed Allam <mailto:ahmed.allam@yale.edu>`__  or
 `Michael Krauthammer <mailto:michael.krauthammer@yale.edu>`__.
 
-For reporting bugs or issues, please refer to bitbucket issue tracker
+For reporting bugs or issues, please refer to bitbucket
 `Issue Tracker <https://bitbucket.org/A_2/pyseqlab/issues>`__.
 
 Funding and Support

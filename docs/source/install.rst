@@ -3,10 +3,10 @@
 Download
 ================================================================================
 
-The latest release of PySeqLab could be obtained from:
+The latest release of PySeqLab could be obtained from
 `Bitbucket <https://bitbucket.org/A_2/pyseqlab/downloads>`__.
 
-Source code is available on
+Source code is also available on
 `Bitbucket <https://bitbucket.org/A_2/pyseqlab/overview>`__.
 
 .. _Installation:
