@@ -81,3 +81,11 @@ pyseqlab.utilities module
     :members:
     :undoc-members:
     :show-inheritance:
+
+pyseqlab.workflow module
+-------------------------
+
+.. automodule:: pyseqlab.workflow
+    :members:
+    :undoc-members:
+    :show-inheritance:
