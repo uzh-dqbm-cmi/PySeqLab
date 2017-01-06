@@ -8,7 +8,7 @@ Chunker
 -------
 
 We start by training a ``chunker`` using `conll 2000 dataset <http://www.cnts.ua.ac.be/conll2000/chunking/>`__.
-The code demonstrating the training is accessed through this `bitbucket repository <https://bitbucket.org/A_2/conll00-chunker>`__.
+The code demonstrating the training is accessible through this `bitbucket repository <https://bitbucket.org/A_2/conll00-chunker>`__.
 
 
 Part-of-Speech tagger
