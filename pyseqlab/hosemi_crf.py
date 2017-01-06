@@ -200,7 +200,7 @@ class HOSemiCRF(HOSemiCRFAD):
        it implements the model discussed in:
        http://www.jmlr.org/papers/volume15/cuong14a/cuong14a.pdf
     """
-    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 4):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 5):
         super().__init__(model, seqs_representer, seqs_info, load_info_fromdisk)
     
     def compute_bpotential(self, w, active_features):

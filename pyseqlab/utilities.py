@@ -608,7 +608,6 @@ class HO_AStarSearcher(object):
                top_node: instance of :class:`AStarNode` class
                back_track: dictionary containing back pointers tracking the best paths to every state
         """
-        P_codebook_rev = self.P_codebook_rev
         # decoding the sequence
         #print("we are decoding")
         #top_node.print_node()
@@ -616,7 +615,7 @@ class HO_AStarSearcher(object):
         pi_c = top_node.pi_c
         pos = top_node.position
         Y_decoded = []
-        Y_decoded.append((P_codebook_rev[pi_c], y))
+        Y_decoded.append((pi_c, y))
         #print("t={}, p_T_code={}, p_T={}, y_T ={}".format(T, p_T_code, p_T, y_T))
         t = pos - 1
         while t>0:

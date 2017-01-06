@@ -843,13 +843,13 @@ class LCRF(object):
                folder_dir: string representing directory where files are pickled/dumped
         """
         # to clean things before pickling the model
-        print(self.seqs_info)
+        #print(self.seqs_info)
         self.seqs_info.clear() 
         self.seqs_representer.save(folder_dir)
         self.model.save(folder_dir)
         # save weights
         ReaderWriter.dump_data(self.weights, os.path.join(folder_dir, "weights"))
-        print('seqs_info from LCRF ',  self.seqs_info)
+        #print('seqs_info from LCRF ',  self.seqs_info)
 
     def decode_seqs(self, decoding_method, out_dir, **kwargs):
         r"""decode sequences (i.e. infer labels of sequence of observations)

@@ -170,7 +170,7 @@ class HOCRF(HOCRFAD):
           https://papers.nips.cc/paper/3815-conditional-random-fields-with-high-order-features-for-sequence-labeling.pdf
     
     """
-    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 3):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 5):
         super().__init__(model, seqs_representer, seqs_info, load_info_fromdisk) 
     
     def compute_bpotential(self, w, active_features):

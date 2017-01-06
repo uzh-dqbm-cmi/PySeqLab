@@ -318,7 +318,7 @@ class HOSemiCRFAD(LCRF):
                                based on estimated space required in memory 
                                
     """
-    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 0):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 5):
 
         super().__init__(model, seqs_representer, seqs_info, load_info_fromdisk)
 
@@ -638,7 +638,7 @@ class HOSemiCRFAD(LCRF):
                 yt = new_yt
                 
             Y_decoded.reverse()
-            print("y_decoded ", Y_decoded)
+            #print("y_decoded ", Y_decoded)
             return(Y_decoded, viol_index)
         else:
             asearcher = HOSemi_AStarSearcher(P_codebook_rev, P_elems)

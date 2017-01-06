@@ -527,9 +527,9 @@ class Learner(object):
                viol_pos: index where violation occurred, 
                          it is identified using :func:`_identify_violation_indx` function
         """
-        print("yref ", y_ref)
-        print("y_imposter ", y_imposter)
-        print("viol_pos ", viol_pos)
+#         print("yref ", y_ref)
+#         print("y_imposter ", y_imposter)
+#         print("viol_pos ", viol_pos)
         T = len(y_ref[:viol_pos])
         #^print("T ", T)
         #^print("viol_pos ", viol_pos)

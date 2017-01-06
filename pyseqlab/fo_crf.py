@@ -367,7 +367,7 @@ class FirstOrderCRF(LCRF):
             for t in range(2, T+1):
                 potential_matrix = self.compute_potential(w, active_features[t,t])
                 for j in range(M):
-                    vec = score_mat[t-1, :] + potential_matrix[t, :, j]
+                    vec = score_mat[t-1, :] + potential_matrix[:, j]
                     score_mat[t, j] = numpy.max(vec)
                     backpointer[t, j] = numpy.argmax(vec)
         else:

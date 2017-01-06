@@ -77,7 +77,7 @@ class HOCRFAD(HOSemiCRFAD):
                                based on estimated space required in memory 
                                
     """
-    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 0):
+    def __init__(self, model, seqs_representer, seqs_info, load_info_fromdisk = 5):
 
         super().__init__(model, seqs_representer, seqs_info, load_info_fromdisk)
     
@@ -366,18 +366,17 @@ class HOCRFAD(HOSemiCRFAD):
             f_potential = self.compute_fpotential(w, active_features)
             #^print("f_potential ", f_potential)
             for pi in pi_pky_map:
-                if(j >= P_len[pi]):
-                    pi_c = P_codebook[pi]
-                    pky_c_list, pk_c_list = pi_pky_map[pi]
-                    vec = f_potential[pky_c_list] + delta[j-1, pk_c_list]
-                    delta[j, pi_c] = numpy.max(vec)
-                    #print("max chosen ", delta[j, P_codebook[pi]])
-                    argmax_ind = numpy.argmax(vec)
-                    #print("argmax chosen ", argmax_ind)
-                    pk_c_max = pk_c_list[argmax_ind]
-                    pk = P_codebook_rev[pk_c_max]
-                    y = P_elems[pk][-1]
-                    back_track[j, pi_c] = (pk_c_max, y)
+                pi_c = P_codebook[pi]
+                pky_c_list, pk_c_list = pi_pky_map[pi]
+                vec = f_potential[pky_c_list] + delta[j-1, pk_c_list]
+                delta[j, pi_c] = numpy.max(vec)
+                #print("max chosen ", delta[j, P_codebook[pi]])
+                argmax_ind = numpy.argmax(vec)
+                #print("argmax chosen ", argmax_ind)
+                pk_c_max = pk_c_list[argmax_ind]
+                pk = P_codebook_rev[pk_c_max]
+                y = P_elems[pk][-1]
+                back_track[j, pi_c] = (pk_c_max, y)
                     
             if(beam_size < num_states):
                 topk_states = self.prune_states(j, delta, beam_size)

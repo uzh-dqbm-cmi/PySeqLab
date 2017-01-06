@@ -194,7 +194,7 @@ def run_conll00_seqs(model_order):
     template_generator.generate_template_XY('w', ('1-gram', range(0, 1)), model_order, templateXY)
     templateY = {'Y':()}
     filter_obj = None
-    return(seqs[:1], templateY, templateXY, filter_obj)
+    return(seqs[:4], templateY, templateXY, filter_obj)
 
 def run_suppl_example_custom(model_order):
     # model order by default is 2, hence the argument is ignored
