@@ -300,7 +300,16 @@ class TestOptions(object):
 test_options = TestOptions()
 
 def run_test_checks(test_type, optimization_options):
-    # if everything is correct the print result for model should be PASS
+    """run tests
+    
+      if everything is correct the print result for model should be:
+          - PASS for the test_type = ``feature extraction``
+          - epsilon(very small number <1e-10) for the test_type = ``forward backward``
+          - small difference (1e-8) between implemented gradient and the finite-difference gradient
+            for the test_type = ``gradient``
+          - SUCCESS as an output from L-BFGS-B scipy optimize routine for the test_type = ``model learning``
+    """
+    
     options = test_options.load_options(('model_type',))
     model_types = options['model_type']
     scaling_method = "rescaling"
