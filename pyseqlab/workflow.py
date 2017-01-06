@@ -97,7 +97,7 @@ class TrainingWorkflow(object):
             data_split = {0:{'train':seqs_id}}    
         return(data_split)
 
-    def traineval_folds(self, data_split, meval=True):
+    def traineval_folds(self, data_split, meval=True, sep=" "):
         """train and evaluate model on different dataset splits"""
         
         seqs_id = self.seqs_id
@@ -127,13 +127,15 @@ class TrainingWorkflow(object):
             savedmodel_info = self.train_model(trainseqs_id, crf_model)      
             # evaluate on the training data 
             trainseqs_info = {seq_id:seqs_info[seq_id] for seq_id in trainseqs_id} 
-            self.eval_model(savedmodel_info, {'seqs_info':trainseqs_info}, traineval_fname, "dec_trainseqs_fold_{}.txt".format(fold))
+            self.eval_model(savedmodel_info, {'seqs_info':trainseqs_info},
+                            traineval_fname, "dec_trainseqs_fold_{}.txt".format(fold), sep=sep)
            
             # evaluate on the test data 
             testseqs_id = data_split[fold].get('test')
             if(testseqs_id):
                 testseqs_info = {seq_id:seqs_info[seq_id] for seq_id in testseqs_id} 
-                self.eval_model(savedmodel_info, {'seqs_info':testseqs_info}, testeval_fname, "dec_testseqs_fold_{}.txt".format(fold))
+                self.eval_model(savedmodel_info, {'seqs_info':testseqs_info}, 
+                                testeval_fname, "dec_testseqs_fold_{}.txt".format(fold), sep=sep)
 
             models_info.append(savedmodel_info)
         # save workflow trainer instance on disk
