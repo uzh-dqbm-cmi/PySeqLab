@@ -15,8 +15,10 @@ class FeatureExtractor(object):
     
        Args:
            templateX: dictionary specifying template to follow for observation features extraction
-                      it has the form: {attr_name: {x_offset:tuple(y_offsets)}}
-                      e.g. {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
+           
+                      It has the form: {attr_name: {x_offset:tuple(y_offsets)}}
+                      
+                      e.g. ``{'w': {(0,):((0,), (-1,0), (-2,-1,0))}}``
                                             
            templateY: dictionary specifying template to follow for y pattern features extraction
                       it has the form: {Y: tuple(y_offsets)}  
