@@ -34,7 +34,7 @@ class AttributeScaler(object):
         """scale real/continuous attributes of a sequence for a list of boundaries
         
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                boundaries: list of boundaries [(1,1), (2,2),...,]
                
         """
@@ -121,7 +121,7 @@ class NERSegmentAttributeExtractor(object):
         """generate attributes of the sequence observations in a specified list of boundaries
         
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                boundaries: list of boundaries [(1,1), (2,2),...,]
                
            .. note::

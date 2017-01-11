@@ -11,7 +11,7 @@ from .utilities import ReaderWriter, create_directory, generate_datetime_str
 from .attributes_extraction import AttributeScaler
 
 class FeatureExtractor(object):
-    r"""Generic feature extractor class that contains feature functions/templates 
+    """Generic feature extractor class that contains feature functions/templates 
     
        Args:
            templateX: dictionary specifying template to follow for observation features extraction
@@ -134,7 +134,7 @@ class FeatureExtractor(object):
         """extract features (observation and y pattern features) per boundary
         
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                
            Keywords Arguments:
                seg_features: optional dictionary of observation features
@@ -198,7 +198,7 @@ class FeatureExtractor(object):
         """extract y pattern features for a given sequence and template Y
         
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                boundary: tuple (u,v) representing current boundary
                templateY: dictionary specifying template to follow for extraction
                           it has the form: {Y: tuple(y_offsets)}  
@@ -247,7 +247,7 @@ class FeatureExtractor(object):
         """extract observation features for a given sequence at a specified boundary
         
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                boundary: tuple (u,v) representing current boundary
         
         """
@@ -306,7 +306,7 @@ class FeatureExtractor(object):
         """extract/join observation features with y pattern features as specified :attr:`template_X` 
         
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                boundary: tuple (u,v) representing current boundary
                
            Keywords Arguments:
@@ -350,7 +350,7 @@ class FeatureExtractor(object):
         """lookup observation features for a given sequence using varying boundaries (i.e. g(X, u, v))
         
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                boundary: tuple (u,v) representing current boundary
                
         """
@@ -417,7 +417,7 @@ class FeatureExtractor(object):
         """lookup/search model active features for a given sequence using varying boundaries (i.e. g(X, u, v))
            
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                model: a model representation instance of the CRF class (i.e. the class having `ModelRepresentation` suffix)
             
            Keyword Arguments:
@@ -573,7 +573,7 @@ class FOFeatureExtractor(FeatureExtractor):
         """extract y pattern features for a given sequence and template Y
         
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                boundary: tuple (u,v) representing current boundary
                templateY: dictionary specifying template to follow for extraction
                           it has the form: {Y: tuple(y_offsets)}  
@@ -620,7 +620,7 @@ class FOFeatureExtractor(FeatureExtractor):
         """lookup/search model active features for a given sequence using varying boundaries (i.e. g(X, u, v))
            
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                model: a model representation instance of the CRF class (i.e. the class having `ModelRepresentation` suffix)
             
            Keyword Arguments:
@@ -724,7 +724,7 @@ class SeqsRepresenter(object):
         
            Args:
                seqs_dict: dictionary containing  sequences and corresponding ids where 
-                          each sequence is an instance of the :class:`SequenceStrcut` class
+                          each sequence is an instance of the :class:`SequenceStruct` class
                corpus_name: string specifying the name of the corpus that will be used as corpus folder name
                working_dir: string representing the directory where the parsing and saving info on disk will occur
                unique_id: boolean indicating if the generated root folder will include a generated id
@@ -1066,7 +1066,7 @@ class SeqsRepresenter(object):
         """generate the missing attributes if the segment length is greater than 1
         
            Args:
-               seq: a sequence instance of :class:`SequenceStrcut`
+               seq: a sequence instance of :class:`SequenceStruct`
                L: longest segment defined in the model
                
            .. note::

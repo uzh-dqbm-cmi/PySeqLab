@@ -196,7 +196,7 @@ class DataFileParser():
     """class to parse a data file comprising the training/testing data
     
        Attributes:
-           seqs: list comprising of sequences that are instances of :class:`SequenceStrcut` class
+           seqs: list comprising of sequences that are instances of :class:`SequenceStruct` class
            header: list of attribute names read from the file
 
     """

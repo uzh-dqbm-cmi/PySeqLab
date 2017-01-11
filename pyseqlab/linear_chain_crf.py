@@ -862,7 +862,7 @@ class LCRF(object):
                 file_name: the name of the file in case decoded sequences are required to be written
                 sep: separator used while writing inferred sequences to file
                 beam_size: integer determining the size of the beam while decoding
-                seqs: a list comprising of sequences that are instances of :class:`SequenceStrcut` class to be decoded
+                seqs: a list comprising of sequences that are instances of :class:`SequenceStruct` class to be decoded
                      (used for decoding test data or any new/unseen data -- sequences
                 seqs_info: dictionary containing the info about the sequences to decode 
                           (used for decoding training sequences)
