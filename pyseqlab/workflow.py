@@ -152,7 +152,7 @@ class TrainingWorkflow(object):
         
         return(learner.training_description['model_dir'])
     
-    def eval_model(self, savedmodel_info, eval_seqs, eval_filename, dec_seqs_filename, sep = " ", ):
+    def eval_model(self, savedmodel_info, eval_seqs, eval_filename, dec_seqs_filename, sep = " "):
         # load learned models
         model_dir = savedmodel_info
         modelparts_dir = os.path.join(model_dir, "model_parts")
@@ -175,7 +175,7 @@ class TrainingWorkflow(object):
         if(eval_filename):
             Y_seqs_dict = self.map_pred_to_ref_seqs(seqs_pred)
             evaluator = Evaluator(crf_model.model)
-            performance = evaluator.compute_model_performance(Y_seqs_dict, 'f1', os.path.join(model_dir, eval_filename), "BIO")
+            performance = evaluator.compute_model_performance(Y_seqs_dict, 'f1', os.path.join(model_dir, eval_filename), "")
             print("performance ", performance)
 
     def map_pred_to_ref_seqs(self, seqs_pred):
@@ -196,22 +196,20 @@ class TrainingWorkflow(object):
     def verify_template(self):
         """ verifying template -- sanity check"""
 
-        seqs_id = self._seqs_id
-        res = self._res
-        seqs_info = self._seqs_info
-        seq_representer = self._seq_representer
-        model = self._model
-        
+        seqs_id = self.seqs_id
+        model = self.model
+        crf_model = self.crf_model
         globalfeatures_len = len(model.modelfeatures_codebook)
-        
-        seqs_activefeatures = seq_representer.get_seqs_modelactivefeatures(seqs_id, seqs_info)
         activefeatures_len = 0
         f = {}
-        for seq_id, seq_activefeatures in seqs_activefeatures.items():
+        for seq_id in seqs_id:
+            crf_model.load_activefeatures(seq_id)
+            seq_activefeatures = crf_model.seqs_info[seq_id]["activefeatures"]
             for features_dict in seq_activefeatures.values():
                 for z_patt in features_dict:
                     for windx in features_dict[z_patt]:
                         f[windx] = 1
+            crf_model.clear_cached_info([seq_id])
         activefeatures_len += len(f)
                     
         statement = ""
@@ -220,6 +218,6 @@ class TrainingWorkflow(object):
         elif(activefeatures_len > globalfeatures_len):
             statement = "len(activefeatures) > len(modelfeatures)"
         else:
-            statement = "pass"
-        res['template'] = statement
+            statement = "PASS"
+        print(statement)
         
