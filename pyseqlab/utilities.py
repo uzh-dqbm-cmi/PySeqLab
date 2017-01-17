@@ -1193,11 +1193,10 @@ def vectorized_logsumexp(vec):
            vec: numpy vector where entries are in the log domain
     """
     max_a = numpy.max(vec)
-    if(max_a == -numpy.inf):
-        return(max_a)
-    else:
-        res = max_a + numpy.log(numpy.sum(numpy.exp(vec - max_a)))
-        return(res)
+    if(max_a != -numpy.inf):
+        return(max_a + numpy.log(numpy.sum(numpy.exp(vec - max_a))))
+    # case where max_a == -numpy.inf
+    return(max_a)
 
 
 def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class=None):
