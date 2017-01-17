@@ -338,6 +338,8 @@ def model_learning_check():
                             'regularization_value': 0
                             }
     run_test_checks('model learning', optimization_options)
-
+def feature_extraction_check():
+    run_test_checks('feature extraction', {})
+    
 if __name__ == "__main__":
     pass

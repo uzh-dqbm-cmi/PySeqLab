@@ -6,18 +6,17 @@ from setuptools import setup
 
 
 # package description
-# to change into .rst file
 expl_files = ['README.rst']
 long_description = '\n'.join([open(f, 'r').read() for f in expl_files])
 
 if __name__ == "__main__":
     setup(name='PySeqLab',
-          version="1.3.0",
+          version="1.3.1",
           description='A package for performing structured prediction (i.e.sequence labeling and segmentation).',
           long_description=long_description,
           author="Ahmed Allam",
           author_email='ahmed.allam@yale.edu',
-          license="",
+          license="MIT",
           url='https://bitbucket.org/A_2/pyseqlab/',
           download_url='https://bitbucket.org/A_2/pyseqlab/downloads',
           keywords='conditional random fields, structured prediction, bioinformatics',
@@ -26,6 +25,7 @@ if __name__ == "__main__":
           classifiers=['Development Status :: 4 - Beta',
                        'Environment :: Console',
                        'Intended Audience :: Science/Research',
+                       'License :: OSI Approved :: MIT License',
                        'Natural Language :: English',
                        'Operating System :: OS Independent',
                        'Programming Language :: Python :: 3',
