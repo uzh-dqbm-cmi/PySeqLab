@@ -855,27 +855,33 @@ class TemplateGenerator(object):
            Args:
                attr_name: string representing the attribute name of the atomic observations/tokens
                x_spec: tuple of the form  (n-gram, range)
-                       that is we can specify the n-gram features required in a specific range
-                       for an attr_name 
+                       that is we can specify the n-gram features required in a specific range/window
+                       for an observation token ``attr_name``
                y_spec: string specifying how to join/combine the features on the X observation level
-                       with labels on the Y level
+                       with labels on the Y level. 
+                       
+                       Example of passed options would be:
+                           - one state (i.e. current state) by passing ``1-state`` or 
+                           - two states (i.e. current and previous state) by passing ``2-states`` or
+                           - one and two states (i.e. mix/combine observation features with one state model and two states models)
+                             by passing ``1-state:2-states``. Higher order models support models with states > 2 such as ``3-states`` and above. 
                template: dictionary that accumulates the generated feature template for all attributes
                
            Example:
            
                suppose we have `word` attribute reference by 'w' and we need to use the current word
-               with the current label (i.e. unigram of words with unigrams of labels) in a range of (0,1)
+               with the current label (i.e. unigram of words with the current label) in a range of (0,1)
             
                ::
                
                    templateXY = {}
-                   generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram', templateXY)
+                   generate_template_XY('w', ('1-gram', range(0, 1)), '1-state', templateXY)
                
-               we can also specify a bigram features at the labels level
+               we can also specify a two states/labels features at the Y level
                
                ::
                
-                   generate_template_XY('w', ('1-gram', range(0, 1)), '1-gram:2-gram', templateXY)
+                   generate_template_XY('w', ('1-gram', range(0, 1)), '1-state:2-states', templateXY)
                
            .. note ::
               this can be applied for every attribute name and accumulated in the `template` dictionary
@@ -893,7 +899,7 @@ class TemplateGenerator(object):
            Args:
                template: dictionary of the accumulated template for the different offsets
                          and attribute names
-               templateXY: dictionary of the form {attr_name:{x_offset:(y_offsets)}}
+               templateXY: dictionary of the form ``{attr_name:{x_offset:(y_offsets)}}``
         """
         for attr_name in templateXY:
             if(attr_name in template):
@@ -907,8 +913,8 @@ class TemplateGenerator(object):
         
            Args:
                attr_name: string representing the attribute name of the atomic observations/tokens
-               ngram_options: string specifying the n-grams (i.e. '1-gram') it also supports multiple
-                              specification such as '1-gram:2-gram' where each is separated by a colon
+               ngram_options: string specifying the n-grams (i.e. ``1-gram``) it also supports multiple
+                              specification such as ``1-gram:2-gram`` where each is separated by a colon
                wsize: a range specifying the window size where the template operates
                
         """
@@ -926,8 +932,9 @@ class TemplateGenerator(object):
         """generate template on the Y labels level
         
            Args:
-               ngram_options: string specifying the n-grams (i.e. '1-gram') it also supports multiple
-                              specification such as '1-gram:2-gram' where each is separated by a colon
+               ngram_options: string specifying the number of states to be use (i.e. ``1-state``).
+                              It also supports multiple specification such as ``1-state:2-states`` 
+                              where each is separated by a colon
                
         """
         template = {'Y':[]}
@@ -959,18 +966,17 @@ class TemplateGenerator(object):
         """mix and join the template on the X observation level with the Y level
            
            Args:
-               templateX: dictionary of the form {attr_name:{x_offset:None}}
-                          e.g. {'w': {(0,): None}}
-               templateY: dictionary of the form {'Y':[y_offset]}
-                          e.g. {'Y': [(0,), (-1, 0)]}
+               templateX: dictionary of the form ``{attr_name:{x_offset:None}}``
+                          e.g. ``{'w': {(0,): None}}``
+               templateY: dictionary of the form ``{'Y':[y_offset]}``
+                          e.g. ``{'Y': [(0,), (-1, 0)]}``
            .. note::
            
               - x_offset is a tuple of offsets representing the ngram options needed 
-                such as (0,) for unigram and (-1,0) bigram using the previous token
+                such as (0,) for unigram and (-1,0) for bigram
                 
-              - y_offset is a tuple of offsets representing the ngram options needed 
-                such as (0,) for unigram and (-1,0) bigram using the previous state and
-                (-2,-1,0) using the previous two states
+              - y_offset is a tuple of offsets representing the number of states options needed 
+                such as (0,) for 1-state and (-1,0) for 2-states and (-2,-1,0) for 3-states
         """
         template_XY = deepcopy(templateX)
         for attr_name in template_XY:

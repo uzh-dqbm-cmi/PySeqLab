@@ -178,8 +178,8 @@ def run_suppl_example(model_order):
     template_generator = TemplateGenerator()
     templateXY = {}
     # generating template for attr_name = w
-    template_generator.generate_template_XY('w', ('1-gram', range(0,1)), '1-gram', templateXY)
-    templateY = template_generator.generate_template_Y('3-gram')
+    template_generator.generate_template_XY('w', ('1-gram', range(0,1)), '1-state', templateXY)
+    templateY = template_generator.generate_template_Y('3-states')
     filter_info = {"filter_type":"pattern", "filter_val": {'P','O', 'L', 'L|O|L'}, "filter_relation": "not in"}
     filter_obj = FeatureFilter(filter_info)
     seq = load_suppl_example()
@@ -201,7 +201,7 @@ def run_suppl_example_custom(model_order):
     template_generator = TemplateGenerator()
     templateXY = {}
     # generating template for attr_name = w
-    template_generator.generate_template_XY('w', ('1-gram', range(0,1)), '1-gram:2-gram', templateXY)
+    template_generator.generate_template_XY('w', ('1-gram', range(0,1)), '1-state:2-states', templateXY)
     templateY = {'Y':()}
     filter_obj = None
     seq = load_suppl_example()
@@ -315,11 +315,11 @@ def run_test_checks(test_type, optimization_options):
     scaling_method = "rescaling"
     for model_type in model_types:
         if(model_type == 'higher-order'):
-            run_config = ((run_suppl_example, ''), (run_conll00_seqs, '1-gram:2-gram:3-gram'))  
+            run_config = ((run_suppl_example, ''), (run_conll00_seqs, '1-state:2-states:3-states'))  
         elif(model_type == 'higher-order-semi'):
-            run_config = ((run_suppl_example, ''), (run_conll00_seqs, '1-gram:2-gram:3-gram'), (run_segments, '1-gram:2-gram:3-gram'))  
+            run_config = ((run_suppl_example, ''), (run_conll00_seqs, '1-state:2-states:3-states'), (run_segments, '1-state:2-states:3-states'))  
         elif(model_type == 'first-order'):
-            run_config = ((run_conll00_seqs, '1-gram:2-gram'),)
+            run_config = ((run_conll00_seqs, '1-state:2-states'),)
         for model_choice in model_types[model_type]:
             if(test_type in {'gradient', 'model learning'} and model_choice == 'HO'):
                 print('HO does not support gradient training -- use HO_AD instead')

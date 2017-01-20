@@ -7,7 +7,7 @@ from .utilities import SequenceStruct, ReaderWriter
 
 
 class AttributeScaler(object):
-    """attribute scalar class to scale/standardize continuous/real attributes/features
+    """attribute scalar class to scale/standardize continuous attributes/features
     
        Args:
            scaling_info: dictionary comprising the relevant info for performing standardization
@@ -30,8 +30,8 @@ class AttributeScaler(object):
         self.scaling_info = scaling_info
         self.method = method
         
-    def scale_real_attributes(self, seq, boundaries):
-        """scale real/continuous attributes of a sequence for a list of boundaries
+    def scale_continuous_attributes(self, seq, boundaries):
+        """scale continuous attributes of a sequence for a list of boundaries
         
            Args:
                seq: a sequence instance of :class:`SequenceStruct`
@@ -71,12 +71,12 @@ class NERSegmentAttributeExtractor(object):
        
        Args:
            attr_desc: dictionary defining the atomic observation/attribute names including
-                      the encoding of such attribute (i.e. {real, binary}}
+                      the encoding of such attribute (i.e. {continuous, categorical}}
            seg_attr:  dictionary comprising the extracted attributes per each boundary of a sequence
     
        Attributes:
            attr_desc: dictionary defining the atomic observation/attribute names including
-                      the encoding of such attribute (i.e. {real, binary}}
+                      the encoding of such attribute (i.e. {continuous, categorical}}
            seg_attr:  dictionary comprising the extracted attributes per each boundary of a sequence
 
     """
@@ -89,24 +89,24 @@ class NERSegmentAttributeExtractor(object):
         """
         attr_desc = {}
         attr_desc['w'] = {'description':'the word/token',
-                          'encoding':'binary'
+                          'encoding':'categorical'
                          }
         attr_desc['shape'] = {'description':'the shape of the word',
-                              'encoding':'binary'
+                              'encoding':'categorical'
                              }
         attr_desc['shaped'] = {'description':'the compressed/degenerated form/shape of the word',
-                               'encoding':'binary'
+                               'encoding':'categorical'
                               }
         attr_desc['seg_numchars'] = {'description':'number of characters in a segment',
-                                     'encoding':'real'
+                                     'encoding':'continuous'
                                     }
         attr_desc['seg_len'] = {'description':'the length of a segment',
-                                'encoding':'real'
+                                'encoding':'continuous'
                                }
         return(attr_desc)
     
     def group_attributes(self):
-        """group attributes based on the encoding type (i.e. real versus binary)"""
+        """group attributes based on the encoding type (i.e. continuous versus categorical)"""
         attr_desc = self.attr_desc
         grouped_attr = {}
         for attr_name in attr_desc:
@@ -280,7 +280,7 @@ class NERSegmentAttributeExtractor(object):
                 # adding dynamically the description and the encoding of the new bag of attributes property
                 if(fkey not in attr_desc):
                     attr_desc[fkey] = {'description':'{} -- bag of attributes property'.format("fkey"),
-                                       'encoding':'real'
+                                       'encoding':'continuous'
                                       }
     
 if __name__ == "__main__":

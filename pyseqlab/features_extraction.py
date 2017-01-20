@@ -14,29 +14,27 @@ class FeatureExtractor(object):
     """Generic feature extractor class that contains feature functions/templates 
     
        Args:
-           templateX: dictionary specifying template to follow for observation features extraction
-           
-                      It has the form: {attr_name: {x_offset:tuple(y_offsets)}}
-                      
+           templateX: dictionary specifying template to follow for observation features extraction.
+                      It has the form: ``{attr_name: {x_offset:tuple(y_offsets)}}``.
                       e.g. ``{'w': {(0,):((0,), (-1,0), (-2,-1,0))}}``
                                             
-           templateY: dictionary specifying template to follow for y pattern features extraction
-                      it has the form: {Y: tuple(y_offsets)}  
-                      e.g. {'Y': ((0,), (-1,0), (-2,-1,0))}
+           templateY: dictionary specifying template to follow for y pattern features extraction.
+                      It has the form: ``{Y: tuple(y_offsets)}``.  
+                      e.g. ``{'Y': ((0,), (-1,0), (-2,-1,0))}``
            attr_desc: dictionary containing description and the encoding of the attributes/observations
-                      e.g. attr_desc['w'] = {'description':'the word/token','encoding':'binary'}
+                      e.g. attr_desc['w'] = {'description':'the word/token','encoding':'categorical'}
                       for more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
             
        Attributes:
-           template_X: dictionary specifying template to follow for observation features extraction
-                      it has the form: {attr_name: {x_offset:tuple(y_offsets)}}
-                      e.g. {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
-           template_Y: dictionary specifying template to follow for y pattern features extraction
-                      it has the form: {Y: tuple(y_offsets)}  
-                      e.g. {'Y': ((0,), (-1,0), (-2,-1,0))}
-           attr_desc: dictionary containing description and the encoding of the attributes/observations
-                      e.g. attr_desc['w'] = {'description':'the word/token','encoding':'binary'}
-                      for more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
+           template_X: dictionary specifying template to follow for observation features extraction.
+                       It has the form: ``{attr_name: {x_offset:tuple(y_offsets)}}``
+                       e.g. ``{'w': {(0,):((0,), (-1,0), (-2,-1,0))}}``
+           template_Y: dictionary specifying template to follow for y pattern features extraction.
+                       It has the form: ``{Y: tuple(y_offsets)}``  
+                       e.g. ``{'Y': ((0,), (-1,0), (-2,-1,0))}``
+           attr_desc: dictionary containing description and the encoding of the attributes/observations.
+                      e.g. ``attr_desc['w'] = {'description':'the word/token','encoding':'categorical'}``.
+                      For more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
             
     """
     def __init__(self, templateX, templateY, attr_desc):
@@ -90,7 +88,9 @@ class FeatureExtractor(object):
            Args:
                template: dictionary specifying template to follow for y pattern features extraction
         
-           Example:: 
+           Example:
+           
+           :: 
            
                template_Y = {'Y': ((0,), (-1,0), (-2,-1,0))}
                           = {Y: tuple(y_offsets)}
@@ -202,9 +202,9 @@ class FeatureExtractor(object):
            Args:
                seq: a sequence instance of :class:`SequenceStruct`
                boundary: tuple (u,v) representing current boundary
-               templateY: dictionary specifying template to follow for extraction
-                          it has the form: {Y: tuple(y_offsets)}  
-                          e.g. {'Y': ((0,), (-1,0), (-2,-1,0))}
+               templateY: dictionary specifying template to follow for extraction.
+                          It has the form: {Y: tuple(y_offsets)}  
+                          e.g. ``{'Y': ((0,), (-1,0), (-2,-1,0))}``
         """
         template_Y = templateY['Y']
 
@@ -265,10 +265,10 @@ class FeatureExtractor(object):
         for attr_name in template_X:
 #             #print("attr_name {}".format(attr_name))
             # check the type of attribute
-            if(attr_desc[attr_name]["encoding"] == "binary"):
-                represent_attr = self._represent_binary_attr
+            if(attr_desc[attr_name]["encoding"] == "categorical"):
+                represent_attr = self._represent_categorical_attr
             else:
-                represent_attr = self._represent_real_attr
+                represent_attr = self._represent_continuous_attr
             
             feat_template = {}
             for offset_tup_x in template_X[attr_name]:
@@ -369,12 +369,10 @@ class FeatureExtractor(object):
         for attr_name in template_X:
 #             #print("attr_name {}".format(attr_name))
             # check the type of attribute
-            if(attr_desc[attr_name]["encoding"] == "binary"):
-#                 aggregate_attr = self._aggregate_binary_attr
-                represent_attr = self._represent_binary_attr
+            if(attr_desc[attr_name]["encoding"] == "categorical"):
+                represent_attr = self._represent_categorical_attr
             else:
-#                 aggregate_attr = self._aggregate_real_attr
-                represent_attr = self._represent_real_attr
+                represent_attr = self._represent_continuous_attr
             
             for offset_tup_x in template_X[attr_name]:
                 attributes = []
@@ -480,11 +478,11 @@ class FeatureExtractor(object):
     
     
     ########################################################
-    # functions used to represent real and binary attributes
+    # functions used to represent continuous and categorical attributes
     ########################################################
 
-    def _represent_binary_attr(self, attributes, feature_name):
-        """function to represent binary attributes 
+    def _represent_categorical_attr(self, attributes, feature_name):
+        """function to represent categorical attributes 
         """
 #         #print("attributes ",attributes)
 #         #print("featurename ", feature_name)
@@ -493,8 +491,8 @@ class FeatureExtractor(object):
         feature = feature_name + "=" + feature_val
         return({feature:1})
 
-    def _represent_real_attr(self, attributes, feature_name):
-        """function to represent real/continuous attributes
+    def _represent_continuous_attr(self, attributes, feature_name):
+        """function to represent continuous attributes
         """
         feature_val = sum(attributes) 
         return({feature_name:feature_val})
@@ -519,32 +517,32 @@ class FOFeatureExtractor(FeatureExtractor):
         it supports the addition of start_state and **potentially** stop_state in the future release
         
         Args:
-            templateX: dictionary specifying template to follow for observation features extraction
-                       it has the form: {attr_name: {x_offset:tuple(y_offsets)}}
-                       e.g. {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
+            templateX: dictionary specifying template to follow for observation features extraction.
+                       It has the form: ``{attr_name: {x_offset:tuple(y_offsets)}}``
+                       e.g. ``{'w': {(0,):((0,), (-1,0), (-2,-1,0))}}``
                                             
-            templateY: dictionary specifying template to follow for y pattern features extraction
-                       it has the form: {Y: tuple(y_offsets)}  
-                       e.g. {'Y': ((0,), (-1,0), (-2,-1,0))}
+            templateY: dictionary specifying template to follow for y pattern features extraction.
+                       It has the form: ``{Y: tuple(y_offsets)}``  
+                       e.g. ``{'Y': ((0,), (-1,0), (-2,-1,0))}``
                        
             attr_desc: dictionary containing description and the encoding of the attributes/observations
-                       e.g. attr_desc['w'] = {'description':'the word/token','encoding':'binary'}
-                       for more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
+                       e.g. ``attr_desc['w'] = {'description':'the word/token','encoding':'categorical'}``.
+                       For more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
             
             start_state: boolean indicating if __START__ state is required in the model
             
         Attributes:
-            templateX: dictionary specifying template to follow for observation features extraction
-                       it has the form: {attr_name: {x_offset:tuple(y_offsets)}}
-                       e.g. {'w': {(0,):((0,), (-1,0), (-2,-1,0))}}
+            templateX: dictionary specifying template to follow for observation features extraction.
+                       It has the form: ``{attr_name: {x_offset:tuple(y_offsets)}}``
+                       e.g. ``{'w': {(0,):((0,), (-1,0), (-2,-1,0))}}``
                                             
-            templateY: dictionary specifying template to follow for y pattern features extraction
-                       it has the form: {Y: tuple(y_offsets)}  
-                       e.g. {'Y': ((0,), (-1,0), (-2,-1,0))}
+            templateY: dictionary specifying template to follow for y pattern features extraction.
+                       It has the form: ``{Y: tuple(y_offsets)}``  
+                       e.g. ``{'Y': ((0,), (-1,0), (-2,-1,0))}``
                        
             attr_desc: dictionary containing description and the encoding of the attributes/observations
-                       e.g. attr_desc['w'] = {'description':'the word/token','encoding':'binary'}
-                       for more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
+                       e.g. ``attr_desc['w'] = {'description':'the word/token','encoding':'categorical'}``.
+                       For more details/info check the :attr:`attr_desc` of the :class:`NERSegmentAttributeExtractor`
             
             start_state: boolean indicating if __START__ state is required in the model
     
@@ -577,9 +575,9 @@ class FOFeatureExtractor(FeatureExtractor):
            Args:
                seq: a sequence instance of :class:`SequenceStruct`
                boundary: tuple (u,v) representing current boundary
-               templateY: dictionary specifying template to follow for extraction
-                          it has the form: {Y: tuple(y_offsets)}  
-                          e.g. {'Y': ((0,), (-1,0)}
+               templateY: dictionary specifying template to follow for extraction.
+                          It has the form: ``{Y: tuple(y_offsets)}``  
+                          e.g. ``{'Y': ((0,), (-1,0)}``
         """
         template_Y = templateY['Y']
 
@@ -700,7 +698,7 @@ class SeqsRepresenter(object):
            attr_extractor: instance of attribute extractor class such as :class:`NERSegmentAttributeExtractor`
            fextractor: instance of feature extractor class such as :class:`FeatureExtractor`
            attr_scaler: instance of scaler class :class:`AttributeScaler`
-                        it is used for scaling features that not binary (using standardization or rescaling) 
+                        it is used for scaling features that are continuous --not categorical (using standardization or rescaling) 
                         
     """
     def __init__(self, attr_extractor, fextractor):
@@ -782,7 +780,7 @@ class SeqsRepresenter(object):
         
            Main task:
                - generate attributes (i.e. apply observation functions) on segments (i.e. L>1)
-               - scale non binary attributes and building the relevant scaling info needed
+               - scale continuous attributes and building the relevant scaling info needed
                - create a directory for every sequence where we save the relevant data
         
            Args:
@@ -795,9 +793,9 @@ class SeqsRepresenter(object):
         """
         attr_extractor = self.attr_extractor
         grouped_attr = attr_extractor.group_attributes()
-        if(grouped_attr.get("real")):
+        if(grouped_attr.get("continuous")):
             active_attr = list(self.feature_extractor.template_X.keys())
-            active_continuous_attr = [attr for attr in active_attr if attr in grouped_attr['real']]
+            active_continuous_attr = [attr for attr in active_attr if attr in grouped_attr['continuous']]
         else:
             active_continuous_attr = {}
             
@@ -820,7 +818,7 @@ class SeqsRepresenter(object):
                 if(new_boundaries):
                     ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
             
-            # gather stats for rescaling/standardizing real/continuous variables
+            # gather stats for rescaling/standardizing continuous variables
             if(active_continuous_attr):
                 for attr_name in active_continuous_attr:
                     for y_boundary in y_boundaries:
@@ -854,14 +852,14 @@ class SeqsRepresenter(object):
         if(seq_dir):
             target_dir = os.path.dirname(seq_dir)
             log_file = os.path.join(target_dir, "log.txt")
-            line = "---Rescaling continuous/real features--- starting time: {} \n".format(start_time)
+            line = "---Rescaling continuous features--- starting time: {} \n".format(start_time)
             line +=  "Number of instances/training data processed: {}\n".format(len(seqs_id))
-            line += "---Rescaling continuous/real features--- end time: {} \n".format(end_time)
+            line += "---Rescaling continuous features--- end time: {} \n".format(end_time)
             line += "\n \n"
             ReaderWriter.log_progress(line, log_file)
         
     def scale_attributes(self, seqs_id, seqs_info):
-        """scale non binary attributes 
+        """scale continuous attributes 
         
            Args:
                seqs_id: list of sequence ids to be processed
@@ -873,7 +871,7 @@ class SeqsRepresenter(object):
                 seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
                 seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb") 
                 boundaries = list(seq.seg_attr.keys())
-                attr_scaler.scale_real_attributes(seq, boundaries)
+                attr_scaler.scale_continuous_attributes(seq, boundaries)
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
 
     def extract_seqs_globalfeatures(self, seqs_id, seqs_info):
@@ -927,7 +925,7 @@ class SeqsRepresenter(object):
         
            Main task:
                - use the sequences assigned  in the training set to build the model
-               - takes the union of the detected global feature functions F_j(X,Y) for each chosen parsed sequence
+               - takes the union of the detected global feature functions :math:`F_j(X,Y)` for each chosen parsed sequence
                  from the training set to form the set of model features
                - construct the tag set Y_set (i.e. possible tags assumed by y_t) using the chosen parsed sequences
                  from the training data set
@@ -1088,7 +1086,7 @@ class SeqsRepresenter(object):
                     # this will update the value of the seg_attr of the sequence 
                     attr_extractor.generate_attributes(seq, [boundary])
                     if(attr_scaler):
-                        attr_scaler.scale_real_attributes(seq, [boundary])
+                        attr_scaler.scale_continuous_attributes(seq, [boundary])
             
     
     def get_seq_activatedstates(self, seq_id, seqs_info):
@@ -1241,7 +1239,7 @@ class SeqsRepresenter(object):
            Keyword Arguments:
                seg_other_symbol: in case of segmentation, this represents the non-entity symbol 
                                  label used. Otherwise, it is None (default) which translates to 
-                                 be sequence labeling problem
+                                 be a sequence labeling problem.
         
 
         """
@@ -1262,7 +1260,7 @@ class SeqsRepresenter(object):
         new_boundaries = attr_extractor.generate_attributes(seq, y_imposter_boundaries)
         #^print("new_boundaries ", new_boundaries)
         if(new_boundaries):
-            attr_scaler.scale_real_attributes(seq, new_boundaries)
+            attr_scaler.scale_continuous_attributes(seq, new_boundaries)
             
         activefeatures_dir =  seqs_info[seq_id]["activefeatures_dir"]
 
@@ -1309,11 +1307,11 @@ class FeatureFilter(object):
                
             
            *count filter*: 
-               - filter_info = {'filter_type': 'count', 'filter_val':5, 'filter_relation':'<'}
+               - ``filter_info = {'filter_type': 'count', 'filter_val':5, 'filter_relation':'<'}``
                  this filter would delete all features that have count less than five
                  
            *pattern filter*:
-               - filter_info = {'filter_type': 'pattern', 'filter_val': ["O|L", "L|L"], 'filter_relation':'in'}
+               - ``filter_info = {'filter_type': 'pattern', 'filter_val': ["O|L", "L|L"], 'filter_relation':'in'}``
                  this filter would delete all features that have associated y pattern ["O|L", "L|L"]
 
     """
@@ -1344,10 +1342,10 @@ class FeatureFilter(object):
         if(filter_info['filter_type'] == "count"):
             threshold = filter_info['filter_val']
             relation = filter_info['filter_realtion']
-            # filter binary features that have counts less than specified threshold
+            # filter binary/categorical features that have counts less than specified threshold
             for z in featuresum_dict:
                 for fname, fsum in featuresum_dict[z].items():
-                    # determine if the feature is binary
+                    # determine if the feature is binary/categorical
                     if(type(fsum) == int):
                         rel_func[relation](fsum, threshold, filtered_dict[z][fname])
 #                         if(relation == "="):
