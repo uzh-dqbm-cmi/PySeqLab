@@ -16,7 +16,7 @@ Installation
 
 To install the latest version of PySeqLab::
 
-    > pip install https://bitbucket.org/A_2/pyseqlab/downloads/PySeqLab-1.3.0.tar.gz
+    > pip install https://bitbucket.org/A_2/pyseqlab/downloads/PySeqLab-1.3.2.tar.gz
     
 
 Requirements
