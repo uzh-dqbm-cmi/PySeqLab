@@ -16,7 +16,7 @@ This work is supported by grant number P2TIP1-161635 awarded by the `Swiss Natio
 Citation
 --------------------------------------------------------------------------------
 
-To cite PySeqLab in publications please use:
+To cite PySeqLab in your work, please use:
 
 **Allam A, Krauthammer M.**
 PySeqLab an open source Python package for sequence labeling and segmentation.
