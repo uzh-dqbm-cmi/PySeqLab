@@ -29,7 +29,7 @@ PySeqLab implements/features models and optimization methods reported in the fol
 	- Ye, N., Lee, W. S., Chieu, H. L., & Wu, D. (2009). Conditional Random Fields with High-Order Features for Sequence Labeling. Neural Information Processing Systems, 2, 2. Retrieved from http://www.comp.nus.edu.sg/~leews/publications/nips09_paper.pdf
 	- Zeiler, M. D. (2012). ADADELTA: An Adaptive Learning Rate Method. Retrieved from http://arxiv.org/abs/1212.5701
 	
-More info about the models and optimization algorithms included in PySeqLab is reported in a **submitted** paper:
+More info about the models and optimization algorithms included in ``PySeqLab`` package is reported in a **submitted** paper:
 
 	**Allam A, Krauthammer M.** PySeqLab an open source Python package for sequence labeling and segmentation.
 	
