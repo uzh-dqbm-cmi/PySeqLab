@@ -1,7 +1,7 @@
 PySeqLab
 ========
 
-PySeqLab is an open source package for performing supervised learning in structured prediction tasks. It implements most known implementations of conditional random fields (CRFs), that is discriminative models from (1) first-order to higher-order linear-chain CRFs, and from (2) first-order to higher-order semi-Markov CRFs (semi-CRFs). 
+``PySeqLab`` is an open source package for performing supervised learning in structured prediction tasks. It implements most known implementations of conditional random fields (CRFs), that is discriminative models from (1) first-order to higher-order linear-chain CRFs, and from (2) first-order to higher-order semi-Markov CRFs (semi-CRFs). 
 
 Documentation & Tutorials
 =========================
@@ -11,7 +11,7 @@ Documentation and tutorials are available through `readthedocs website <http://p
 References
 ----------
 
-PySeqLab implements/features models and optimization methods reported in the following references.
+``PySeqLab`` implements/features models and optimization methods reported in the following references.
 
 	- Bottou, L., & Le Cun, Y. (2004). Large Scale Online Learning. Advances in Neural Information Processing Systems, 16, 217–225. Retrieved from http://leon.bottou.org/papers/bottou-lecun-2004\npapers://616814c5-046b-40e4-b13b-55fce5f60979/Paper/p6996
 	- Collins, M. (2002). Discriminative training methods for hidden Markov models: theory and experiments with perceptron algorithms. In Proceedings of the ACL-02 conference on Empirical methods in natural language processing - EMNLP ’02 (pp. 1–8). http://dx.doi.org/10.3115/1118693.1118694
