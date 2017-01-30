@@ -1260,6 +1260,7 @@ def split_data(seqs_id, options):
     r"""utility function for splitting dataset (i.e. training/testing and cross validation)
     
        Args:
+           seqs_id: list of processed sequence ids
            options: dictionary comprising of the options on how to split data
            
        Example:
@@ -1300,7 +1301,7 @@ def split_data(seqs_id, options):
         batch_size = int(numpy.ceil(N/k_fold))
         test_seqs = seqs_id.copy()
         seqs_len = len(test_seqs)
-        numpy.random.shuffle(test_seqs)
+        #numpy.random.shuffle(test_seqs)
         indx = numpy.arange(0, seqs_len + 1, batch_size)
         if(indx[-1] < seqs_len):
             indx = numpy.append(indx, [seqs_len])
@@ -1397,12 +1398,14 @@ def aggregate_weightedsample(w_sample):
 ##################################
 
 def nested_cv(seqs_id, outer_kfold, inner_kfold):
-    outer_split = split_data(seqs_id, "cross_validation", k_fold = outer_kfold)
+    """generate nested cross-validation division of sequence ids
+    """
+    outer_split = split_data(seqs_id, {'method':'cross_validation', 'k_fold':outer_kfold})
     cv_hierarchy = {}
     for outerfold, outer_datasplit in outer_split.items():
         cv_hierarchy["{}_{}".format("outer", outerfold)] = outer_datasplit
         curr_train_seqs = outer_datasplit['train']
-        inner_split = split_data(curr_train_seqs, "cross_validation", k_fold = inner_kfold) 
+        inner_split = split_data(curr_train_seqs, {'method':'cross_validation', 'k_fold':inner_kfold}) 
         for innerfold, inner_datasplit in inner_split.items():
             cv_hierarchy["{}_{}_{}_{}".format("outer", outerfold, "inner", innerfold)] = inner_datasplit
     return(cv_hierarchy)
