@@ -51,7 +51,7 @@ class SequenceStruct():
         """setup the observation sequence 
            
            Args:
-               l: a list of elements (i.e. X =  [{'w':'Michael'}, {'w':'is'}, {'w':'in'}, {'w':'New'}, {'w':'Haven'}])
+               l: a list of elements (i.e. ``X =  [{'w':'Michael'}, {'w':'is'}, {'w':'in'}, {'w':'New'}, {'w':'Haven'}]``)
            
            
            Example::
@@ -83,7 +83,7 @@ class SequenceStruct():
         
            Args:
                elmtup: tuple consisting of:
-                       - **Y** a list of elements (i.e. Y = ['P','O','O','L','L']) 
+                       - **Y** a list of elements (i.e. ``Y = ['P','O','O','L','L']``) 
                          representing the labels of the elements in X
                        - **non_entity_symbol** which represents the Other category (i.e. non entity element which is 'O' in above example)
            
@@ -301,8 +301,7 @@ class DataFileParser():
                 X = []
                 Y = []
                 self._xarg = None
-                self._y = None
-        
+                self._y = None        
 
     def update_XY(self, X, Y):
         """update sequence observations and corresponding labels"""
