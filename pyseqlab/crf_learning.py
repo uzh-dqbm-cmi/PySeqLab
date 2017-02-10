@@ -1371,8 +1371,7 @@ class Learner(object):
         self._elapsed_time = None
         self._exitloop = None
 
-
-class Evaluator(object):
+class SeqDecodingEvaluator(object):
     """Evaluator class to evaluate performance of the models
     
        Args:
@@ -1385,7 +1384,151 @@ class Evaluator(object):
                        
        .. note::
        
-          this class does not support evaluation of segment learning since it is application-specific
+          this class does not support evaluation of segment learning (i.e. notations that include IOB2/BIO notation)
+    """
+    def __init__(self, model_repr):
+        self.model_repr = model_repr
+                    
+    def compute_states_confmatrix(self, Y_seqs_dict):
+        """compute/generate the confusion matrix for each state
+           
+           Args:
+               Y_seqs_dict: dictionary where each sequence has the reference label sequence
+                            and its corresponding predicted sequence. It has the following form
+                            ``{seq_id:{'Y_ref':[reference_ylabels], 'Y_pred':[predicted_ylabels]}}``
+        """
+        Y_codebook = self.model_repr.Y_codebook
+        M = len(Y_codebook)
+        # add another state in case unseen states occur in the test data
+        model_taglevel_performance = numpy.zeros((M + 1, 2, 2))
+
+        for seq_id in Y_seqs_dict:
+            Y_pred = Y_seqs_dict[seq_id]['Y_pred']
+            Y_ref = Y_seqs_dict[seq_id]['Y_ref']
+            #^print("Y_pred ", Y_pred)
+            #^print("Y_ref ", Y_ref)
+            taglevel_performance = self._compute_tags_confusionmatrix(self.map_states_to_num(Y_ref, Y_codebook, M),
+                                                                      self.map_states_to_num(Y_pred, Y_codebook, M),
+                                                                      M)
+#             print("taglevel_performance {}".format(taglevel_performance))
+#             print("tagging performance \n {}".format(taglevel_performance))
+            model_taglevel_performance += taglevel_performance
+            #^print("model_taglevel_performance ", model_taglevel_performance)
+
+        return(model_taglevel_performance)
+    
+    def get_performance_metric(self, taglevel_performance, metric, exclude_states=[]):
+        """compute the performance of the model using a requested metric
+           
+           Args:
+               taglevel_performance: `numpy` array with Mx2x2 dimension. For every state code a 2x2 confusion matrix
+                                     is included. It is computed using :func:`compute_model_performance`
+               metric: evaluation metric that could take one of ``{'f1', 'precision', 'recall', 'accuracy'}``
+           
+           Keyword Arguments:
+               exclude_states: list (default empty list) of states to exclude from the computation. Usually, in NER applications the non-entity symbol
+                               such as 'O' is excluded from the computation. Example: If ``exclude_states = ['O']``, this will replicate the behavior of `conlleval script <http://www.cnts.ua.ac.be/conll2000/chunking/output.html>`__
+        """
+        Y_codebook = self.model_repr.Y_codebook
+        exclude_indices = []
+        if(exclude_states):
+            # do not include 'exclude states' in the computation
+            for state in exclude_states:
+                exclude_indices.append(Y_codebook[state])
+        # total number of states plus 1
+        M = len(Y_codebook) + 1
+        include_indices = list(set(range(M)) - set(exclude_indices))
+        # perform sum across all layers to get micro-average
+        collapsed_performance = taglevel_performance[include_indices].sum(axis = 0)
+#         print("collapsed performance \n {}".format(collapsed_performance))
+        tp = collapsed_performance[0,0]
+        fp = collapsed_performance[0,1]
+        fn = collapsed_performance[1,0]
+        tn = collapsed_performance[1,1]
+        
+        perf_measure = 0
+        if(metric == "f1"):
+            precision = tp/(tp + fp)
+            recall = tp/(tp + fn)
+            f1 = 2 * ((precision * recall)/(precision +  recall))
+            print("f1 {}".format(f1))
+            perf_measure = f1
+        elif(metric == "precision"):
+            precision = tp/(tp + fp)
+            print("precision {}".format(precision))
+            perf_measure = precision
+        elif(metric == "recall"):
+            recall = tp/(tp + fn)
+            print("recall {}".format(recall))
+            perf_measure = recall
+        elif(metric == "accuracy"):
+            accuracy = (tp + tn)/(tp + fp + fn + tn)
+            print("accuracy {}".format(accuracy))
+            perf_measure = accuracy
+
+        return(perf_measure)
+    
+    def map_states_to_num(self, Y, Y_codebook, M):
+        """map states to their code/number using the `Y_codebook`
+           
+           Args:
+               Y: list representing label sequence 
+               Y_codebook: dictionary containing the states as keys and the assigned unique code as values
+               M: number of states
+               
+           .. note:: we give one unique index for tags that did not occur in the training data such as len(Y_codebook)
+
+        """
+        Y_coded = [Y_codebook[state] if state in Y_codebook else M for state in Y]
+#         print("Y_coded {}".format(Y_coded))
+        return(Y_coded)
+        
+    def _compute_tags_confusionmatrix(self, Y_ref, Y_pred, M):
+        """compute confusion matrix on the level of the tag/state
+        
+           Args:
+               Y_ref: list of reference label sequence (represented by the states code)
+               Y_pred: list of predicted label sequence (represented by the states code) 
+               M: number of states
+        """
+        #^print("Y_ref coded ", Y_ref)
+        #^print("Y_pred coded ", Y_pred)
+        detected_statescode = set(Y_ref)
+        Y_ref = numpy.asarray(Y_ref)
+        Y_pred = numpy.asarray(Y_pred)
+#         print("Y_ref as numpy array {}".format(Y_ref))
+        tagslevel_performance = numpy.zeros((M + 1, 2, 2))
+        
+        for statecode in detected_statescode:
+            # get all indices of the target tag (gold-standard)
+            tag_indx_origin = numpy.where(Y_ref == statecode)[0]
+            # get all indices of the target tag (predicted)
+            tag_indx_pred = numpy.where(Y_pred == statecode)[0]
+            tag_tp = len(numpy.where(numpy.in1d(tag_indx_origin, tag_indx_pred))[0])
+            tag_fn = len(tag_indx_origin) - tag_tp
+            other_indx_origin = numpy.where(Y_ref != statecode)[0]
+            tag_fp = len(numpy.where(numpy.in1d(other_indx_origin, tag_indx_pred))[0])
+            tag_tn = len(other_indx_origin) - tag_fp
+            tagslevel_performance[statecode] = numpy.array([[tag_tp, tag_fp], [tag_fn, tag_tn]])
+            
+        return(tagslevel_performance)
+
+
+class Evaluator(object):
+    """Evaluator class to evaluate performance of the models 
+    
+       Args:
+           model_repr: the CRF model representation that has a suffix of `ModelRepresentation`
+                       such as :class:`HOCRFADModelRepresentation`
+       
+       Attributes:
+           model_repr: the CRF model representation that has a suffix of `ModelRepresentation`
+                       such as :class:`HOCRFADModelRepresentation`
+                       
+       .. note::
+       
+          this class is **EXPERIMENTAL/work in progress*** and does not support evaluation of segment learning.
+          Use instead :class:`SeqDecodingEvaluator` for evaluating models learned using **sequence** learning.
     """
     def __init__(self, model_repr):
         self.model_repr = model_repr
@@ -1415,8 +1558,8 @@ class Evaluator(object):
            
            Args:
                Y_seqs_dict: dictionary where each sequence has the reference label sequence
-                            and its corresponding predicted sequence. it has the following form
-                            {seq_id:{'Y_ref':[reference_ylabels], 'Y_pred':[predicted_ylabels]}}
+                            and its corresponding predicted sequence. It has the following form
+                            ``{seq_id:{'Y_ref':[reference_ylabels], 'Y_pred':[predicted_ylabels]}}``
                metric: evaluation metric that could take one of {'f1', 'precision', 'recall', 'accuracy'}
                output_file: file where to output the evaluation result
                states_notation: notation used to code the state (i.e. BIO)

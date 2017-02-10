@@ -205,7 +205,7 @@ class DataFileParser():
         self.seqs = []
         self.header = []
         
-    def read_file(self, file_path, header, y_ref = True, seg_other_symbol = None, column_sep = " "):
+    def read_file(self, file_path, header, y_ref = True, seg_other_symbol = None, column_sep = " ", generator=False):
         r"""read and parse a file the contains the sequences following a predefined format
         
             the file should contain label and observation tracks each separated in a column 
@@ -228,6 +228,8 @@ class DataFileParser():
                                   where it represents the non-entity symbol else (None) then it is considered 
                                   as sequence labeling problem
                 column_sep: separator used between the columns in the file
+                generator: boolean, if True then the function will act as a generator, else all sequences are read
+                           and stored in memory in the :attr:`self.seqs` attribute
                
 
         """
@@ -285,23 +287,30 @@ class DataFileParser():
 
                 else:
                     seq = SequenceStruct(X, Y, seg_other_symbol)
-                    self.seqs.append(seq)
                     # reset counter for filling new sequence
                     counter = 0
                     X = []
                     Y = []
                     self._xarg = None
                     self._y = None
+                    if(generator):
+                        yield seq
+                    else:
+                        self.seqs.append(seq)
+
                     
             if(X and Y):
                 seq = SequenceStruct(X, Y, seg_other_symbol)
-                self.seqs.append(seq)
                 # reset counter for filling new sequence
                 counter = 0
                 X = []
                 Y = []
                 self._xarg = None
-                self._y = None        
+                self._y = None 
+                if(generator):
+                    yield seq
+                else:
+                    self.seqs.append(seq)  
 
     def update_XY(self, X, Y):
         """update sequence observations and corresponding labels"""

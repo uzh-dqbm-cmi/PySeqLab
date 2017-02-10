@@ -8,10 +8,11 @@ from setuptools import setup
 # package description
 expl_files = ['README.rst']
 long_description = '\n'.join([open(f, 'r').read() for f in expl_files])
+curr_version = open('version.txt', 'r').read().rstrip()
 
 if __name__ == "__main__":
     setup(name='PySeqLab',
-          version="1.3.2",
+          version=curr_version,
           description='A package for performing structured prediction (i.e.sequence labeling and segmentation).',
           long_description=long_description,
           author="Ahmed Allam",

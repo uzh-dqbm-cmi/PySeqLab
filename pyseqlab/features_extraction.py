@@ -714,7 +714,7 @@ class SeqsRepresenter(object):
         # make a copy to preserve the template_X and template_Y used in the extractor
         self._feature_extractor = deepcopy(fextractor)
     
-    def prepare_seqs(self, seqs_dict, corpus_name, working_dir, unique_id = True):
+    def prepare_seqs(self, seqs_dict, corpus_name, working_dir, unique_id=True, log_progress=True):
         r"""prepare sequences to be used in the CRF models
         
            Main task:
@@ -765,13 +765,14 @@ class SeqsRepresenter(object):
         end_time = datetime.now()
         
         # log progress
-        log_file = os.path.join(target_dir, "log.txt")
-        line = "---Preparing/parsing sequences--- starting time: {} \n".format(start_time)
-        line +=  "Number of sequences prepared/parsed: {}\n".format(len(seqs_dict))
-        line += "Corpus directory of the parsed sequences is: {} \n".format(target_dir)
-        line += "---Preparing/parsing sequences--- end time: {} \n".format(end_time)
-        line += "\n \n"
-        ReaderWriter.log_progress(line, log_file)
+        if(log_progress):
+            log_file = os.path.join(target_dir, "log.txt")
+            line = "---Preparing/parsing sequences--- starting time: {} \n".format(start_time)
+            line +=  "Number of sequences prepared/parsed: {}\n".format(len(seqs_dict))
+            line += "Corpus directory of the parsed sequences is: {} \n".format(target_dir)
+            line += "---Preparing/parsing sequences--- end time: {} \n".format(end_time)
+            line += "\n \n"
+            ReaderWriter.log_progress(line, log_file)
         
         return(seqs_info)
 

@@ -853,25 +853,28 @@ class LCRF(object):
 
     def decode_seqs(self, decoding_method, out_dir, **kwargs):
         r"""decode sequences (i.e. infer labels of sequence of observations)
-        
+           
             Args:
                 decoding_method: a string referring to type of decoding {viterbi, per_state_decoding}
-                out_dir: string representing the output directory where sequence processing will take place
+                out_dir: string representing the working directory (path) where sequence processing will take place
                
             Keyword Arguments:
                 file_name: the name of the file in case decoded sequences are required to be written
-                sep: separator used while writing inferred sequences to file
+                sep: separator (default '\t') between the columns when writing decoded sequences to file
+                procseqs_foldername: string representing the folder name where intermediary data and parsing would take place
                 beam_size: integer determining the size of the beam while decoding
                 seqs: a list comprising of sequences that are instances of :class:`SequenceStruct` class to be decoded
                      (used for decoding test data or any new/unseen data -- sequences
                 seqs_info: dictionary containing the info about the sequences to decode 
                           (used for decoding training sequences)
-                          
+                seqs_dict: a dictionary comprising of sequence ids as keys and corresponding sequences that are instances of :class:`SequenceStruct` class to be decoded
+                           as values
             .. note:: 
             
-               for keyword arguments either `seqs` or `seqs_info` option need to be specified
+               for keyword arguments only one of {``seqs`` , ``seqs_info``, ``seqs_dict``} option need to be specified
+        
         """
-        corpus_name = "decoding_seqs"
+        
         w = self.weights
 
         if(decoding_method == "perstate_decoding"):
@@ -881,25 +884,39 @@ class LCRF(object):
             
         file_name = kwargs.get('file_name')
         if(file_name):
-            out_file = os.path.join(create_directory(corpus_name, out_dir), file_name)
+            # file to write the sequences with their predicted labels
+            corpus_fname = "decoding_seqs"
+            out_file = os.path.join(create_directory(corpus_fname, out_dir), file_name)
             if(kwargs.get("sep")):
                 sep = kwargs['sep']
             else:
+                # default separator is tab
                 sep = "\t"
 
         beam_size = kwargs.get('beam_size')
         if(not beam_size):
             beam_size = self.beam_size
             
+        unique_id = False
+        procseqs_foldername = kwargs.get('procseqs_foldername')
+        if(not procseqs_foldername):
+            unique_id = True
+            procseqs_foldername = "processed_seqs"
+
         if(kwargs.get("seqs_info")):
             self.seqs_info = kwargs["seqs_info"]
             N = len(self.seqs_info)
-        elif(kwargs.get("seqs")): 
-            seqs = kwargs["seqs"]           
-            seqs_dict = {i+1:seqs[i] for i in range(len(seqs))}
+        else:
+            if(kwargs.get("seqs")): 
+                seqs = kwargs["seqs"]           
+                seqs_dict = {i+1:seqs[i] for i in range(len(seqs))}
+            elif(kwargs.get("seqs_dict")):
+                seqs_dict = kwargs['seqs_dict'] 
+            else:
+                raise('You need to specify one of the following keyword arguments {``seqs`` , ``seqs_info``, ``seqs_dict``} ')
             seqs_id = list(seqs_dict.keys())
             N = len(seqs_id)
-            seqs_info = self.seqs_representer.prepare_seqs(seqs_dict, "processed_seqs", out_dir, unique_id = True)
+            seqs_info = self.seqs_representer.prepare_seqs(seqs_dict, procseqs_foldername, out_dir, unique_id = unique_id)
             self.seqs_representer.scale_attributes(seqs_id, seqs_info)
             self.seqs_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, self.model, "processed_seqs", learning=False)
             self.seqs_info = seqs_info

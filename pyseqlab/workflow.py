@@ -3,8 +3,8 @@
 '''
 import os
 from pyseqlab.features_extraction import SeqsRepresenter
-from pyseqlab.crf_learning import Learner, Evaluator
-from pyseqlab.utilities import create_directory, ReaderWriter, split_data, \
+from pyseqlab.crf_learning import Learner, Evaluator, SeqDecodingEvaluator
+from pyseqlab.utilities import create_directory, generate_datetime_str, ReaderWriter, split_data, \
                                group_seqs_by_length, weighted_sample, aggregate_weightedsample, \
                                generate_updated_model
 
@@ -12,6 +12,10 @@ from pyseqlab.utilities import create_directory, ReaderWriter, split_data, \
 class TrainingWorkflow(object):
     """general training workflow
     
+      .. note::
+      
+        **It is highly recommended to start using :class:`TrainingWorkflowIterative` class instead
+        of the current :class:`TrainingWorkflow` class **
     """
     def __init__(self, template_y, template_xy, model_repr_class, model_class,
                  fextractor_class, aextractor_class, scaling_method, 
@@ -220,4 +224,269 @@ class TrainingWorkflow(object):
         else:
             statement = "PASS"
         print(statement)
+        
+class TrainingWorkflowIterative(object):
+    """general training workflow that support reading/preparing **large** training sets
+       
+       .. note::
+        
+          **It is highly recommended to use this ``workflow`` class instead of :class:`TrainingWorkflow` class.**
+    """
+    def __init__(self, template_y, template_xy, model_repr_class, model_class,
+                 fextractor_class, aextractor_class, scaling_method, ascaler_class, 
+                 optimization_options, root_dir, data_parser_options, filter_obj = None):
+        self.template_y = template_y
+        self.template_xy = template_xy
+        self.model_class = model_class
+        self.model_repr_class = model_repr_class
+        self.fextractor_class = fextractor_class
+        self.aextractor_class = aextractor_class
+        self.scaling_method = scaling_method
+        self.ascaler_class = ascaler_class
+        self.optimization_options = optimization_options
+        self.root_dir = root_dir
+        self.data_parser_options = data_parser_options
+        self.filter_obj = filter_obj
+
+    def get_seqs_from_file(self, seq_file):
+        parser = self.data_parser_options['parser']
+        header = self.data_parser_options['header']
+        col_sep = self.data_parser_options['col_sep']
+        seg_other_symbol = self.data_parser_options['seg_other_symbol']
+        for seq in parser.read_file(seq_file, header=header, column_sep=col_sep, 
+                                    seg_other_symbol=seg_other_symbol, generator=True):
+            yield seq
+    
+    def build_seqsinfo(self, seq_file):
+        seq_representer = self.seq_representer
+        # create working directory 
+        corpus_name = "reference_corpus_" + generate_datetime_str()
+        working_dir = create_directory("working_dir", self.root_dir)
+        self.working_dir = working_dir
+        unique_id = False
+        # build the seqs_info by parsing the sequences from file iteratively
+        seqs_info = {}
+        counter=1
+        for seq in self.get_seqs_from_file(seq_file):
+            if(seq.id):
+                seq_id = seq.id
+            else:
+                seq_id = counter
+            seqs_info.update(seq_representer.prepare_seqs({seq_id:seq}, corpus_name, working_dir, unique_id, log_progress=False))
+            print("{} sequences have been processed".format(counter))
+            counter+=1    
+        return(seqs_info)
+    
+    def seq_parsing_workflow(self, seq_file, split_options):
+        """preparing sequences to be used in the learning framework"""
+        
+        # initialize attribute extractor
+        attr_extractor = self.aextractor_class()
+
+        # create the feature extractor
+        scaling_method = self.scaling_method        
+        fextractor_class = self.fextractor_class
+        f_extractor = fextractor_class(self.template_xy, self.template_y, attr_extractor.attr_desc)
+        
+        # create sequence representer
+        seq_representer = SeqsRepresenter(attr_extractor, f_extractor)
+        self.seq_representer = seq_representer
+        # build the seqs_info by parsing the sequences from file iteratively
+        seqs_info = self.build_seqsinfo(seq_file)
+        seqs_id = list(seqs_info.keys())
+        self.seqs_id = seqs_id
+        
+        # preprocess and generate attributes in case of segments with length >1 or in case of scaling of
+        # attributes is needed               
+        seq_representer.preprocess_attributes(seqs_id, seqs_info, method = scaling_method)
+        
+        # extract global features F(X,Y)
+        seq_representer.extract_seqs_globalfeatures(seqs_id, seqs_info)
+        
+        # save the link to seqs_info and seq_representer as instance variables
+        self.seqs_info = seqs_info
+        self.seq_representer = seq_representer
+        
+        # split dataset according to the specified split options
+        data_split = self.split_dataset(seqs_info, split_options)
+        
+        # save the datasplit dictionary on disk 
+        gfeatures_dir = seqs_info[1]['globalfeatures_dir']
+        ref_corpusdir = os.path.dirname(os.path.dirname(gfeatures_dir))
+        ReaderWriter.dump_data(data_split, os.path.join(ref_corpusdir, 'data_split'))
+        return(data_split)
+
+    def split_dataset(self, seqs_info, split_options):
+        if(split_options['method'] == "wsample"):
+            # try weighted sample
+            # first group seqs based on length
+            grouped_seqs = group_seqs_by_length(seqs_info)
+            # second get a weighted sample based on seqs length
+            w_sample = weighted_sample(grouped_seqs, trainset_size=split_options['trainset_size'])
+            print("w_sample ", w_sample)
+            # third aggregate the seqs in training category and testing category
+            data_split = aggregate_weightedsample(w_sample)
+        elif(split_options['method'] == "cross_validation"):
+            # try cross validation
+            seqs_id = list(seqs_info.keys())
+            data_split = split_data(seqs_id, split_options)
+        elif(split_options['method'] == 'random'):
+            seqs_id = list(seqs_info.keys())
+            data_split = split_data(seqs_id, split_options)
+        elif(split_options['method'] == 'none'):
+            seqs_id = list(seqs_info.keys())
+            data_split = {0:{'train':seqs_id}}    
+        return(data_split)
+
+    def traineval_folds(self, data_split, **kwargs):
+        """train and evaluate model on different dataset splits"""
+        
+        seqs_id = self.seqs_id
+        seq_representer = self.seq_representer
+        seqs_info = self.seqs_info
+        model_repr_class = self.model_repr_class
+        model_class = self.model_class
+        models_info = []
+        ref_corpusdir = os.path.dirname(os.path.dirname(seqs_info[1]['globalfeatures_dir']))
+        
+        info_fromdisk = kwargs.get('load_info_fromdisk')
+        if(type(info_fromdisk) != int):
+            info_fromdisk = 6
+        elif(info_fromdisk < 0):
+            info_fromdisk = 6
+
+        for fold in data_split:
+            track_perf = {}
+            trainseqs_id = data_split[fold]['train']
+            # create model using the sequences assigned for training
+            model_repr = seq_representer.create_model(trainseqs_id, seqs_info, model_repr_class, self.filter_obj)
+            # extract for each sequence model active features
+            seq_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, model_repr, "f{}".format(fold))
+            # create a CRF model
+            crf_model = model_class(model_repr, seq_representer, seqs_info, load_info_fromdisk = info_fromdisk)
+            # get the directory of the trained model
+            savedmodel_dir = self.train_model(trainseqs_id, crf_model)      
+            # evaluate on the training data 
+            trainseqs_info = {seq_id:seqs_info[seq_id] for seq_id in trainseqs_id} 
+            res = self.eval_model(savedmodel_dir, {'seqs_info':trainseqs_info}, kwargs)
+            track_perf['train_f{}'.format(fold)] = res
+            # evaluate on the test data 
+            testseqs_id = data_split[fold].get('test')
+            if(testseqs_id):
+                testseqs_info = {seq_id:seqs_info[seq_id] for seq_id in testseqs_id} 
+                res = self.eval_model(savedmodel_dir, {'seqs_info':testseqs_info}, kwargs)
+                track_perf['test_f{}'.format(fold)] = res
+
+            models_info.append((savedmodel_dir, track_perf))
+        # save workflow trainer instance on disk
+        ReaderWriter.dump_data(self, os.path.join(ref_corpusdir, 'workflow_trainer'))
+        return(models_info)
+    
+    def train_model(self, trainseqs_id, crf_model):
+        """ training a model and return the directory of the trained model"""
+        
+        working_dir = self.working_dir
+        optimization_options = self.optimization_options
+        learner = Learner(crf_model) 
+        learner.train_model(crf_model.weights, trainseqs_id, optimization_options, working_dir)
+        
+        return(learner.training_description['model_dir'])
+    
+    def eval_model(self, savedmodel_dir, evalseqs_info, kwargs):
+        # load learned models
+        model_dir = savedmodel_dir
+        modelparts_dir = os.path.join(model_dir, "model_parts")
+        modelrepr_class = self.model_repr_class
+        model_class = self.model_class        
+        fextractor_class = self.fextractor_class
+        aextractor_class = self.aextractor_class
+        seqrepresenter_class = SeqsRepresenter
+        ascaler_class = self.ascaler_class
+        # revive/generate learned model
+        crf_model  = generate_updated_model(modelparts_dir, modelrepr_class,  model_class, 
+                                            aextractor_class, fextractor_class, 
+                                            seqrepresenter_class,ascaler_class=ascaler_class)
+        # the folder name where intermediary seqs and data are stored
+        procseqs_foldername = "processed_seqs_" + generate_datetime_str()
+        # parse the arguments in kwargs
+        seqbatch_size = kwargs.get("seqbatch_size")
+        if(not seqbatch_size):
+            seqbatch_size = 1000
+        # check if model evaluation is requested
+        model_eval = kwargs.get('model_eval')
+        if(model_eval):
+            evaluator = SeqDecodingEvaluator(crf_model.model)
+            perf_metric = kwargs.get('metric')
+            if(not perf_metric):
+                perf_metric = 'f1'
+            exclude_states = kwargs.get('exclude_states')
+            if(not exclude_states):
+                exclude_states = []
+        # decode sequences 
+        seqs_info = evalseqs_info
+        seqs_id = list(seqs_info.keys())
+        start_ind = 0
+        stop_ind = seqbatch_size
+        while(start_ind<=len(seqs_id)):
+            batch_seqsinfo = {seq_id:seqs_info[seq_id] for seq_id in seqs_id[start_ind:stop_ind]}              
+            seqs_pred = crf_model.decode_seqs("viterbi", model_dir, seqs_info=batch_seqsinfo, 
+                                              procseqs_foldername=procseqs_foldername,
+                                              file_name=kwargs.get('file_name'), sep=kwargs.get('sep'),
+                                              beam_size=kwargs.get('beam_size'))
+            if(model_eval):
+                Y_seqs_dict = self.map_pred_to_ref_seqs(seqs_pred)
+                if(start_ind == 0):
+                    taglevel_perf = evaluator.compute_states_confmatrix(Y_seqs_dict)
+                else:
+                    taglevel_perf += evaluator.compute_states_confmatrix(Y_seqs_dict)
+            start_ind+=seqbatch_size
+            stop_ind+=seqbatch_size
+        if(model_eval):
+            performance = evaluator.get_performance_metric(taglevel_perf, perf_metric, exclude_states=exclude_states)
+            return((taglevel_perf, (performance, perf_metric)))
+        return((None, (None, None)))
+
+    def map_pred_to_ref_seqs(self, seqs_pred):
+        Y_seqs_dict = {}
+#         print("seqs_pred {}".format(seqs_pred))
+        for seq_id in seqs_pred:
+            Y_seqs_dict[seq_id] = {}
+            for seq_label in seqs_pred[seq_id]:
+                if(seq_label == "seq"):
+                    val = seqs_pred[seq_id][seq_label].flat_y
+                    key = "Y_ref"
+                else:
+                    val = seqs_pred[seq_id][seq_label]
+                    key = seq_label
+                Y_seqs_dict[seq_id][key] = val
+        return(Y_seqs_dict)
+    
+    def verify_template(self):
+        """ verifying template -- sanity check"""
+
+        seqs_id = self.seqs_id
+        model = self.model
+        crf_model = self.crf_model
+        globalfeatures_len = len(model.modelfeatures_codebook)
+        activefeatures_len = 0
+        f = {}
+        for seq_id in seqs_id:
+            crf_model.load_activefeatures(seq_id)
+            seq_activefeatures = crf_model.seqs_info[seq_id]["activefeatures"]
+            for features_dict in seq_activefeatures.values():
+                for z_patt in features_dict:
+                    for windx in features_dict[z_patt]:
+                        f[windx] = 1
+            crf_model.clear_cached_info([seq_id])
+        activefeatures_len += len(f)
+                    
+        statement = ""
+        if(activefeatures_len < globalfeatures_len): 
+            statement = "len(activefeatures) < len(modelfeatures)"
+        elif(activefeatures_len > globalfeatures_len):
+            statement = "len(activefeatures) > len(modelfeatures)"
+        else:
+            statement = "PASS"
+        print(statement)
+
         
