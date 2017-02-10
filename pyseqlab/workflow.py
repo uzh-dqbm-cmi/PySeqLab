@@ -14,8 +14,8 @@ class TrainingWorkflow(object):
     
       .. note::
       
-        **It is highly recommended to start using :class:`TrainingWorkflowIterative` class instead
-        of the current :class:`TrainingWorkflow` class **
+        It is **highly recommended** to start using :class:`TrainingWorkflowIterative` class instead
+        of the current :class:`TrainingWorkflow` class.
     """
     def __init__(self, template_y, template_xy, model_repr_class, model_class,
                  fextractor_class, aextractor_class, scaling_method, 
@@ -228,9 +228,6 @@ class TrainingWorkflow(object):
 class TrainingWorkflowIterative(object):
     """general training workflow that support reading/preparing **large** training sets
        
-       .. note::
-        
-          **It is highly recommended to use this ``workflow`` class instead of :class:`TrainingWorkflow` class.**
     """
     def __init__(self, template_y, template_xy, model_repr_class, model_class,
                  fextractor_class, aextractor_class, scaling_method, ascaler_class, 
