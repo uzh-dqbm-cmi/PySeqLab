@@ -250,8 +250,10 @@ class TrainingWorkflowIterative(object):
         header = self.data_parser_options['header']
         col_sep = self.data_parser_options['col_sep']
         seg_other_symbol = self.data_parser_options['seg_other_symbol']
-        for seq in parser.read_file(seq_file, header=header, column_sep=col_sep, 
-                                    seg_other_symbol=seg_other_symbol, generator=True):
+        for seq in parser.read_file(seq_file, header, 
+                                    column_sep=col_sep,
+                                    seg_other_symbol=seg_other_symbol, 
+                                    generator=True):
             yield seq
     
     def build_seqsinfo(self, seq_file):
@@ -265,7 +267,7 @@ class TrainingWorkflowIterative(object):
         seqs_info = {}
         counter=1
         for seq in self.get_seqs_from_file(seq_file):
-            if(seq.id):
+            if(hasattr(seq, 'id')):
                 seq_id = seq.id
             else:
                 seq_id = counter
@@ -364,14 +366,16 @@ class TrainingWorkflowIterative(object):
             # get the directory of the trained model
             savedmodel_dir = self.train_model(trainseqs_id, crf_model)      
             # evaluate on the training data 
-            trainseqs_info = {seq_id:seqs_info[seq_id] for seq_id in trainseqs_id} 
-            res = self.eval_model(savedmodel_dir, {'seqs_info':trainseqs_info}, kwargs)
+            trainseqs_info = {seq_id:seqs_info[seq_id] for seq_id in trainseqs_id}
+            kwargs['seqs_info'] = trainseqs_info 
+            res = self.eval_model(savedmodel_dir, kwargs)
             track_perf['train_f{}'.format(fold)] = res
             # evaluate on the test data 
             testseqs_id = data_split[fold].get('test')
             if(testseqs_id):
                 testseqs_info = {seq_id:seqs_info[seq_id] for seq_id in testseqs_id} 
-                res = self.eval_model(savedmodel_dir, {'seqs_info':testseqs_info}, kwargs)
+                kwargs['seqs_info'] = testseqs_info
+                res = self.eval_model(savedmodel_dir, kwargs)
                 track_perf['test_f{}'.format(fold)] = res
 
             models_info.append((savedmodel_dir, track_perf))
@@ -389,7 +393,7 @@ class TrainingWorkflowIterative(object):
         
         return(learner.training_description['model_dir'])
     
-    def eval_model(self, savedmodel_dir, evalseqs_info, kwargs):
+    def get_learned_crf(self, savedmodel_dir):
         # load learned models
         model_dir = savedmodel_dir
         modelparts_dir = os.path.join(model_dir, "model_parts")
@@ -403,41 +407,80 @@ class TrainingWorkflowIterative(object):
         crf_model  = generate_updated_model(modelparts_dir, modelrepr_class,  model_class, 
                                             aextractor_class, fextractor_class, 
                                             seqrepresenter_class,ascaler_class=ascaler_class)
-        # the folder name where intermediary seqs and data are stored
-        procseqs_foldername = "processed_seqs_" + generate_datetime_str()
+        return(crf_model)
+    
+    def eval_model(self, savedmodel_dir, options):
+        # load learned models
+        model_dir = savedmodel_dir
+        # revive/generate learned model
+        crf_model  = self.get_learned_crf(model_dir)
+
         # parse the arguments in kwargs
-        seqbatch_size = kwargs.get("seqbatch_size")
+        seqbatch_size = options.get("seqbatch_size")
         if(not seqbatch_size):
             seqbatch_size = 1000
         # check if model evaluation is requested
-        model_eval = kwargs.get('model_eval')
+        model_eval = options.get('model_eval')
         if(model_eval):
             evaluator = SeqDecodingEvaluator(crf_model.model)
-            perf_metric = kwargs.get('metric')
+            perf_metric = options.get('metric')
             if(not perf_metric):
                 perf_metric = 'f1'
-            exclude_states = kwargs.get('exclude_states')
+            exclude_states = options.get('exclude_states')
             if(not exclude_states):
                 exclude_states = []
-        # decode sequences 
-        seqs_info = evalseqs_info
-        seqs_id = list(seqs_info.keys())
-        start_ind = 0
-        stop_ind = seqbatch_size
-        while(start_ind<=len(seqs_id)):
-            batch_seqsinfo = {seq_id:seqs_info[seq_id] for seq_id in seqs_id[start_ind:stop_ind]}              
-            seqs_pred = crf_model.decode_seqs("viterbi", model_dir, seqs_info=batch_seqsinfo, 
-                                              procseqs_foldername=procseqs_foldername,
-                                              file_name=kwargs.get('file_name'), sep=kwargs.get('sep'),
-                                              beam_size=kwargs.get('beam_size'))
-            if(model_eval):
-                Y_seqs_dict = self.map_pred_to_ref_seqs(seqs_pred)
-                if(start_ind == 0):
-                    taglevel_perf = evaluator.compute_states_confmatrix(Y_seqs_dict)
-                else:
+        
+        if(options.get('seqs_info')):
+            # decode sequences 
+            seqs_info = options.get('seqs_info')
+            seqs_id = list(seqs_info.keys())
+            start_ind = 0
+            stop_ind = seqbatch_size
+            while(start_ind<=len(seqs_id)):
+                batch_seqsinfo = {seq_id:seqs_info[seq_id] for seq_id in seqs_id[start_ind:stop_ind]}              
+                seqs_pred = crf_model.decode_seqs("viterbi", model_dir, seqs_info=batch_seqsinfo, 
+                                                  file_name=options.get('file_name'), sep=options.get('sep'),
+                                                  beam_size=options.get('beam_size'))
+                if(model_eval):
+                    Y_seqs_dict = self.map_pred_to_ref_seqs(seqs_pred)
+                    if(start_ind == 0):
+                        taglevel_perf = evaluator.compute_states_confmatrix(Y_seqs_dict)
+                    else:
+                        taglevel_perf += evaluator.compute_states_confmatrix(Y_seqs_dict)
+                start_ind+=seqbatch_size
+                stop_ind+=seqbatch_size
+        elif(options.get('seq_file')):       
+            seq_file = options.get('seq_file')
+            # the folder name where intermediary seqs and data are stored
+            procseqs_foldername = "processed_seqs_" + generate_datetime_str()
+            seqs_dict = {}
+            bcounter = 1
+            seq_counter = 1
+            for seq in self.get_seqs_from_file(seq_file):
+                seqs_dict[seq_counter] = seq
+                if(bcounter >= seqbatch_size):
+                    seqs_pred = crf_model.decode_seqs("viterbi", model_dir, seqs_dict=seqs_dict, 
+                                                      procseqs_foldername=procseqs_foldername, file_name=options.get('file_name'),
+                                                      sep=options.get('sep'), beam_size=options.get('beam_size'))
+                    bcounter = 0
+                    seqs_dict.clear()
+                    if(model_eval):
+                        Y_seqs_dict = self.map_pred_to_ref_seqs(seqs_pred)
+                        if(seq_counter == seqbatch_size):
+                            taglevel_perf = evaluator.compute_states_confmatrix(Y_seqs_dict)
+                        else:
+                            taglevel_perf += evaluator.compute_states_confmatrix(Y_seqs_dict)
+                bcounter += 1
+                seq_counter+=1
+            if(len(seqs_dict)):
+                # decode the remaining sequences
+                seqs_pred = crf_model.decode_seqs("viterbi", model_dir, seqs_dict=seqs_dict, 
+                                                  procseqs_foldername=procseqs_foldername, file_name=options.get('file_name'),
+                                                  sep=options.get('sep'), beam_size=options.get('beam_size'))
+                if(model_eval):
+                    Y_seqs_dict = self.map_pred_to_ref_seqs(seqs_pred)
                     taglevel_perf += evaluator.compute_states_confmatrix(Y_seqs_dict)
-            start_ind+=seqbatch_size
-            stop_ind+=seqbatch_size
+
         if(model_eval):
             performance = evaluator.get_performance_metric(taglevel_perf, perf_metric, exclude_states=exclude_states)
             return((taglevel_perf, (performance, perf_metric)))
