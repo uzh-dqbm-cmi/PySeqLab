@@ -1445,28 +1445,32 @@ class SeqDecodingEvaluator(object):
         fp = collapsed_performance[0,1]
         fn = collapsed_performance[1,0]
         tn = collapsed_performance[1,1]
-        
+                    
         perf_measure = 0
-        if(metric == "f1"):
-            precision = tp/(tp + fp)
-            recall = tp/(tp + fn)
-            f1 = 2 * ((precision * recall)/(precision +  recall))
-            print("f1 {}".format(f1))
-            perf_measure = f1
-        elif(metric == "precision"):
-            precision = tp/(tp + fp)
-            print("precision {}".format(precision))
-            perf_measure = precision
-        elif(metric == "recall"):
-            recall = tp/(tp + fn)
-            print("recall {}".format(recall))
-            perf_measure = recall
-        elif(metric == "accuracy"):
-            accuracy = (tp + tn)/(tp + fp + fn + tn)
-            print("accuracy {}".format(accuracy))
-            perf_measure = accuracy
 
-        return(perf_measure)
+        try:
+            if(metric == "f1"):
+                precision = tp/(tp + fp)
+                recall = tp/(tp + fn)
+                f1 = 2 * ((precision * recall)/(precision +  recall))
+                print("f1 {}".format(f1))
+                perf_measure = f1
+            elif(metric == "precision"):
+                precision = tp/(tp + fp)
+                print("precision {}".format(precision))
+                perf_measure = precision
+            elif(metric == "recall"):
+                recall = tp/(tp + fn)
+                print("recall {}".format(recall))
+                perf_measure = recall
+            elif(metric == "accuracy"):
+                accuracy = (tp + tn)/(tp + fp + fn + tn)
+                print("accuracy {}".format(accuracy))
+                perf_measure = accuracy
+        except ZeroDivisionError as e:
+            print("dividing by Zero: check/investigate the confusion matrix")
+        finally:
+            return(perf_measure)
     
     def map_states_to_num(self, Y, Y_codebook, M):
         """map states to their code/number using the `Y_codebook`

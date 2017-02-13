@@ -1278,7 +1278,7 @@ def split_data(seqs_id, options):
                
            ::
                
-               options = {'method':'cross-validation',
+               options = {'method':'cross_validation',
                           'k_fold':number
                          }
                          
