@@ -192,6 +192,12 @@ class SequenceStruct():
             boundaries.append((u, u))
         return(boundaries)
     
+    def __str__(self):
+        """print parsed sequences"""
+        print("Y sequence: \n {}".format(self.flat_y))
+        print("X sequence: \n {}".format(self.X))
+        print("_"*40)
+            
 class DataFileParser():
     """class to parse a data file comprising the training/testing data
     
@@ -201,11 +207,9 @@ class DataFileParser():
 
     """
     def __init__(self):
-        # list that will hold the sequences, each is an instance of SequenceStruct() class
-        self.seqs = []
         self.header = []
         
-    def read_file(self, file_path, header, y_ref = True, seg_other_symbol = None, column_sep = " ", generator=False):
+    def read_file(self, file_path, header, y_ref = True, seg_other_symbol = None, column_sep = " "):
         r"""read and parse a file the contains the sequences following a predefined format
         
             the file should contain label and observation tracks each separated in a column 
@@ -228,9 +232,6 @@ class DataFileParser():
                                   where it represents the non-entity symbol else (None) then it is considered 
                                   as sequence labeling problem
                 column_sep: separator used between the columns in the file
-                generator: boolean, if True then the function will act as a generator, else all sequences are read
-                           and stored in memory in the :attr:`self.seqs` attribute
-               
 
         """
         if(y_ref):
@@ -293,11 +294,7 @@ class DataFileParser():
                     Y = []
                     self._xarg = None
                     self._y = None
-                    if(generator):
-                        yield seq
-                    else:
-                        self.seqs.append(seq)
-
+                    yield seq
                     
             if(X and Y):
                 seq = SequenceStruct(X, Y, seg_other_symbol)
@@ -307,10 +304,7 @@ class DataFileParser():
                 Y = []
                 self._xarg = None
                 self._y = None 
-                if(generator):
-                    yield seq
-                else:
-                    self.seqs.append(seq)  
+                yield seq
 
     def update_XY(self, X, Y):
         """update sequence observations and corresponding labels"""
@@ -342,18 +336,6 @@ class DataFileParser():
         """
         seq_header = [input_src for input_src in x_arg]
         self.header = seq_header
-
-    def print_seqs(self):
-        """print parsed sequences"""
-        seqs = self.seqs
-        for i in range(len(seqs)):
-            seq = seqs[i]
-            print("Y sequence: \n {}".format(seq.Y))
-            print("X sequence: \n {}".format(seq.X))
-            print("-" * 40)
-            
-    def clear_seqs(self):
-        self.seqs = []
 
 class ReaderWriter(object):
     """class for dumping, reading and logging data"""
