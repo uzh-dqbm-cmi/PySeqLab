@@ -252,8 +252,7 @@ class TrainingWorkflowIterative(object):
         seg_other_symbol = self.data_parser_options['seg_other_symbol']
         for seq in parser.read_file(seq_file, header, 
                                     column_sep=col_sep,
-                                    seg_other_symbol=seg_other_symbol, 
-                                    generator=True):
+                                    seg_other_symbol=seg_other_symbol):
             yield seq
     
     def build_seqsinfo(self, seq_file):

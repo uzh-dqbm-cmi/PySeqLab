@@ -1371,6 +1371,7 @@ class Learner(object):
         self._elapsed_time = None
         self._exitloop = None
 
+
 class SeqDecodingEvaluator(object):
     """Evaluator class to evaluate performance of the models
     
@@ -1430,11 +1431,8 @@ class SeqDecodingEvaluator(object):
                                such as 'O' is excluded from the computation. Example: If ``exclude_states = ['O']``, this will replicate the behavior of `conlleval script <http://www.cnts.ua.ac.be/conll2000/chunking/output.html>`__
         """
         Y_codebook = self.model_repr.Y_codebook
-        exclude_indices = []
-        if(exclude_states):
-            # do not include 'exclude states' in the computation
-            for state in exclude_states:
-                exclude_indices.append(Y_codebook[state])
+        # do not include 'exclude states' in the computation
+        exclude_indices = [Y_codebook[state] for state in exclude_states]
         # total number of states plus 1
         M = len(Y_codebook) + 1
         include_indices = list(set(range(M)) - set(exclude_indices))
