@@ -836,6 +836,7 @@ class SeqsRepresenter(object):
                 for attr_name in attr_dict:
                     scaling_info[attr_name] = {}
                     scaling_info[attr_name]['max'] = numpy.max(attr_dict[attr_name])
+                    scaling_info[attr_name]['min'] = numpy.min(attr_dict[attr_name])
             elif(method == "standardization"):
                 for attr_name in attr_dict:
                     scaling_info[attr_name] = {}

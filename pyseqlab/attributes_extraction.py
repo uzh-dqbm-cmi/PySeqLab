@@ -22,7 +22,7 @@ class AttributeScaler(object):
            in case of *standardization*:
                - scaling_info has the form: scaling_info[attr_name] = {'mean':value,'sd':value}
            in case of *rescaling*
-               - scaling_info has the form: scaling_info[attr_name] = {'max':value}
+               - scaling_info has the form: scaling_info[attr_name] = {'max':value, 'min':value}
            
                         
     """
@@ -35,7 +35,7 @@ class AttributeScaler(object):
         
            Args:
                seq: a sequence instance of :class:`SequenceStruct`
-               boundaries: list of boundaries [(1,1), (2,2),...,]
+               boundaries: list of boundaries ``[(1,1), (2,2),...,]``
                
         """
         scaling_info = self.scaling_info
@@ -51,8 +51,10 @@ class AttributeScaler(object):
         elif(method == "rescaling"):
             for attr_name in scaling_info:
                 attr_max = scaling_info[attr_name]['max']
+                attr_min = scaling_info[attr_name]['min']
+                diff = attr_max - attr_min
                 for boundary in boundaries:
-                    seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_max)/attr_max + 1
+                    seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_min)/diff
     
     def save(self, folder_dir):
         """save relevant info about the scaler on disk
