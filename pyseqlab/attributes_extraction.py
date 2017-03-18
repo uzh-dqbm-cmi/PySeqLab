@@ -41,20 +41,20 @@ class AttributeScaler(object):
         scaling_info = self.scaling_info
         method = self.method
         seg_attr = seq.seg_attr
-
+        epsilon = 1e-8
         if(method == "standardization"):
             for attr_name in scaling_info:
                 attr_mean = scaling_info[attr_name]['mean']
                 attr_sd = scaling_info[attr_name]['sd']
                 for boundary in boundaries:
-                    seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_mean)/attr_sd
+                    seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_mean)/(attr_sd+epsilon)
         elif(method == "rescaling"):
             for attr_name in scaling_info:
                 attr_max = scaling_info[attr_name]['max']
                 attr_min = scaling_info[attr_name]['min']
                 diff = attr_max - attr_min
                 for boundary in boundaries:
-                    seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_min)/diff
+                    seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_min)/(diff+epsilon)
     
     def save(self, folder_dir):
         """save relevant info about the scaler on disk
