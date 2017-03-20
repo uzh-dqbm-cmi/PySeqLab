@@ -1036,7 +1036,7 @@ class LCRF(object):
         return((raw_diff, rel_diff)) 
         
     def check_gradient(self, w, seq_id):
-        """implementation of finite difference method similar to scipy.optimize.check_grad()
+        """implementation of finite difference method similar to ``scipy.optimize.check_grad()``
         
            Args:
                w: weight vector (numpy vector)
@@ -1045,25 +1045,61 @@ class LCRF(object):
         """
         print("checking gradient...")
         self.clear_cached_info([seq_id])
-        epsilon = 1e-9
+        epsilon = 1e-4
+        w_dim = len(w)
+        w = numpy.random.randn(w_dim)
         # basis vector
-        ei = numpy.zeros(len(w), dtype="longdouble")
-        grad = numpy.zeros(len(w), dtype="longdouble")
+        ei = numpy.zeros(w_dim, dtype="longdouble")
+        grad = numpy.zeros(w_dim, dtype="longdouble")
         for i in range(len(w)):
             ei[i] = epsilon
             l_wplus = self.compute_seq_loglikelihood(w + ei, seq_id)
             self.clear_cached_info([seq_id])
-            l = self.compute_seq_loglikelihood(w, seq_id)
+            l_wminus = self.compute_seq_loglikelihood(w - ei, seq_id)
             self.clear_cached_info([seq_id])
-            grad[i] = (l_wplus - l) / epsilon
+            grad[i] = (l_wplus - l_wminus) / (2*epsilon)
             ei[i] = 0
         estimated_grad = self.compute_seqs_gradient(w, [seq_id])
-        diff = numpy.absolute(-grad + estimated_grad)
+        diff = numpy.abs(-grad + estimated_grad)
         avg_diff = numpy.mean(diff)
         print("difference between both gradients: \n {}".format(diff))
-        print("average difference = {}".format(numpy.mean(avg_diff)))
+        print("average difference = {}".format(avg_diff))
         # clear seq_id info
         self.clear_cached_info([seq_id])
+        return(avg_diff)
+    
+    def validate_gradient(self, w, seq_id):
+        print("checking gradient using approach mentioned in (Bottou, 2012) 'Stochastic Gradient Descent Tricks' paper...")
+        self.clear_cached_info([seq_id])
+        epsilons = [1e-6, 1e-8, 1e-10]
+        rounds = 5
+        res = {}
+        # generate a random initial weight w
+        for __ in range(rounds):
+            for epsilon in epsilons: 
+                w0 = numpy.random.rand(len(w))
+                l0 = self.compute_seq_loglikelihood(w0, seq_id)
+                self.clear_cached_info([seq_id])
+                g = self.compute_seqs_gradient(w0, [seq_id])
+                self.clear_cached_info([seq_id])
+                delta = -epsilon*g
+                w_prime = w0 + delta
+                l_prime = self.compute_seq_loglikelihood(w_prime, seq_id)
+                # clear seq_id info
+                self.clear_cached_info([seq_id])
+                # verify that l_prime = l0 + epsilon*g
+                diff = numpy.abs(l0 + numpy.dot(delta, g) - l_prime)
+                if(epsilon in res):
+                    res[epsilon].append(diff)
+                else:
+                    res[epsilon] = [diff]
+        diff_concat = []
+        for eps, diff_array in res.items():
+            print("epsilon = ", eps)
+            print("difference across 5 random initializations of w ", diff_array)
+            diff_concat += diff_array
+        avg_diff = numpy.mean(numpy.asarray(diff_concat))
+        print("Average gradient difference across all epsilons and initializations is ", avg_diff)
         return(avg_diff)
     
     def validate_expected_featuresum(self, w, seqs_id):
@@ -1075,8 +1111,9 @@ class LCRF(object):
         """
         self.clear_cached_info(seqs_id)
         grad = self.compute_seqs_gradient(w, seqs_id)
-        avg_diff = numpy.mean(grad)
-        print("difference between empirical feature sum and model's expected feature sum: \n {}".format(grad))
+        abs_grad = numpy.abs(grad)
+        avg_diff = numpy.mean(abs_grad)
+        print("difference between empirical feature sum and model's expected feature sum: \n {}".format(avg_diff))
         print("average difference is {}".format(avg_diff))
         self.clear_cached_info(seqs_id)
         return(avg_diff)

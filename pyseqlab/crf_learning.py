@@ -485,7 +485,7 @@ class Learner(object):
             the sum should be decreasing after each iteration for successful training (used as diagnostics)
             however it is expensive/costly to recompute
             
-            >>> seqs_loglikelihood = self._optscipy_seqs_loglikelihood(w, train_seqs_id)
+            >>> seqs_loglikelihood = crf_model.compute_seqs_loglikelihood(w, train_seqs_id)
         """
         model_dir = self.training_description["model_dir"]
         log_file = os.path.join(model_dir, "crf_training_log.txt")
@@ -1126,7 +1126,7 @@ class Learner(object):
                 else:                   
 #                     print("fval {}".format(fval)) 
                     w[windx] += numpy.multiply(eta, fval)
-                    
+                
                 t += 1
                 # clean cached info
                 crf_model.clear_cached_info([seq_id])
