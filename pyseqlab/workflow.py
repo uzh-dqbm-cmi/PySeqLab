@@ -352,31 +352,35 @@ class TrainingWorkflowIterative(object):
             info_fromdisk = 6
         elif(info_fromdisk < 0):
             info_fromdisk = 6
-
+        # check if file name is specified
+        file_name = kwargs.get('file_name')
         for fold in data_split:
             track_perf = {}
-            trainseqs_id = data_split[fold]['train']
-            # create model using the sequences assigned for training
-            model_repr = seq_representer.create_model(trainseqs_id, seqs_info, model_repr_class, self.filter_obj)
-            # extract for each sequence model active features
-            seq_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, model_repr, "f{}".format(fold))
-            # create a CRF model
-            crf_model = model_class(model_repr, seq_representer, seqs_info, load_info_fromdisk = info_fromdisk)
-            # get the directory of the trained model
-            savedmodel_dir = self.train_model(trainseqs_id, crf_model)      
-            # evaluate on the training data 
-            trainseqs_info = {seq_id:seqs_info[seq_id] for seq_id in trainseqs_id}
-            kwargs['seqs_info'] = trainseqs_info 
-            res = self.eval_model(savedmodel_dir, kwargs)
-            track_perf['train_f{}'.format(fold)] = res
-            # evaluate on the test data 
-            testseqs_id = data_split[fold].get('test')
-            if(testseqs_id):
-                testseqs_info = {seq_id:seqs_info[seq_id] for seq_id in testseqs_id} 
-                kwargs['seqs_info'] = testseqs_info
-                res = self.eval_model(savedmodel_dir, kwargs)
-                track_perf['test_f{}'.format(fold)] = res
-
+            for dtype in ('train', 'test'):
+                fold_seqs_id = data_split[fold].get(dtype)
+                if(dtype == 'train'):
+                    # create model using the sequences assigned for training
+                    model_repr = seq_representer.create_model(fold_seqs_id, seqs_info, model_repr_class, self.filter_obj)
+                    # extract for each sequence model active features
+                    seq_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, model_repr, "f{}".format(fold))
+                    # create a CRF model
+                    crf_model = model_class(model_repr, seq_representer, seqs_info, load_info_fromdisk = info_fromdisk)
+                    # get the directory of the trained model
+                    savedmodel_dir = self.train_model(fold_seqs_id, crf_model)      
+                if(fold_seqs_id):
+                    # evaluate on the current data fold 
+                    fold_name = '{}_f{}'.format(dtype, fold)
+                    fold_seqs_info = {seq_id:seqs_info[seq_id] for seq_id in fold_seqs_id}
+                    kwargs['seqs_info'] = fold_seqs_info 
+                    
+                    if(file_name):
+                        # add prefix
+                        update_filename = fold_name + "_" + file_name
+                        kwargs['file_name'] = update_filename
+                    
+                    res = self.eval_model(savedmodel_dir, kwargs)
+                    track_perf[fold_name] = res
+                
             models_info.append((savedmodel_dir, track_perf))
         # save workflow trainer instance on disk
         ReaderWriter.dump_data(self, os.path.join(ref_corpusdir, 'workflow_trainer'))

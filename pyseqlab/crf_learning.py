@@ -1150,12 +1150,12 @@ class Learner(object):
     def _sga_svrg(self, w, train_seqs_id):
         """implements the stochastic variance reduced gradient
         
-           the original paper is Johnson R, Zhang T. Accelerating Stochastic Gradient Descent using  Predictive Variance Reduction.
-           https://papers.nips.cc/paper/4937-accelerating-stochastic-gradient-descent-using-predictive-variance-reduction.pdf
+           The algorithm is reported in  `Johnson R, Zhang T. Accelerating Stochastic Gradient Descent using  Predictive Variance Reduction.
+           <https://papers.nips.cc/paper/4937-accelerating-stochastic-gradient-descent-using-predictive-variance-reduction.pdf>`__
            
            Args:
                w: weight vector (numpy vector)
-               train_seqs_id: list of integers representing ids assigned to the sequence
+               train_seqs_id: list of integers representing sequences IDs
            
         """
         
