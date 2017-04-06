@@ -336,10 +336,6 @@ class HOCRFAD(HOSemiCRFAD):
                K: integer indicating number of decoded sequences required (i.e. top-k list)
                           
         """
-        l = {}
-        l['activated_states'] = (seq_id, )
-        l['seg_features'] = (seq_id, )
-        self.check_cached_info(seq_id, l)
         model = self.model
         P_elems = model.P_elems
         pi_pky_map = model.pi_pky_map
@@ -354,31 +350,60 @@ class HOCRFAD(HOSemiCRFAD):
         # the score for the empty sequence at time 0 is 1
         delta[0, P_codebook[""]] = 0
         back_track = {}
-        # tracks active states by boundary
-        accum_activestates = {}
         # records where violation occurs -- it is 1-based indexing 
         viol_index = []
 
-        for j in range(1, T+1):
-            boundary = (j, j)
-            active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
-            # vector of size len(pky)
-            f_potential = self.compute_fpotential(w, active_features)
-            #^print("f_potential ", f_potential)
-            for pi in pi_pky_map:
-                pi_c = P_codebook[pi]
-                pky_c_list, pk_c_list = pi_pky_map[pi]
-                vec = f_potential[pky_c_list] + delta[j-1, pk_c_list]
-                delta[j, pi_c] = numpy.max(vec)
-                #print("max chosen ", delta[j, P_codebook[pi]])
-                argmax_ind = numpy.argmax(vec)
-                #print("argmax chosen ", argmax_ind)
-                pk_c_max = pk_c_list[argmax_ind]
-                pk = P_codebook_rev[pk_c_max]
-                y = P_elems[pk][-1]
-                back_track[j, pi_c] = (pk_c_max, y)
-                    
-            if(beam_size < num_states):
+        if(beam_size == num_states):
+            # case of exact search and decoding
+            l = {}
+            l['activefeatures'] = (seq_id, )
+            self.check_cached_info(seq_id, l)
+            active_features = self.seqs_info[seq_id]['activefeatures']
+            for j in range(1, T+1):
+                boundary = (j, j)
+                # vector of size len(pky)
+                f_potential = self.compute_fpotential(w, active_features[boundary])
+                #^print("f_potential ", f_potential)
+                for pi in pi_pky_map:
+                    pi_c = P_codebook[pi]
+                    pky_c_list, pk_c_list = pi_pky_map[pi]
+                    vec = f_potential[pky_c_list] + delta[j-1, pk_c_list]
+                    delta[j, pi_c] = numpy.max(vec)
+                    #print("max chosen ", delta[j, P_codebook[pi]])
+                    argmax_ind = numpy.argmax(vec)
+                    #print("argmax chosen ", argmax_ind)
+                    pk_c_max = pk_c_list[argmax_ind]
+                    pk = P_codebook_rev[pk_c_max]
+                    y = P_elems[pk][-1]
+                    back_track[j, pi_c] = (pk_c_max, y)
+            
+        else:
+            # case of inexact search and decoding
+            l = {}
+            l['activated_states'] = (seq_id, )
+            l['seg_features'] = (seq_id, )
+            self.check_cached_info(seq_id, l)
+            # tracks active states by boundary
+            accum_activestates = {}
+            for j in range(1, T+1):
+                boundary = (j, j)
+                active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
+                # vector of size len(pky)
+                f_potential = self.compute_fpotential(w, active_features)
+                #^print("f_potential ", f_potential)
+                for pi in pi_pky_map:
+                    pi_c = P_codebook[pi]
+                    pky_c_list, pk_c_list = pi_pky_map[pi]
+                    vec = f_potential[pky_c_list] + delta[j-1, pk_c_list]
+                    delta[j, pi_c] = numpy.max(vec)
+                    #print("max chosen ", delta[j, P_codebook[pi]])
+                    argmax_ind = numpy.argmax(vec)
+                    #print("argmax chosen ", argmax_ind)
+                    pk_c_max = pk_c_list[argmax_ind]
+                    pk = P_codebook_rev[pk_c_max]
+                    y = P_elems[pk][-1]
+                    back_track[j, pi_c] = (pk_c_max, y)
+                        
                 topk_states = self.prune_states(j, delta, beam_size)
                 # update tracked active states -- to consider renaming it          
                 accum_activestates[boundary] = accum_activestates[boundary].intersection(topk_states)

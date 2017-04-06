@@ -545,12 +545,7 @@ class HOSemiCRFAD(LCRF):
                K: integer indicating number of decoded sequences required (i.e. top-k list)
                   A* searcher with viterbi will be used to generate k-decoded list
                           
-        """
-        l = {}
-        l['activated_states'] = (seq_id, )
-        l['seg_features'] = (seq_id, )
-        self.check_cached_info(seq_id, l)
-        
+        """  
         model = self.model
         P_elems = model.P_elems
         pi_pky_map = model.pi_pky_map
@@ -566,56 +561,91 @@ class HOSemiCRFAD(LCRF):
         # the score for the empty sequence at time 0 is 1
         delta[0, P_codebook[""]] = 0
         back_track = {}
-        accum_activestates = {}
         # records where violation occurs -- it is 1-based indexing 
         viol_index = []
         
-        for j in range(1, T+1):
-            pi_mat = numpy.zeros((len_P, L), dtype='longdouble')
-            backpointer = {}
-            for d in range(L):
-                u = j-d
-                if(u <= 0):
-                    break
-                v = j
-                boundary = (u, v)
-                active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
-                # vector of size len(pky)
-                f_potential = self.compute_fpotential(w, active_features)
-                for pi in pi_pky_map:
-                    pi_c = P_codebook[pi]
-                    pky_c_list, pk_c_list = pi_pky_map[pi]
-                    vec = f_potential[pky_c_list] + delta[u-1, pk_c_list]
-                    pi_mat[pi_c, d] = numpy.max(vec)
-                    argmax_indx = numpy.argmax(vec)
-                    #print("argmax chosen ", argmax_ind)
-                    pk_c_max = pk_c_list[argmax_indx]
-                    #print('pk_c ', pk_c)
-                    pk = P_codebook_rev[pk_c_max]
-                    y = P_elems[pk][-1]
-                    backpointer[d, pi_c] =  (pk_c_max, y)
-                
-                if(beam_size < num_states):
+        if(beam_size == num_states):
+            # case of exact search and decoding
+            l = {}
+            l['activefeatures'] = (seq_id, )
+            self.check_cached_info(seq_id, l)
+            active_features = self.seqs_info[seq_id]['activefeatures']
+            for j in range(1, T+1):
+                pi_mat = numpy.zeros((len_P, L), dtype='longdouble')
+                backpointer = {}
+                for d in range(L):
+                    u = j-d
+                    if(u <= 0):
+                        break
+                    v = j
+                    boundary = (u, v)
+                    # vector of size len(pky)
+                    f_potential = self.compute_fpotential(w, active_features[boundary])
+                    for pi in pi_pky_map:
+                        pi_c = P_codebook[pi]
+                        pky_c_list, pk_c_list = pi_pky_map[pi]
+                        vec = f_potential[pky_c_list] + delta[u-1, pk_c_list]
+                        pi_mat[pi_c, d] = numpy.max(vec)
+                        argmax_indx = numpy.argmax(vec)
+                        #print("argmax chosen ", argmax_ind)
+                        pk_c_max = pk_c_list[argmax_indx]
+                        #print('pk_c ', pk_c)
+                        pk = P_codebook_rev[pk_c_max]
+                        y = P_elems[pk][-1]
+                        backpointer[d, pi_c] =  (pk_c_max, y)
+            
+        else:
+            # case of inexact search and decoding
+            l = {}
+            l['activated_states'] = (seq_id, )
+            l['seg_features'] = (seq_id, )
+            self.check_cached_info(seq_id, l)
+            # tracks active states by boundary
+            accum_activestates = {}
+            for j in range(1, T+1):
+                pi_mat = numpy.zeros((len_P, L), dtype='longdouble')
+                backpointer = {}
+                for d in range(L):
+                    u = j-d
+                    if(u <= 0):
+                        break
+                    v = j
+                    boundary = (u, v)
+                    active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates)
+                    # vector of size len(pky)
+                    f_potential = self.compute_fpotential(w, active_features)
+                    for pi in pi_pky_map:
+                        pi_c = P_codebook[pi]
+                        pky_c_list, pk_c_list = pi_pky_map[pi]
+                        vec = f_potential[pky_c_list] + delta[u-1, pk_c_list]
+                        pi_mat[pi_c, d] = numpy.max(vec)
+                        argmax_indx = numpy.argmax(vec)
+                        #print("argmax chosen ", argmax_ind)
+                        pk_c_max = pk_c_list[argmax_indx]
+                        #print('pk_c ', pk_c)
+                        pk = P_codebook_rev[pk_c_max]
+                        y = P_elems[pk][-1]
+                        backpointer[d, pi_c] =  (pk_c_max, y)
+                    
                     topk_states = self.prune_states(pi_mat[:,d], beam_size)
                     # update tracked active states -- to consider renaming it          
                     accum_activestates[boundary] = accum_activestates[boundary].intersection(topk_states)
-            
-            # get the max for each pi across all segment lengths
-            for pi in pi_pky_map:
-                pi_c = P_codebook[pi]
-                delta[j, pi_c] = numpy.max(pi_mat[pi_c, :])
-                argmax_indx = numpy.argmax(pi_mat[pi_c, :])     
-                pk_c, y = backpointer[argmax_indx, pi_c] 
-                back_track[j, pi_c] = (argmax_indx, pk_c, y)
-                
-            # in case we are using viterbi for learning    
-            if(y_ref and beam_size < num_states):    
-                topk_states = self.prune_states(delta[j, :], beam_size)           
-                if(y_ref[j-1] not in topk_states):
-                    viol_index.append(j)
-                    if(stop_off_beam):
-                        T = j
-                        break
+                # get the max for each pi across all segment lengths
+                for pi in pi_pky_map:
+                    pi_c = P_codebook[pi]
+                    delta[j, pi_c] = numpy.max(pi_mat[pi_c, :])
+                    argmax_indx = numpy.argmax(pi_mat[pi_c, :])     
+                    pk_c, y = backpointer[argmax_indx, pi_c] 
+                    back_track[j, pi_c] = (argmax_indx, pk_c, y)
+                    
+                # in case we are using viterbi for learning    
+                if(y_ref):    
+                    topk_states = self.prune_states(delta[j, :], beam_size)           
+                    if(y_ref[j-1] not in topk_states):
+                        viol_index.append(j)
+                        if(stop_off_beam):
+                            T = j
+                            break
         
         if(K == 1):
             # decoding the sequence

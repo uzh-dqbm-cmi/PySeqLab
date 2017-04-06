@@ -452,7 +452,11 @@ class TrainingWorkflowIterative(object):
                         taglevel_perf += evaluator.compute_states_confmatrix(Y_seqs_dict)
                 start_ind+=seqbatch_size
                 stop_ind+=seqbatch_size
+        
+        # TO REFIX..............
+        # TO adjust the batch size and available sequences..
         elif(options.get('seq_file')):       
+            flag = False
             seq_file = options.get('seq_file')
             # the folder name where intermediary seqs and data are stored
             procseqs_foldername = "processed_seqs_" + generate_datetime_str()
@@ -471,6 +475,7 @@ class TrainingWorkflowIterative(object):
                         Y_seqs_dict = self.map_pred_to_ref_seqs(seqs_pred)
                         if(seq_counter == seqbatch_size):
                             taglevel_perf = evaluator.compute_states_confmatrix(Y_seqs_dict)
+                            flag = True
                         else:
                             taglevel_perf += evaluator.compute_states_confmatrix(Y_seqs_dict)
                 bcounter += 1
@@ -482,8 +487,10 @@ class TrainingWorkflowIterative(object):
                                                   sep=options.get('sep'), beam_size=options.get('beam_size'))
                 if(model_eval):
                     Y_seqs_dict = self.map_pred_to_ref_seqs(seqs_pred)
-                    taglevel_perf += evaluator.compute_states_confmatrix(Y_seqs_dict)
-
+                    if(flag):
+                        taglevel_perf += evaluator.compute_states_confmatrix(Y_seqs_dict)
+                    else:
+                        taglevel_perf = evaluator.compute_states_confmatrix(Y_seqs_dict)
         if(model_eval):
             performance = evaluator.get_performance_metric(taglevel_perf, perf_metric, exclude_states=exclude_states)
             return((taglevel_perf, (performance, perf_metric)))
