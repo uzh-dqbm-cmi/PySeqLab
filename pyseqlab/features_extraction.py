@@ -41,6 +41,7 @@ class FeatureExtractor(object):
         self.template_X = templateX
         self.template_Y = templateY
         self.attr_desc = attr_desc
+        # to add function mapper based on the type of the attributes in the self.attr_desc attribute 
 
     @property
     def template_X(self):
@@ -171,7 +172,7 @@ class FeatureExtractor(object):
     def aggregate_seq_features(self, features, boundaries):
         """aggregate features across all boundaries
         
-           it is usually used to aggregate features in the dictionary obtainted from
+           it is usually used to aggregate features in the dictionary obtained from
            :func:`extract_seq_features_perboundary()` function
            
            Args:
@@ -206,6 +207,8 @@ class FeatureExtractor(object):
                           It has the form: {Y: tuple(y_offsets)}  
                           e.g. ``{'Y': ((0,), (-1,0), (-2,-1,0))}``
         """
+        # to remove y_range and substitute it by checking if pos is withing 0 and seq.T
+        
         template_Y = templateY['Y']
 
         if(template_Y):
@@ -265,6 +268,7 @@ class FeatureExtractor(object):
         for attr_name in template_X:
 #             #print("attr_name {}".format(attr_name))
             # check the type of attribute
+            # to use instead a function mapper -- check the init method
             if(attr_desc[attr_name]["encoding"] == "categorical"):
                 represent_attr = self._represent_categorical_attr
             else:
