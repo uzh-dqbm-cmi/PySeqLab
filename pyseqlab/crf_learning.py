@@ -504,7 +504,7 @@ class Learner(object):
            violation means when the reference state fall off the specified beam while decoding
            
            Args:
-               viol_indx: list of indices where violation occrured while decoding
+               viol_indx: list of indices where violation occurred while decoding
                y_ref_boundaries: boundaries of the labels/tags in the reference sequence
         """
         # viol_index is 1-based indexing
