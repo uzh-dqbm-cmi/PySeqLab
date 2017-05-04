@@ -210,9 +210,8 @@ class HOSemiCRF(HOSemiCRFAD):
         b_potential = numpy.zeros(len(siy_codebook))
         # to consider caching the w_indx and fval as in cached_pf
         for z in active_features:
-            w_indx = list(active_features[z].keys())
-            f_val = list(active_features[z].values())
-            potential = numpy.inner(w[w_indx], f_val)
+            w_indx, f_val = active_features[z]
+            potential = numpy.dot(w[w_indx], f_val)
             # get all ysk's in coded format where z maintains a prefix relation with them
             siy_c_list = z_siy[z]
             b_potential[siy_c_list] += potential

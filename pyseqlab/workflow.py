@@ -6,7 +6,7 @@ from pyseqlab.features_extraction import SeqsRepresenter
 from pyseqlab.crf_learning import Learner, Evaluator, SeqDecodingEvaluator
 from pyseqlab.utilities import create_directory, generate_datetime_str, ReaderWriter, split_data, \
                                group_seqs_by_length, weighted_sample, aggregate_weightedsample, \
-                               generate_updated_model
+                               generate_updated_model, generate_trained_model
 
 
 class TrainingWorkflow(object):
@@ -15,7 +15,12 @@ class TrainingWorkflow(object):
       .. note::
       
         It is **highly recommended** to start using :class:`TrainingWorkflowIterative` class instead
-        of the current :class:`TrainingWorkflow` class.
+        of the :class:`TrainingWorkflow` class.
+        
+      .. warning::
+      
+        This class will be deprecated in future releases...
+        
     """
     def __init__(self, template_y, template_xy, model_repr_class, model_class,
                  fextractor_class, aextractor_class, scaling_method, 
@@ -226,7 +231,7 @@ class TrainingWorkflow(object):
         print(statement)
         
 class TrainingWorkflowIterative(object):
-    """general training workflow that support reading/preparing **large** training sets
+    r"""general training workflow that support reading/preparing **large** training sets
        
     """
     def __init__(self, template_y, template_xy, model_repr_class, model_class,
@@ -517,23 +522,21 @@ class TrainingWorkflowIterative(object):
         seqs_id = self.seqs_id
         model = self.model
         crf_model = self.crf_model
-        globalfeatures_len = len(model.modelfeatures_codebook)
-        activefeatures_len = 0
-        f = {}
+        num_globalfeatures = model.num_features
+        f = set()
         for seq_id in seqs_id:
             crf_model.load_activefeatures(seq_id)
             seq_activefeatures = crf_model.seqs_info[seq_id]["activefeatures"]
             for features_dict in seq_activefeatures.values():
                 for z_patt in features_dict:
-                    for windx in features_dict[z_patt]:
-                        f[windx] = 1
+                    f.update(set(features_dict[z_patt][0]))
             crf_model.clear_cached_info([seq_id])
-        activefeatures_len += len(f)
+        num_activefeatures = len(f)
                     
         statement = ""
-        if(activefeatures_len < globalfeatures_len): 
+        if(num_activefeatures < num_globalfeatures): 
             statement = "len(activefeatures) < len(modelfeatures)"
-        elif(activefeatures_len > globalfeatures_len):
+        elif(num_activefeatures > num_globalfeatures):
             statement = "len(activefeatures) > len(modelfeatures)"
         else:
             statement = "PASS"

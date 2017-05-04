@@ -8,10 +8,7 @@ from datetime import datetime
 from copy import deepcopy
 from itertools import combinations
 import heapq
-import warnings
 import numpy
-warnings.filterwarnings('error')
-
 
 class SequenceStruct():
     r"""class for representing each sequence/segment
@@ -1195,8 +1192,10 @@ def vectorized_logsumexp(vec):
     return(max_a)
 
 
-def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class=None):
-    """to update/regenerate CRF models using the save parts/components
+def generate_updated_model(modelparts_dir, modelrepr_class,  
+                           model_class, aextractor_class, 
+                           fextractor_class, seqrepresenter_class, ascaler_class=None):
+    """update/regenerate CRF models using the saved parts/components
     
        Args:
            modelparts_dir: string representing the directory where model parts are saved
@@ -1207,6 +1206,13 @@ def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextra
            fextractor_class: name of the feature extractor class used such as :class:`HOFeatureExtractor`
            seqrepresenter_class: name of the sequence representer class such as :class:`SeqsRepresenter`
            ascaler_class: name of the attribute scaler class such as :class:`AttributeScaler`
+           
+       .. note::
+       
+          This function is equivalent to :func:`generate_trained_model` function. However, this function
+          uses explicit specification of the arguments (i.e. specifying explicitly the classes to be used)
+       
+           
     """
     
     ycodebook = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_Ycodebook"))
@@ -1235,6 +1241,86 @@ def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextra
     
     # generate attribute scaler if applicable
     if(ascaler_class):
+        scaling_info = ReaderWriter.read_data(os.path.join(modelparts_dir, "AS_scalinginfo"))
+        method = ReaderWriter.read_data(os.path.join(modelparts_dir, "AS_method"))
+        new_attrscaler = ascaler_class(scaling_info, method)
+        new_seqrepr.attr_scaler = new_attrscaler
+
+    # generate crf instance
+    new_crfmodel = model_class(new_mrepr, new_seqrepr, {})
+    new_crfmodel.weights = ReaderWriter.read_data(os.path.join(modelparts_dir, "weights"))
+    return(new_crfmodel)
+
+def generate_trained_model(modelparts_dir, aextractor_class):
+    """regenerate trained CRF models using the saved trained model parts/components
+    
+       Args:
+           modelparts_dir: string representing the directory where model parts are saved
+           aextractor_class: name of the attribute extractor class such as :class:`NERSegmentAttributeExtractor`
+
+    """
+    # parse the class description file
+    class_desc = []
+    with open(os.path.join(modelparts_dir, 'class_desc.txt'), 'r') as f:
+        for line in f:
+            class_desc.append(line.strip())
+
+    from pyseqlab.features_extraction import HOFeatureExtractor, FOFeatureExtractor, SeqsRepresenter
+    seqrepresenter_class = SeqsRepresenter
+    if(class_desc[1] == 'HOCRFAD'):
+        from pyseqlab.ho_crf_ad import HOCRFAD, HOCRFADModelRepresentation
+        modelrepr_class = HOCRFADModelRepresentation
+        model_class = HOCRFAD
+        fextractor_class = HOFeatureExtractor
+    elif(class_desc[1] == 'HOCRF'):
+        from pyseqlab.ho_crf import HOCRF, HOCRFModelRepresentation
+        modelrepr_class = HOCRFModelRepresentation
+        model_class = HOCRF
+        fextractor_class = HOFeatureExtractor
+    elif(class_desc[1] == 'HOSemiCRFAD'):
+        from pyseqlab.hosemi_crf_ad import HOSemiCRFAD, HOSemiCRFADModelRepresentation
+        modelrepr_class = HOSemiCRFADModelRepresentation
+        model_class = HOSemiCRFAD
+        fextractor_class = HOFeatureExtractor
+    elif(class_desc[1] == 'HOSemiCRF'):
+        from pyseqlab.hosemi_crf import HOSemiCRF, HOSemiCRFModelRepresentation
+        modelrepr_class = HOSemiCRFModelRepresentation
+        model_class = HOSemiCRF
+        fextractor_class = HOFeatureExtractor
+    elif(class_desc[1] == 'FOCRF'):
+        from pyseqlab.fo_crf import FirstOrderCRF, FirstOrderCRFModelRepresentation
+        modelrepr_class = FirstOrderCRFModelRepresentation
+        model_class = FirstOrderCRF
+        fextractor_class = FOFeatureExtractor
+        
+    ycodebook = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_Ycodebook"))
+    mfeatures  = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_modelfeatures"))
+    mfeatures_codebook  = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_modelfeaturescodebook"))
+    L = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_L"))
+    
+    # generate model representation
+    new_mrepr = modelrepr_class()
+    new_mrepr.modelfeatures = mfeatures
+    new_mrepr.modelfeatures_codebook = mfeatures_codebook
+    new_mrepr.Y_codebook = ycodebook
+    new_mrepr.L = L
+    new_mrepr.generate_instance_properties()
+    
+    # generate attribute extractor
+    new_attrextractor = aextractor_class()
+
+    # generate feature extractor
+    templateX = ReaderWriter.read_data(os.path.join(modelparts_dir, "FE_templateX"))
+    templateY = ReaderWriter.read_data(os.path.join(modelparts_dir, "FE_templateY"))
+    new_fextractor = fextractor_class(templateX, templateY, new_attrextractor.attr_desc)
+    
+    # generate sequence representer
+    new_seqrepr = seqrepresenter_class(new_attrextractor, new_fextractor)
+        
+    # generate attribute scaler if applicable
+    if(class_desc[-1] != 'None'):
+        from pyseqlab.attributes_extraction import AttributeScaler
+        ascaler_class = AttributeScaler
         scaling_info = ReaderWriter.read_data(os.path.join(modelparts_dir, "AS_scalinginfo"))
         method = ReaderWriter.read_data(os.path.join(modelparts_dir, "AS_method"))
         new_attrscaler = ascaler_class(scaling_info, method)

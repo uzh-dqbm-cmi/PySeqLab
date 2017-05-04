@@ -41,8 +41,20 @@ class FeatureExtractor(object):
         self.template_X = templateX
         self.template_Y = templateY
         self.attr_desc = attr_desc
-        # to add function mapper based on the type of the attributes in the self.attr_desc attribute 
-
+        self.attr_represent_func = self.attr_represent_funcmapper()
+    
+    def attr_represent_funcmapper(self):
+        """assign a representation function based on the encoding (i.e. categorical or continuous) of each attribute name
+        """
+        attr_represent_func = {}
+        attr_desc = self.attr_desc
+        for attr_name in attr_desc:
+            if(attr_desc[attr_name]["encoding"] == "categorical"):
+                attr_represent_func[attr_name] = self._represent_categorical_attr
+            else:
+                attr_represent_func[attr_name] = self._represent_continuous_attr
+        return(attr_represent_func)
+    
     @property
     def template_X(self):
         return self._template_X
@@ -155,7 +167,6 @@ class FeatureExtractor(object):
             #print("boundary {}".format(boundary))
             #print("y_feat {}".format(y_feat))
             #print("xy_feat {}".format(xy_feat))
-            #TOUPDATEEEEE
             for offset_tup_y in y_feat:
                 for y_patt in y_feat[offset_tup_y]:
                     if(y_patt in xy_feat):
@@ -207,7 +218,7 @@ class FeatureExtractor(object):
                           It has the form: {Y: tuple(y_offsets)}  
                           e.g. ``{'Y': ((0,), (-1,0), (-2,-1,0))}``
         """
-        # to remove y_range and substitute it by checking if pos is withing 0 and seq.T
+        # to remove y_range and substitute it by checking if pos is within 0 and seq.T
         
         template_Y = templateY['Y']
 
@@ -258,7 +269,6 @@ class FeatureExtractor(object):
         """
         # get template X
         template_X = self.template_X
-        attr_desc = self.attr_desc
         x_featurenames = self.x_featurenames
         # current boundary begin and end
         u, v = boundary
@@ -266,14 +276,10 @@ class FeatureExtractor(object):
 #         #print("positions {}".format(positions))
         seg_features = {}
         for attr_name in template_X:
+            attr_represent_func = self.attr_represent_func[attr_name]
 #             #print("attr_name {}".format(attr_name))
             # check the type of attribute
-            # to use instead a function mapper -- check the init method
-            if(attr_desc[attr_name]["encoding"] == "categorical"):
-                represent_attr = self._represent_categorical_attr
-            else:
-                represent_attr = self._represent_continuous_attr
-            
+            # to use instead a function mapper -- check the init method     
             feat_template = {}
             for offset_tup_x in template_X[attr_name]:
                 attributes = []
@@ -295,7 +301,7 @@ class FeatureExtractor(object):
                         break
                 if(attributes):
 #                     feat_template[offset_tup_x] = represent_attr(attributes, feature_name)
-                    feat_template[offset_tup_x] = represent_attr(attributes, x_featurenames[attr_name][offset_tup_x])
+                    feat_template[offset_tup_x] = attr_represent_func(attributes, x_featurenames[attr_name][offset_tup_x])
             seg_features[attr_name] = feat_template
 #         
 #         #print("X"*40)
@@ -362,7 +368,6 @@ class FeatureExtractor(object):
         """
         # get template X
         template_X = self.template_X
-        attr_desc = self.attr_desc
         x_featurenames = self.x_featurenames
         # current boundary begin and end
         u = boundary[0]
@@ -373,11 +378,8 @@ class FeatureExtractor(object):
         for attr_name in template_X:
 #             #print("attr_name {}".format(attr_name))
             # check the type of attribute
-            if(attr_desc[attr_name]["encoding"] == "categorical"):
-                represent_attr = self._represent_categorical_attr
-            else:
-                represent_attr = self._represent_continuous_attr
-            
+            attr_represent_func = self.attr_represent_func[attr_name]        
+            # the offset_tup_x is sorted tuple -- this is helpful in case of out of boundary tuples    
             for offset_tup_x in template_X[attr_name]:
                 attributes = []
 #                 feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
@@ -399,7 +401,7 @@ class FeatureExtractor(object):
                         attributes = []
                         break
                 if(attributes):
-                    seg_features.update(represent_attr(attributes, x_featurenames[attr_name][offset_tup_x]))
+                    seg_features.update(attr_represent_func(attributes, x_featurenames[attr_name][offset_tup_x]))
 
 #         #print("seg_features lookup {}".format(seg_features))
         return(seg_features)
@@ -901,6 +903,7 @@ class SeqsRepresenter(object):
         feature_extractor = self.feature_extractor
         
         start_time = datetime.now()
+        counter = 0 
         for seq_id in seqs_id:
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb")
@@ -912,7 +915,8 @@ class SeqsRepresenter(object):
             # store the features' sum (i.e. F_j(X,Y) for every sequence on disk)
             ReaderWriter.dump_data(gfeatures, os.path.join(seq_dir, "globalfeatures"))
             ReaderWriter.dump_data(gfeatures_perboundary, os.path.join(seq_dir, "globalfeatures_per_boundary"))
-            print("dumping seq with id ", seq_id)
+            counter+=1
+            print("dumping globalfeatures -- processed seqs: ", counter)
 
         end_time = datetime.now()
         
@@ -957,7 +961,7 @@ class SeqsRepresenter(object):
         modelfeatures = {}
         # length of default entity in a segment
         L = 1
-        
+        counter = 0
         start_time = datetime.now()
         for seq_id in seqs_id:
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
@@ -976,8 +980,9 @@ class SeqsRepresenter(object):
                 # record all encountered states/labels
                 parts = y_patt.split("|")
                 for state in parts:
-                    Y_states[state] = 1       
-                   
+                    Y_states[state] = 1 
+            counter+=1      
+            print("constructing model -- processed seqs: ", counter)
         # apply a filter 
         if(filter_obj):
             # this will trim unwanted features from modelfeatures dictionary
@@ -1037,11 +1042,12 @@ class SeqsRepresenter(object):
         output_dir = create_directory("model_activefeatures_{}".format(output_foldername), root_dir)
         L = model.L
         f_extractor = self.feature_extractor
-         
+        counter = 0
         start_time = datetime.now()
         for seq_id in seqs_id:
+            counter += 1
             # lookup active features for the current sequence and store them on disk
-            print("looking for model active features for seq {}".format(seq_id))
+            print("identifying model active features -- processed seqs: ", counter)
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
             if(L > 1):
@@ -1176,9 +1182,16 @@ class SeqsRepresenter(object):
         if(per_boundary):
             fname = "globalfeatures_per_boundary"
         else:
-            fname = "globalfeatures"
-        gfeatures = ReaderWriter.read_data(os.path.join(seq_dir, fname))
-        return(gfeatures)
+            fname = "globalfeatures_repr"
+        try:
+            exception_fired = False
+            gfeatures = ReaderWriter.read_data(os.path.join(seq_dir, fname))
+        except FileNotFoundError:
+            # read the saved globalfeatures on disk
+            gfeatures = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures"))
+            exception_fired = True
+        finally:
+            return(gfeatures, exception_fired)
     
     def aggregate_gfeatures(self, gfeatures, boundaries):
         """aggregate global features using specified list of boundaries

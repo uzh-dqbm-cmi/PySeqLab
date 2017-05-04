@@ -114,7 +114,7 @@ class TestCRFModel(object):
 #         print(crf_model.seqs_info == seqs_info)
         globalfeatures_len = len(model.modelfeatures_codebook)
         activefeatures_len = 0
-        f = {}
+        f = set()
         for seq_id in seqs_id:
 #             print(seqs_info[seq_id])
 #             print(seqs_info[seq_id] == crf_model.seqs_info[seq_id])
@@ -124,8 +124,7 @@ class TestCRFModel(object):
             seq_activefeatures = crf_model.seqs_info[seq_id]["activefeatures"]
             for features_dict in seq_activefeatures.values():
                 for z_patt in features_dict:
-                    for windx in features_dict[z_patt]:
-                        f[windx] = 1
+                    f.update(set(features_dict[z_patt][0]))
             crf_model.clear_cached_info([seq_id])
 #             print(seqs_info[seq_id])
         activefeatures_len += len(f)
@@ -138,7 +137,6 @@ class TestCRFModel(object):
         else:
             statement = "PASS"
         print(statement)
-
 
 def read_data(file_path, header, sep=" "):
     parser = DataFileParser()

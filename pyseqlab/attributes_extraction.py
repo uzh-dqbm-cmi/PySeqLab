@@ -41,20 +41,23 @@ class AttributeScaler(object):
         scaling_info = self.scaling_info
         method = self.method
         seg_attr = seq.seg_attr
-        epsilon = 1e-8
-        if(method == "standardization"):
-            for attr_name in scaling_info:
-                attr_mean = scaling_info[attr_name]['mean']
-                attr_sd = scaling_info[attr_name]['sd']
-                for boundary in boundaries:
-                    seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_mean)/(attr_sd+epsilon)
-        elif(method == "rescaling"):
-            for attr_name in scaling_info:
-                attr_max = scaling_info[attr_name]['max']
-                attr_min = scaling_info[attr_name]['min']
-                diff = attr_max - attr_min
-                for boundary in boundaries:
-                    seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_min)/(diff+epsilon)
+        try:
+            if(method == "standardization"):
+                for attr_name in scaling_info:
+                    attr_mean = scaling_info[attr_name]['mean']
+                    attr_sd = scaling_info[attr_name]['sd']
+                    for boundary in boundaries:
+                        seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_mean)/(attr_sd)
+            elif(method == "rescaling"):
+                for attr_name in scaling_info:
+                    attr_max = scaling_info[attr_name]['max']
+                    attr_min = scaling_info[attr_name]['min']
+                    diff = attr_max - attr_min
+                    for boundary in boundaries:
+                        seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_min)/(diff)
+        except Exception as e:
+            print("one of the features is either constant or zero. Division by zero error...")
+            print(e)
     
     def save(self, folder_dir):
         """save relevant info about the scaler on disk
@@ -67,6 +70,23 @@ class AttributeScaler(object):
                     }
         for name in save_info:
             ReaderWriter.dump_data(save_info[name], os.path.join(folder_dir, name))   
+
+# to implement/structure from below class....
+class GenericAttributeExtractor(object):
+    """Generic attribute extractor class implementing observation functions that generates attributes from tokens/observations
+       
+       Args:
+           attr_desc: dictionary defining the atomic observation/attribute names including
+                      the encoding of such attribute (i.e. {continuous, categorical}}
+           seg_attr:  dictionary comprising the extracted attributes per each boundary of a sequence
+    
+       Attributes:
+           attr_desc: dictionary defining the atomic observation/attribute names including
+                      the encoding of such attribute (i.e. {continuous, categorical}}
+           seg_attr:  dictionary comprising the extracted attributes per each boundary of a sequence
+
+    """
+    pass
 
 class NERSegmentAttributeExtractor(object):
     """class implementing observation functions that generates attributes from tokens/observations
@@ -286,6 +306,7 @@ class NERSegmentAttributeExtractor(object):
                                       }
     
 if __name__ == "__main__":
+    # sequence example is from `Cuong et al. paper <>`_
     X = [{'w':'Peter'}, {'w':'goes'}, {'w':'to'}, {'w':'Britain'}, {'w':'and'}, {'w':'France'}, {'w':'annually'},{'w':'.'}]
     Y = ['P', 'O', 'O', 'L', 'O', 'L', 'O', 'O']
     seq = SequenceStruct(X, Y)
