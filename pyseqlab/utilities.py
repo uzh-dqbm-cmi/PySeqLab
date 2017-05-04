@@ -1292,44 +1292,18 @@ def generate_trained_model(modelparts_dir, aextractor_class):
         modelrepr_class = FirstOrderCRFModelRepresentation
         model_class = FirstOrderCRF
         fextractor_class = FOFeatureExtractor
-        
-    ycodebook = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_Ycodebook"))
-    mfeatures  = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_modelfeatures"))
-    mfeatures_codebook  = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_modelfeaturescodebook"))
-    L = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_L"))
     
-    # generate model representation
-    new_mrepr = modelrepr_class()
-    new_mrepr.modelfeatures = mfeatures
-    new_mrepr.modelfeatures_codebook = mfeatures_codebook
-    new_mrepr.Y_codebook = ycodebook
-    new_mrepr.L = L
-    new_mrepr.generate_instance_properties()
-    
-    # generate attribute extractor
-    new_attrextractor = aextractor_class()
-
-    # generate feature extractor
-    templateX = ReaderWriter.read_data(os.path.join(modelparts_dir, "FE_templateX"))
-    templateY = ReaderWriter.read_data(os.path.join(modelparts_dir, "FE_templateY"))
-    new_fextractor = fextractor_class(templateX, templateY, new_attrextractor.attr_desc)
-    
-    # generate sequence representer
-    new_seqrepr = seqrepresenter_class(new_attrextractor, new_fextractor)
-        
     # generate attribute scaler if applicable
     if(class_desc[-1] != 'None'):
         from pyseqlab.attributes_extraction import AttributeScaler
         ascaler_class = AttributeScaler
-        scaling_info = ReaderWriter.read_data(os.path.join(modelparts_dir, "AS_scalinginfo"))
-        method = ReaderWriter.read_data(os.path.join(modelparts_dir, "AS_method"))
-        new_attrscaler = ascaler_class(scaling_info, method)
-        new_seqrepr.attr_scaler = new_attrscaler
+    else:
+        ascaler_class = None
 
-    # generate crf instance
-    new_crfmodel = model_class(new_mrepr, new_seqrepr, {})
-    new_crfmodel.weights = ReaderWriter.read_data(os.path.join(modelparts_dir, "weights"))
-    return(new_crfmodel)
+    trained_model = generate_updated_model(modelparts_dir, modelrepr_class, model_class,
+                                           aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class)
+
+    return(trained_model)
 
 
 def split_data(seqs_id, options):
