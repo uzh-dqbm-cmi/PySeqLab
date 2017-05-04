@@ -691,7 +691,7 @@ class Learner(object):
         if(y_ref_boundaries):
             y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures, y_ref_boundaries[:boundpos_indx])
         else:
-            y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures, None)
+            y_ref_windxfval = seqs_info[seq_id][gfeatures_type]
 
         #ref_unp_windxfval = self._unpack_windxfval(y_ref_windxfval)
         # generate global features for the imposters
