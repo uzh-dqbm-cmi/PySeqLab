@@ -176,7 +176,7 @@ def run_perceptron(model_type, trainconfig):
 def run_sga_classic(model_type, trainconfig):
     optimization_options = {"method" : "SGA",
                             "num_epochs":15,
-                            "regularization_value":0,
+                            "regularization_value":1,
                             "tolerance":1e-16
                             }
     dsplit_options = {'method':"none"}
@@ -185,7 +185,7 @@ def run_sga_classic(model_type, trainconfig):
 def run_svrg(model_type, trainconfig):
     optimization_options = {"method" : "SVRG",
                             "num_epochs":10,
-                            "regularization_value":0,
+                            "regularization_value":1,
                             "tolerance":1e-16
                             }
     dsplit_options = {'method':"none"}
@@ -195,7 +195,7 @@ def run_sga_adadelta(model_type, trainconfig, profile=True):
     import cProfile
     optimization_options = {"method" : "SGA-ADADELTA",
                             "regularization_type": "l2",
-                            "regularization_value":0,
+                            "regularization_value":1,
                             "num_epochs":15,
                             "tolerance":1e-6
                             }

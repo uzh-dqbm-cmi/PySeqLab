@@ -6,7 +6,6 @@ import os
 from datetime import datetime
 import numpy
 from .utilities import ReaderWriter, create_directory, generate_datetime_str, vectorized_logsumexp
-from docutils.nodes import target
 
 class Learner(object):
     """learner used for training CRF models supporting search- and gradient-based learning methods

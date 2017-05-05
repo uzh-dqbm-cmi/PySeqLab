@@ -354,7 +354,6 @@ class TrainingWorkflowIterative(object):
         # check if file name is specified
         file_name = kwargs.get('file_name')
         for fold in data_split:
-            track_perf = {}
             for dtype in ('train', 'test'):
                 fold_seqs_id = data_split[fold].get(dtype)
                 if(dtype == 'train'):

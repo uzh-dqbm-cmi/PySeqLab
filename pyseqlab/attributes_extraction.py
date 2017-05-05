@@ -52,9 +52,14 @@ class AttributeScaler(object):
                 for attr_name in scaling_info:
                     attr_max = scaling_info[attr_name]['max']
                     attr_min = scaling_info[attr_name]['min']
-                    #diff = attr_max - attr_min
-                    for boundary in boundaries:
-                        seg_attr[boundary][attr_name]= self.transform_scale(seg_attr[boundary][attr_name], attr_min, attr_max)
+                    diff = attr_max - attr_min
+                    if(diff == 0):        
+                        for boundary in boundaries:
+                            seg_attr[boundary][attr_name]= 0
+                    else:
+                        for boundary in boundaries:
+                            seg_attr[boundary][attr_name]= self.transform_scale(seg_attr[boundary][attr_name], attr_min, attr_max)
+
 #                         seg_attr[boundary][attr_name]= (seg_attr[boundary][attr_name] - attr_min)/(diff)
         except Exception as e:
             print("one of the features is either constant or zero. Division by zero error...")
