@@ -6,7 +6,7 @@ from pyseqlab.features_extraction import SeqsRepresenter
 from pyseqlab.crf_learning import Learner, Evaluator, SeqDecodingEvaluator
 from pyseqlab.utilities import create_directory, generate_datetime_str, ReaderWriter, split_data, \
                                group_seqs_by_length, weighted_sample, aggregate_weightedsample, \
-                               generate_updated_model, generate_trained_model
+                               generate_updated_model
 
 
 class TrainingWorkflow(object):
@@ -346,10 +346,11 @@ class TrainingWorkflowIterative(object):
         ref_corpusdir = os.path.dirname(os.path.dirname(seqs_info[1]['globalfeatures_dir']))
         
         info_fromdisk = kwargs.get('load_info_fromdisk')
+        # specify large number such that we always load the computed data from disk rather keeping them in memory
         if(type(info_fromdisk) != int):
-            info_fromdisk = 6
+            info_fromdisk = 10
         elif(info_fromdisk < 0):
-            info_fromdisk = 6
+            info_fromdisk = 10
         # check if file name is specified
         file_name = kwargs.get('file_name')
         for fold in data_split:
@@ -377,9 +378,9 @@ class TrainingWorkflowIterative(object):
                         kwargs['file_name'] = update_filename
                     
                     res = self.eval_model(savedmodel_dir, kwargs)
-                    track_perf[fold_name] = res
-                
-            models_info.append((savedmodel_dir, track_perf))
+                    res['fold_name'] = fold_name
+                    res['model_dir'] = savedmodel_dir
+                    models_info.append(res)                
         # save workflow trainer instance on disk
         ReaderWriter.dump_data(self, os.path.join(ref_corpusdir, 'workflow_trainer'))
         return(models_info)
@@ -437,7 +438,7 @@ class TrainingWorkflowIterative(object):
             seqs_id = list(seqs_info.keys())
             start_ind = 0
             stop_ind = seqbatch_size
-            while(start_ind<=len(seqs_id)):
+            while(start_ind<len(seqs_id)):
                 batch_seqsinfo = {seq_id:seqs_info[seq_id] for seq_id in seqs_id[start_ind:stop_ind]}              
                 seqs_pred = crf_model.decode_seqs("viterbi", model_dir, seqs_info=batch_seqsinfo, 
                                                   file_name=options.get('file_name'), sep=options.get('sep'),
@@ -451,12 +452,11 @@ class TrainingWorkflowIterative(object):
                 start_ind+=seqbatch_size
                 stop_ind+=seqbatch_size
         
-        # TO REFIX..............
         # TO adjust the batch size and available sequences..
         elif(options.get('seq_file')):       
             flag = False
             seq_file = options.get('seq_file')
-            # the folder name where intermediary seqs and data are stored
+            # the folder name where intermediary sequences and data are stored
             procseqs_foldername = "processed_seqs_" + generate_datetime_str()
             seqs_dict = {}
             bcounter = 1
@@ -491,8 +491,8 @@ class TrainingWorkflowIterative(object):
                         taglevel_perf = evaluator.compute_states_confmatrix(Y_seqs_dict)
         if(model_eval):
             performance = evaluator.get_performance_metric(taglevel_perf, perf_metric, exclude_states=exclude_states)
-            return((taglevel_perf, (performance, perf_metric)))
-        return((None, (None, None)))
+            return({perf_metric:performance, 'taglevel_confusion_matrix':taglevel_perf})
+        return({})
 
     def map_pred_to_ref_seqs(self, seqs_pred):
         Y_seqs_dict = {}
