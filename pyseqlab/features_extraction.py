@@ -733,7 +733,7 @@ class SeqsRepresenter(object):
                           each sequence is an instance of the :class:`SequenceStruct` class
                corpus_name: string specifying the name of the corpus that will be used as corpus folder name
                working_dir: string representing the directory where the parsing and saving info on disk will occur
-               unique_id: boolean indicating if the generated root folder will include a generated id
+               unique_id: boolean indicating if the generated corpus folder will include a generated id
                
            Return:
                seqs_info (dictionary): dictionary comprising the the info about the prepared sequences

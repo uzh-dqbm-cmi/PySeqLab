@@ -26,9 +26,9 @@ class SequenceStruct():
            seg_other_symbol: string or None(default), if specified then the task is a segmentation problem 
                              where it represents the non-entity symbol else (None) then it is considered 
                              as sequence labeling problem
-           T: length of a sequence (i.e. len(X))
+           T: int, length of a sequence (i.e. len(X))
            seg_attr: dictionary comprising the extracted attributes per each boundary of a sequence
-           L: longest length of an identified segment in the sequence
+           L: int, longest length of an identified segment in the sequence
            flat_y: list of labels/tags 
            y_sboundaries: sorted list of boundaries of the :attr:`Y` of the sequence
            y_range: range of the sequence
@@ -84,9 +84,9 @@ class SequenceStruct():
                          representing the labels of the elements in X
                        - **non_entity_symbol** which represents the Other category (i.e. non entity element which is 'O' in above example)
            
-           Example::
+           Example:
            
-               Y after the transformation becomes {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
+               Y after the transformation becomes ``{(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}``
         """
         try:
             Y_ref, non_entity_symb = elmtup
@@ -165,11 +165,11 @@ class SequenceStruct():
         r"""flatten the :attr:`Y` attribute 
         
            Args:
-               Y: dictionary of this form {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
+               Y: dictionary of this form ``{(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}``
            
-           Example::
+           Example:
                
-               flattened y becomes ['P','O','O','L','L']
+               flattened y becomes ``['P','O','O','L','L']``
         """
         s_boundaries = sorted(Y)
         flat_y = []
@@ -190,10 +190,9 @@ class SequenceStruct():
         return(boundaries)
     
     def __str__(self):
-        """print parsed sequences"""
-        print("Y sequence: \n {}".format(self.flat_y))
-        print("X sequence: \n {}".format(self.X))
-        print("_"*40)
+        """return string representation of the parsed sequence"""
+        out_str = "Y sequence:\n {}\nX sequence:\n {}\n{}".format(self.flat_y, self.X, "-"*40)
+        return(out_str)
             
 class DataFileParser():
     """class to parse a data file comprising the training/testing data
@@ -226,9 +225,10 @@ class DataFileParser():
             Keyword Arguments:
                 y_ref: boolean specifying if the reference label column in the data file
                 seg_other_sybmol: string or None(default), if specified then the task is a segmentation problem 
-                                  where it represents the non-entity symbol else (None) then it is considered 
-                                  as sequence labeling problem
-                column_sep: separator used between the columns in the file
+                                  where `seg_other_symbol` represents the non-entity symbol. In this case semi-CRF models
+                                  are used. Else (i.e. `seg_other_symbol` is not None) then it is considered 
+                                  as sequence labeling problem.
+                column_sep: string, separator used between the columns in the file
 
         """
         if(y_ref):
@@ -563,15 +563,15 @@ class HO_AStarSearcher(object):
        
        Args:
           P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
-                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+                          e.g. ``{0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}``
           P_elems: dictionary comprising the composing elements of every prefix in the `P` set
-                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+                   e.g. ``{'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}``
 
        Attributes:
           P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
-                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+                          e.g. ``{0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}``
           P_elems: dictionary comprising the composing elements of every prefix in the `P` set
-                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+                   e.g. ``{'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}``
     """
     def __init__(self, P_codebook_rev, P_elems):
         self.P_codebook_rev = P_codebook_rev
@@ -696,15 +696,15 @@ class HOSemi_AStarSearcher(object):
        
        Args:
           P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
-                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+                          e.g. ``{0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}``
           P_elems: dictionary comprising the composing elements of every prefix in the `P` set
-                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+                   e.g. ``{'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}``
 
        Attributes:
           P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
-                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+                          e.g. ``{0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}``
           P_elems: dictionary comprising the composing elements of every prefix in the `P` set
-                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+                   e.g. ``{'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}``
     """
     def __init__(self, P_codebook_rev, pi_elems):
         self.P_codebook_rev = P_codebook_rev
@@ -856,7 +856,7 @@ class TemplateGenerator(object):
                
            Example:
            
-               suppose we have `word` attribute reference by 'w' and we need to use the current word
+               suppose we have `word` attribute referenced by 'w' and we need to use the current word
                with the current label (i.e. unigram of words with the current label) in a range of (0,1)
             
                ::
@@ -1463,22 +1463,18 @@ def nested_cv(seqs_id, outer_kfold, inner_kfold):
 def get_conll00():
     current_dir = os.path.dirname(os.path.realpath(__file__))
     root_dir = os.path.dirname(current_dir)
-    parser = DataFileParser()
     files_info = {'train_short_main.txt':('main', True, " "), 
                   'train_short_none.txt':(('w','pos'), True, " "),
-                  'train_short_per_sequence.txt':('per_sequence', True, " "),
-                  'train_short_noref.txt':(('w', 'pos'), False, "\t")
+                  'train_short_per_sequence.txt':('per_sequence', True, " ")
                   }
     for file_name in files_info:
+        parser = DataFileParser()
+        print(file_name)
         file_path = os.path.join(root_dir, "tests", "dataset","conll00",file_name)
-        parser.read_file(file_path, header=files_info[file_name][0], y_ref = files_info[file_name][1], column_sep=files_info[file_name][2])
-        parser.print_seqs()
-        print("*"*40)
-        parser.seqs = []
-        parser.header = []
-
+        for seq in parser.read_file(file_path, header=files_info[file_name][0], y_ref = files_info[file_name][1], column_sep=files_info[file_name][2]):
+            print(seq)
     
 if __name__ == "__main__":
     pass
-#     get_conll00()
+    #get_conll00()
 
