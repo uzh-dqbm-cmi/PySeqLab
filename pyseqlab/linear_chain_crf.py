@@ -174,6 +174,8 @@ class LCRFModelRepresentation(object):
                             },
                             ...
                }
+               
+               ypatt_features = {'B-NP', 'B-PP|B-NP', ..}
         """
         modelfeatures = self.modelfeatures
         Z_len = self.Z_len
@@ -244,8 +246,38 @@ class LCRFModelRepresentation(object):
         count = len(windx_fval)
         return(numpy.fromiter(windx_fval.keys(), numpy.uint32, count), 
                numpy.fromiter(windx_fval.values(), numpy.float64, count))
+#         
+#     def represent_activefeatures(self, activestates, seg_features):  
+#         """represent detected active features while parsing sequences
+#         
+#            Args:
+#                activestates: dictionary of the form {'patt_len':{patt_1, patt_2, ...}}
+#                seg_features: dictionary of the observation features. It has the form 
+#                              {featureA_name:value, featureB_name:value, ...} 
+#         """
+#         modelfeatures = self.modelfeatures
+#         modelfeatures_codebook = self.modelfeatures_codebook   
+#         activefeatures = {}
+#         for z_len in activestates:
+#             z_patt_set = activestates[z_len]
+#             for z_patt in z_patt_set:
+#                 windx_fval = {}
+#                 for seg_featurename in seg_features:
+#                     fkey = (z_patt, seg_featurename)
+#                     if(fkey in modelfeatures_codebook):
+#                         windx_fval[modelfeatures_codebook[fkey]] = seg_features[seg_featurename]     
+#                 if(z_patt in modelfeatures[z_patt]):
+#                     fkey = (z_patt, z_patt)
+#                     windx_fval[modelfeatures_codebook[fkey]] = 1
+#                 if(windx_fval):
+#                     #activefeatures[Z_codebook[z_patt]] = windx_fval
+#                     count = len(windx_fval)
+#                     activefeatures[z_patt] = (numpy.fromiter(windx_fval.keys(), numpy.uint32, count), 
+#                                               numpy.fromiter(windx_fval.values(), numpy.float64, count))
+#         return(activefeatures)
+
         
-    def represent_activefeatures(self, activestates, seg_features):  
+    def represent_activefeatures(self, seg_features, allowed_z_len):  
         """represent detected active features while parsing sequences
         
            Args:
@@ -253,27 +285,60 @@ class LCRFModelRepresentation(object):
                seg_features: dictionary of the observation features. It has the form 
                              {featureA_name:value, featureB_name:value, ...} 
         """
-        modelfeatures = self.modelfeatures
         modelfeatures_codebook = self.modelfeatures_codebook   
+        modelfeatures_inverted = self.modelfeatures_inverted
+        ypatt_activestates = self.ypatt_activestates
         activefeatures = {}
-        for z_len in activestates:
-            z_patt_set = activestates[z_len]
-            for z_patt in z_patt_set:
-                windx_fval = {}
-                for seg_featurename in seg_features:
-                    fkey = (z_patt, seg_featurename)
-                    if(fkey in modelfeatures_codebook):
-                        windx_fval[modelfeatures_codebook[fkey]] = seg_features[seg_featurename]     
-                if(z_patt in modelfeatures[z_patt]):
-                    fkey = (z_patt, z_patt)
-                    windx_fval[modelfeatures_codebook[fkey]] = 1
-                if(windx_fval):
-                    #activefeatures[Z_codebook[z_patt]] = windx_fval
-                    count = len(windx_fval)
-                    activefeatures[z_patt] = (numpy.fromiter(windx_fval.keys(), numpy.uint32, count), 
-                                              numpy.fromiter(windx_fval.values(), numpy.float64, count))
-        return(activefeatures)
-    
+        windx_fval = {}
+        # use segment features plus the activated states
+        for seg_featurename in seg_features:
+            if(seg_featurename in modelfeatures_inverted):
+                for z_len in allowed_z_len:
+                    for zpatt in modelfeatures_inverted[seg_featurename][z_len]:
+                        fkey = (zpatt, seg_featurename)
+                        if(zpatt in activefeatures):
+                            activefeatures[zpatt][modelfeatures_codebook[fkey]] = seg_features[seg_featurename]
+                        else:
+                            activefeatures[zpatt] = {modelfeatures_codebook[fkey]:seg_features[seg_featurename]}
+       
+        # check if ypattern features are modeled
+        for z_len in allowed_z_len:
+            if(z_len in ypatt_activestates):
+                for zpatt in ypatt_activestates[z_len]:
+                    fkey = (zpatt, zpatt)
+                    if(zpatt in activefeatures):
+                        activefeatures[zpatt][modelfeatures_codebook[fkey]] = 1
+                    else:
+                        activefeatures[zpatt] = {modelfeatures_codebook[fkey]:1}
+        for z_patt in activefeatures:
+            count = len(activefeatures[z_patt])
+            windx_fval[z_patt] = (numpy.fromiter(activefeatures[z_patt].keys(), numpy.uint32, count), 
+                                  numpy.fromiter(activefeatures[z_patt].values(), numpy.float64, count))
+        return(windx_fval)
+
+#     def find_activated_states(self, seg_features, allowed_z_len):
+#         """identify possible activated y patterns/features using the observation features
+#         
+#            Args:
+#                seg_features: dictionary of the observation features. It has the form 
+#                              {featureA_name:value, featureB_name:value, ...} 
+#                allowed_z_len: set of permissible order/length of y features
+#                              {1,2,3} -> means up to third order y features are allowed
+#         """ 
+#         modelfeatures_inverted = self.modelfeatures_inverted
+#         active_states = {}
+#         for feature in seg_features:
+#             if(feature in modelfeatures_inverted):
+#                 factivestates = modelfeatures_inverted[feature]
+#                 for z_len in factivestates:
+#                     if(z_len in allowed_z_len):
+#                         if(z_len in active_states):
+#                             active_states[z_len].update(factivestates[z_len])
+#                         else:
+#                             active_states[z_len] = set(factivestates[z_len])
+#                 #print("active_states from func ", active_states)
+#         return(active_states)
+
     def find_activated_states(self, seg_features, allowed_z_len):
         """identify possible activated y patterns/features using the observation features
         
@@ -296,7 +361,6 @@ class LCRFModelRepresentation(object):
                             active_states[z_len] = set(factivestates[z_len])
                 #print("active_states from func ", active_states)
         return(active_states)
-
     def filter_activated_states(self, activated_states, accum_active_states, boundary):
         """filter/prune states and y features 
         
@@ -403,6 +467,51 @@ class LCRF(object):
         self._seqs_info = deepcopy(info_dict)
     
     
+#     def identify_activefeatures(self, seq_id, boundary, accum_activestates):
+#         """determine model active features for a given sequence at defined boundary
+#            
+#            Main task:
+#                - determine model active features in a given boundary
+#                - update the accum_activestates dictionary   
+#                      
+#            Args:
+#                seq_id: integer representing unique id assigned to the sequence
+#                boundary: tuple (u,v) defining the boundary under consideration
+#                accum_activestates: dictionary of the form {(u,v):{state_1, state_2, ...}}
+#                                    it keeps track of the active states in each boundary
+#         """
+#         
+#         model = self.model
+#         # default length of a state/tag
+#         state_len = 1
+#         # get activated states per boundary
+#         activated_states = self.seqs_info[seq_id]['activated_states'][boundary]
+#         seg_features = self.seqs_info[seq_id]['seg_features'][boundary]
+#         #^print("boundary ", boundary)
+#         #^print('seg_features ', seg_features)
+#         #^print('activated_states ', activated_states)
+#         #^print("accum_activestates ", accum_activestates)
+# 
+#         if(state_len in activated_states):
+#             accum_activestates[boundary] = set(activated_states[state_len])
+#             
+#             if(boundary != (1,1)):
+#                 filtered_states =  model.filter_activated_states(activated_states, accum_activestates, boundary)
+#                 filtered_states[state_len] = set(activated_states[state_len])
+#             # initial point t0
+#             else:
+#                 # we do not need to make a copy of it -- to reconsider
+#                 filtered_states = activated_states
+#             #print("filtered_states ", filtered_states)
+#             #print("seg_features ", seg_features)        
+#             active_features = model.represent_activefeatures(filtered_states, seg_features)
+# 
+#         else:
+#             accum_activestates[boundary] = set()
+#             active_features = {}
+# 
+#         return(active_features)        
+
     def identify_activefeatures(self, seq_id, boundary, accum_activestates):
         """determine model active features for a given sequence at defined boundary
            
@@ -418,16 +527,40 @@ class LCRF(object):
         """
         
         model = self.model
+        max_patt_len = model.max_patt_len
+        patts_len = model.patts_len
+        ypatt_activestates = model.ypatt_activestates
+        start_state_flag = False
+        if('__START__' in model.Y_codebook):
+            start_state_flag = True
+        u, v = boundary
         # default length of a state/tag
         state_len = 1
-        # get activated states per boundary
-        activated_states = self.seqs_info[seq_id]['activated_states'][boundary]
         seg_features = self.seqs_info[seq_id]['seg_features'][boundary]
         #^print("boundary ", boundary)
         #^print('seg_features ', seg_features)
         #^print('activated_states ', activated_states)
         #^print("accum_activestates ", accum_activestates)
+        need_filter = True
+        # check if we are modeling label bias terms or having categorical features or boundary is at 1
+        if(state_len in ypatt_activestates or self.seqs_representer.attr_scaler or u == 1):
+            need_filter = False
+        if(u < max_patt_len):
+            if(start_state_flag):
+                max_len = max_patt_len
+            else:
+                max_len = u
+        else:
+            max_len = max_patt_len
+        allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
 
+        if(not need_filter):
+            active_features = model.represent_activefeatures(seg_features, allowed_z_len)
+        else:
+            activated_features = model.represent_activefeatures(seg_features, state_len)
+            activated_states= set(activated_features.keys())
+            accum_activestates[boundary] = activated_states
+            
         if(state_len in activated_states):
             accum_activestates[boundary] = set(activated_states[state_len])
             
@@ -446,8 +579,7 @@ class LCRF(object):
             accum_activestates[boundary] = set()
             active_features = {}
 
-        return(active_features)        
-
+        return(active_features)  
     def generate_activefeatures(self, seq_id):
         """construct a dictionary of model active features identified given a sequence
         

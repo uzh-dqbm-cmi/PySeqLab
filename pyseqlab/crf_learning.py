@@ -454,8 +454,8 @@ class Learner(object):
         line += "\n \n"
         ReaderWriter.log_progress(line, log_file)
           
-        print("results \n {}".format(result))
-          
+        #print("results \n {}".format(result))
+ 
         # estimated optimal weights
         w_hat = result.x
           
@@ -810,6 +810,8 @@ class Learner(object):
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
         w = w_avg/(num_epochs*N) 
+        ReaderWriter.dump_data(avg_error_list, os.path.join(model_dir, 'avg_decodingerror_training'))
+
         return(w)      
     
     def _update_weights_perceptron(self, w, ref_unp_windxfval, imp_unp_windxfval):
@@ -897,7 +899,8 @@ class Learner(object):
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
-                 
+        ReaderWriter.dump_data(avg_error_list, os.path.join(model_dir, 'avg_decodingerror_training'))
+
         return(w)      
 
     def _track_perceptron_optimizer(self, w, k, avg_error_list):
@@ -1034,7 +1037,8 @@ class Learner(object):
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
-                
+        ReaderWriter.dump_data(mean_cost_vec, os.path.join(model_dir, 'avg_loglikelihood_training'))
+
         return(w)  
     
     def _sga_classic(self, w, train_seqs_id):
@@ -1143,7 +1147,7 @@ class Learner(object):
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
-                
+        ReaderWriter.dump_data(mean_cost_vec, os.path.join(model_dir, 'avg_loglikelihood_training'))
         return(w)
 
     def _sga_svrg(self, w, train_seqs_id):
@@ -1276,7 +1280,7 @@ class Learner(object):
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
-                
+        ReaderWriter.dump_data(mean_cost_vec, os.path.join(model_dir, 'avg_loglikelihood_training'))
         return(w)     
         
     def _apply_l1_penalty(self, w, q, u, w_indx):
@@ -1288,7 +1292,7 @@ class Learner(object):
                w: weight vector (numpy vector)
                q: total L1 penalty that current weights (corresponding to the features) did receive up to the current time
                u: absolute value of total L1 penalty that each weight could receive up to the current time
-               w_indx: weight indices corresponding to the current feature under update
+               w_indx: weight indices corresponding to the current features under update
                
            TODO: vectorize this function
         """

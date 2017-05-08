@@ -148,10 +148,16 @@ def trainconfig_3():
     track_attr_names = ["f_{}".format(i) for i in range(seq_generator.num_features)]
     for track_attr_name in track_attr_names:
         template_generator.generate_template_XY(track_attr_name, ('1-gram:2-gram', range(-5,6)), '1-state', templateXY)
+        template_generator.generate_template_XY(track_attr_name, ('1-gram', range(0,1)), '2-states:3-states', templateXY)
+
     templateY = {'Y':()}
     filter_obj = None
     ascaler_class = AttributeScaler
     return(templateXY, templateY, ascaler_class, filter_obj)
+
+def run_training(model_type, trainconfig, optimization_options):
+    dsplit_options = {'method':"none"}
+    return(train_crfs(model_type, optimization_options, dsplit_options, trainconfig))
 
 def run_lbfgs(model_type, trainconfig):
     optimization_options = {'method': "L-BFGS-B",
@@ -235,7 +241,7 @@ def train_crfs(model_type, optimization_options, dsplit_options, trainconfig):
 
     data_split = workflow_trainer.seq_parsing_workflow(seqs, dsplit_options)
     models_info = workflow_trainer.traineval_folds(data_split, meval=False)
-
+    return(models_info)
 
 class TestCRFModel(object):
     def __init__(self, templateY, templateXY, model_class, model_repr_class, fextractor_class, scaling_method, optimization_options, filter_obj = None):
