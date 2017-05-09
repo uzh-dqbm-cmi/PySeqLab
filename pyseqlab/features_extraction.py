@@ -160,9 +160,14 @@ class FeatureExtractor(object):
         Y = seq.Y
         features = {}
         for boundary in Y:
+            print('boundary ', boundary)
             xy_feat = self.extract_features_XY(seq, boundary, seg_features)
+            print("xy_feat")
+            print(xy_feat)
             y_feat = self.extract_features_Y(seq, boundary, self.template_Y)
             y_feat = y_feat['Y']
+            print("y_feat")
+            print(y_feat)
             #print("boundary {}".format(boundary))
             #print("boundary {}".format(boundary))
             #print("y_feat {}".format(y_feat))
@@ -173,6 +178,8 @@ class FeatureExtractor(object):
                         xy_feat[y_patt].update(y_feat[offset_tup_y])
                     else:
                         xy_feat[y_patt] = y_feat[offset_tup_y]
+            print("xy_feat after join")
+            print(xy_feat)
             features[boundary] = xy_feat
 #             #print("features {}".format(features[boundary]))
 #             #print("*"*40)
@@ -432,11 +439,6 @@ class FeatureExtractor(object):
         # segment length
         L = model.L
         T = seq.T
-        # maximum pattern length 
-        max_patt_len = model.max_patt_len
-        patts_len = model.patts_len
-        ypatt_activestates = model.ypatt_activestates
-        activated_states = {}
         seg_features = {}
         l_segfeatures = {}
             
@@ -449,38 +451,14 @@ class FeatureExtractor(object):
                 # end boundary
                 v = j
                 boundary = (u, v)
-                
-                if(u < max_patt_len):
-                    max_len = u
-                else:
-                    max_len = max_patt_len
-                    
-                allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
-                
                 # used in the case of model training
                 if(learning):
                     l_segfeatures[boundary] = self.extract_features_X(seq, boundary)
                     seg_features[boundary] = self.flatten_segfeatures(l_segfeatures[boundary])
                 else:
                     seg_features[boundary] = self.lookup_features_X(seq, boundary)
-                    
-                activated_states[boundary] = model.find_activated_states(seg_features[boundary], allowed_z_len)
-                #^print("allowed_z_len ", allowed_z_len)
-                #^print("seg_features ", seg_features)
-                #^print("activated_states ", activated_states)
-                if(ypatt_activestates):
-                    ypatt_activated_states = {z_len:ypatt_activestates[z_len] for z_len in allowed_z_len if z_len in ypatt_activestates}
-                    #^print("ypatt_activated_states ", ypatt_activated_states)
-                    for zlen, ypatts in ypatt_activated_states.items():
-                        if(zlen in activated_states[boundary]):
-                            activated_states[boundary][zlen].update(ypatts)
-                        else:
-                            activated_states[boundary][zlen] = set(ypatts) 
-                #^print("activated_states ", activated_states)
-        #^print("activated_states from feature_extractor ", activated_states)
-        #^print("seg_features from feature_extractor ", seg_features)
 
-        return(activated_states, seg_features, l_segfeatures)
+        return(seg_features, l_segfeatures)
     
     
     ########################################################
@@ -619,77 +597,7 @@ class FOFeatureExtractor(FeatureExtractor):
         else:
             y_patt_features = {'Y':{}}
 
-        return(y_patt_features)
-    
-        
-    def lookup_seq_modelactivefeatures(self, seq, model, learning=False):
-        """lookup/search model active features for a given sequence using varying boundaries (i.e. g(X, u, v))
-           
-           Args:
-               seq: a sequence instance of :class:`SequenceStruct`
-               model: a model representation instance of the CRF class (i.e. the class having `ModelRepresentation` suffix)
-            
-           Keyword Arguments:
-               learning: optional boolean indicating if this function is used wile learning model parameters
-        """
-        # segment length
-        L = model.L
-        T = seq.T
-        # maximum pattern length 
-        max_patt_len = model.max_patt_len
-        patts_len = model.patts_len
-        ypatt_activestates = model.ypatt_activestates
-        startstate_flag = self.start_state
-        
-        activated_states = {}
-        seg_features = {}
-        l_segfeatures = {}
-            
-        for j in range(1, T+1):
-            for d in range(L):
-                if(j-d <= 0):
-                    break
-                # start boundary
-                u = j-d
-                # end boundary
-                v = j
-                boundary = (u, v)
-                
-                if(u < max_patt_len):
-                    if(startstate_flag):
-                        max_len = max_patt_len
-                    else:
-                        max_len = u
-                else:
-                    max_len = max_patt_len
-                    
-                allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
-                
-                # used while learning model parameters
-                if(learning):
-                    l_segfeatures[boundary] = self.extract_features_X(seq, boundary)
-                    seg_features[boundary] = self.flatten_segfeatures(l_segfeatures[boundary])
-                else:
-                    seg_features[boundary] = self.lookup_features_X(seq, boundary)
-                    
-                activated_states[boundary] = model.find_activated_states(seg_features[boundary], allowed_z_len)
-                #^print("allowed_z_len ", allowed_z_len)
-                #^print("seg_features ", seg_features)
-                #^print("activated_states ", activated_states)
-                if(ypatt_activestates):
-                    ypatt_activated_states = {z_len:ypatt_activestates[z_len] for z_len in allowed_z_len if z_len in ypatt_activestates}
-                    #^print("ypatt_activated_states ", ypatt_activated_states)
-                    for zlen, ypatts in ypatt_activated_states.items():
-                        if(zlen in activated_states[boundary]):
-                            activated_states[boundary][zlen].update(ypatts)
-                        else:
-                            activated_states[boundary][zlen] = set(ypatts) 
-                #^print("activated_states ", activated_states)
-        #^print("activated_states from feature_extractor ", activated_states)
-        #^print("seg_features from feature_extractor ", seg_features)
-
-        return(activated_states, seg_features, l_segfeatures)
-        
+        return(y_patt_features)        
 
 class SeqsRepresenter(object):
     """Sequence representer class that prepares, pre-process and transform sequences for learning/decoding tasks
@@ -1053,12 +961,11 @@ class SeqsRepresenter(object):
             if(L > 1):
                 self._lookup_seq_attributes(seq, L)
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-            activated_states, seg_features, l_segfeatures = f_extractor.lookup_seq_modelactivefeatures(seq, model, learning=learning)
+            seg_features, l_segfeatures = f_extractor.lookup_seq_modelactivefeatures(seq, model, learning=learning)
 
             # dump model active features data
             activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
             seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
-            ReaderWriter.dump_data(activated_states, os.path.join(activefeatures_dir, "activated_states"))
             ReaderWriter.dump_data(seg_features, os.path.join(activefeatures_dir, "seg_features"))
             # to add condition regarding learning
             ReaderWriter.dump_data(l_segfeatures, os.path.join(activefeatures_dir, "l_segfeatures"))

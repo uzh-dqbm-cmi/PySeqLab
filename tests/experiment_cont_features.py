@@ -129,6 +129,18 @@ def trainconfig_1():
     ascaler_class = AttributeScaler
     return(templateXY, templateY, ascaler_class, filter_obj)
 
+def trainconfig_4():
+    template_generator = TemplateGenerator()
+    templateXY = {}
+    # generating template for tracks
+    track_attr_names = ["f_{}".format(i) for i in range(seq_generator.num_features)]
+    for track_attr_name in track_attr_names:
+        template_generator.generate_template_XY(track_attr_name, ('1-gram:2-gram', range(-3,4)), '1-state:2-states', templateXY)
+    templateY = template_generator.generate_template_Y('1-state')
+    filter_obj = None
+    ascaler_class = AttributeScaler
+    return(templateXY, templateY, ascaler_class, filter_obj)
+
 def trainconfig_2():
     template_generator = TemplateGenerator()
     templateXY = {}

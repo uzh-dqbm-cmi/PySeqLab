@@ -8,8 +8,6 @@ from copy import deepcopy
 from collections import OrderedDict
 import numpy
 from .utilities import ReaderWriter, create_directory, vectorized_logsumexp
-from sqlalchemy.orm.session import ACTIVE
-from conda.cli import activate
 
 class LCRFModelRepresentation(object):
     """Model representation that will hold data structures to be used in :class:`LCRF` class
@@ -339,6 +337,7 @@ class LCRFModelRepresentation(object):
         """
         modelfeatures_codebook = self.modelfeatures_codebook   
         ypatt_activestates = self.ypatt_activestates
+        print("ypatt_activestates ", ypatt_activestates)
         activefeatures = {}
         # check if ypattern features are modeled
         for z_len in allowed_z_len:
@@ -587,7 +586,7 @@ class LCRF(object):
 # 
 #         return(active_features)        
 
-    def identify_activefeatures(self, seq_id, boundary, accum_activestates, apply_filter = False):
+    def identify_activefeatures(self, seq_id, boundary, accum_activestates, apply_filter = True):
         """determine model active features for a given sequence at defined boundary
            
            Main task:
@@ -613,12 +612,13 @@ class LCRF(object):
         if('__START__' in model.Y_codebook): # first order model is used with max_patt_len = 2
             start_state_flag = True
             apply_filter = True
+            
         u, __ = boundary
         if(u == 1 and start_state_flag):
             accum_activestates[0,0] = {'__START__'}
-        #^print("boundary ", boundary)
-        #^print('seg_features ', seg_features)
-        #^print("accum_activestates ", accum_activestates)
+#         print("boundary ", boundary)
+#         print('seg_features ', seg_features)
+#         print("accum_activestates ", accum_activestates)
         if(u < max_patt_len):
             # case when we use first-order CRF model -- max_patt_len = 2
             if(start_state_flag):
@@ -630,6 +630,7 @@ class LCRF(object):
         # determine allowed z patterns length (i.e. pattern order)
         allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
         
+        print("apply filter ", apply_filter)
         if(not apply_filter): # case of no filtering
             seg_activefeatures = model.find_seg_activefeatures(seg_features, allowed_z_len)
             ypatt_activefeatures = model.find_ypatt_activefeatures(allowed_z_len)
@@ -654,6 +655,10 @@ class LCRF(object):
             ypatt_filtered_states = model.filter_activated_states(ypatt_activated_states, accum_activestates, boundary)
             ypatt_activefeatures_addendum = model.represent_ypatt_filteredstates(ypatt_filtered_states) 
             
+#             print("seg_activefeatures ", seg_activefeatures)
+#             print("ypatt_activefeatures ", ypatt_activefeatures)
+#             print("seg_activefeatures_addendum ", seg_activefeatures_addendum)
+#             print("ypatt_activefeatures_addendum ", ypatt_activefeatures_addendum)
             # join all the active features
             accumfeatures = seg_activefeatures
             model.accumulate_activefeatures(ypatt_activefeatures, accumfeatures)
@@ -680,6 +685,8 @@ class LCRF(object):
         accum_activestates = {}
         activefeatures_perboundary = {}
         ypatt_activestates = self.model.ypatt_activestates
+        print("inverted modelfeatures ", self.model.modelfeatures_inverted)
+        print("model features ", self.model.modelfeatures)
         # zero-order state/tag has state_len = 1 (i.e. using only one state)
         state_len = 1
         apply_filter = True
@@ -695,7 +702,7 @@ class LCRF(object):
                 v = j
                 boundary = (u, v)
                 # identify active features
-                active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates, apply_filter)
+                active_features = self.identify_activefeatures(seq_id, boundary, accum_activestates, apply_filter=apply_filter)
                 activefeatures_perboundary[boundary] = active_features
         return(activefeatures_perboundary)
 
@@ -930,7 +937,7 @@ class LCRF(object):
         if(not activefeatures):
             # check if activated_states and seg_features are loaded
             l = {}
-            l['activated_states'] = (seq_id, )
+            #l['activated_states'] = (seq_id, )
             l['seg_features'] = (seq_id, )
             self.check_cached_info(seq_id, l)
             activefeatures = self.generate_activefeatures(seq_id)
