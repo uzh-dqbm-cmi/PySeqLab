@@ -160,14 +160,9 @@ class FeatureExtractor(object):
         Y = seq.Y
         features = {}
         for boundary in Y:
-            print('boundary ', boundary)
             xy_feat = self.extract_features_XY(seq, boundary, seg_features)
-            print("xy_feat")
-            print(xy_feat)
             y_feat = self.extract_features_Y(seq, boundary, self.template_Y)
             y_feat = y_feat['Y']
-            print("y_feat")
-            print(y_feat)
             #print("boundary {}".format(boundary))
             #print("boundary {}".format(boundary))
             #print("y_feat {}".format(y_feat))
@@ -178,12 +173,9 @@ class FeatureExtractor(object):
                         xy_feat[y_patt].update(y_feat[offset_tup_y])
                     else:
                         xy_feat[y_patt] = y_feat[offset_tup_y]
-            print("xy_feat after join")
-            print(xy_feat)
             features[boundary] = xy_feat
 #             #print("features {}".format(features[boundary]))
 #             #print("*"*40)
-                
         return(features)
 
     
@@ -361,7 +353,7 @@ class FeatureExtractor(object):
                             if(y_patt in xy_features):
                                 xy_features[y_patt].update(seg_feat_template[offset_tup_x])
                             else:
-                                xy_features[y_patt] = seg_feat_template[offset_tup_x]
+                                xy_features[y_patt] = dict(seg_feat_template[offset_tup_x])
 #                         #print("xy_features {}".format(xy_features))
         return(xy_features)
     

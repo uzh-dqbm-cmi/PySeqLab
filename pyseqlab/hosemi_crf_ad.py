@@ -559,12 +559,12 @@ class HOSemiCRFAD(LCRF):
         T = self.seqs_info[seq_id]["T"]
         # records max score at every time step
         delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
+        pi_mat = numpy.ones((len_P, L), dtype='longdouble')* (-numpy.inf)
         # the score for the empty sequence at time 0 is 1
         delta[0, P_codebook[""]] = 0
         back_track = {}
         # records where violation occurs -- it is 1-based indexing 
         viol_index = []
-        
         if(beam_size == num_states):
             # case of exact search and decoding
             l = {}
@@ -572,7 +572,8 @@ class HOSemiCRFAD(LCRF):
             self.check_cached_info(seq_id, l)
             active_features = self.seqs_info[seq_id]['activefeatures']
             for j in range(1, T+1):
-                pi_mat = numpy.zeros((len_P, L), dtype='longdouble')
+                # reset pi_mat at every loop
+                pi_mat.fill(-numpy.inf)
                 backpointer = {}
                 for d in range(L):
                     u = j-d
@@ -586,6 +587,9 @@ class HOSemiCRFAD(LCRF):
                         pi_c = P_codebook[pi]
                         pky_c_list, pk_c_list = pi_pky_map[pi]
                         vec = f_potential[pky_c_list] + delta[u-1, pk_c_list]
+#                         print("f_potential[pky_c_list] ", f_potential[pky_c_list])
+#                         print("delta[u-1, pk_c_list] ", delta[u-1, pk_c_list])
+#                         print("vec ", vec)
                         pi_mat[pi_c, d] = numpy.max(vec)
                         argmax_indx = numpy.argmax(vec)
                         #print("argmax chosen ", argmax_ind)
@@ -594,17 +598,31 @@ class HOSemiCRFAD(LCRF):
                         pk = P_codebook_rev[pk_c_max]
                         y = P_elems[pk][-1]
                         backpointer[d, pi_c] =  (pk_c_max, y)
-            
+#                 print("backpointer  ")
+#                 print(backpointer)
+#                 print("pi_mat")
+#                 print(pi_mat)
+                # get the max for each pi across all segment lengths
+                for pi in pi_pky_map:
+                    pi_c = P_codebook[pi]
+                    delta[j, pi_c] = numpy.max(pi_mat[pi_c, :])
+                    argmax_indx = numpy.argmax(pi_mat[pi_c, :])     
+                    pk_c, y = backpointer[argmax_indx, pi_c] 
+                    back_track[j, pi_c] = (argmax_indx, pk_c, y)
+#             print("delta ")
+#             print(delta)
+#             print("backtrack ")
+#             print(back_track)
         else:
             # case of inexact search and decoding
             l = {}
-            l['activated_states'] = (seq_id, )
             l['seg_features'] = (seq_id, )
             self.check_cached_info(seq_id, l)
             # tracks active states by boundary
             accum_activestates = {}
             for j in range(1, T+1):
-                pi_mat = numpy.zeros((len_P, L), dtype='longdouble')
+                # reset pi_mat at every loop
+                pi_mat.fill(-numpy.inf)
                 backpointer = {}
                 for d in range(L):
                     u = j-d

@@ -376,7 +376,6 @@ class HOCRFAD(HOSemiCRFAD):
         else:
             # case of inexact search and decoding
             l = {}
-            l['activated_states'] = (seq_id, )
             l['seg_features'] = (seq_id, )
             self.check_cached_info(seq_id, l)
             # tracks active states by boundary
@@ -411,8 +410,6 @@ class HOCRFAD(HOSemiCRFAD):
                         if(stop_off_beam):
                             T = j
                             break
-        #^print('seq_id ', seq_id)
-        #^print("activefeatures_perboundary ", activefeatures_perboundary)
         if(K == 1):
             # decoding the sequence
             Y_decoded = []
@@ -420,12 +417,10 @@ class HOCRFAD(HOSemiCRFAD):
             p_T = P_codebook_rev[p_T_c]
             y_T = P_elems[p_T][-1]
             Y_decoded.append((p_T_c,y_T))
-            #print("t={}, p_T_code={}, p_T={}, y_T ={}".format(T, p_T_code, p_T, y_T))
             t = T - 1
             while t>0:
                 p_tplus1_c = Y_decoded[-1][0]
                 p_t_c, y_t = back_track[(t+1, p_tplus1_c)]
-                #print("t={}, (t+1, p_t_code)=({}, {})->({},{})".format(t, t+1, P_codebook[p_tplus1], p_t, y_t))
                 Y_decoded.append((p_t_c, y_t))
                 t -= 1
             Y_decoded.reverse()

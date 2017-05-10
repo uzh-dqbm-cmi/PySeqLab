@@ -369,7 +369,6 @@ class FirstOrderCRF(LCRF):
         else:
             # case of inexact search and decoding
             l = {}
-            l['activated_states'] = (seq_id, )
             l['seg_features'] = (seq_id, )
             self.check_cached_info(seq_id, l)
             
