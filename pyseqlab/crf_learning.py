@@ -454,8 +454,8 @@ class Learner(object):
         line += "\n \n"
         ReaderWriter.log_progress(line, log_file)
           
-        print("results \n {}".format(result))
-          
+        #print("results \n {}".format(result))
+ 
         # estimated optimal weights
         w_hat = result.x
           
@@ -501,10 +501,10 @@ class Learner(object):
     def _identify_violation_indx(self, viol_indx, y_ref_boundaries):
         """determine the index where the violation occurs
         
-           violation means when the reference state fall off the specified beam while decoding
+           violation means when the reference state falls off the specified beam while decoding
            
            Args:
-               viol_indx: list of indices where violation occrured while decoding
+               viol_indx: list of indices where violation occurred while decoding
                y_ref_boundaries: boundaries of the labels/tags in the reference sequence
         """
         # viol_index is 1-based indexing
@@ -543,11 +543,11 @@ class Learner(object):
         """unpack the weight indices and corresponding feature values 
         
            Args:
-               y_windxfval: dictionary where the keys are the weight indices of the features
-                            and values are the feature sum/count
+               y_windxfval: tuple having two numpy array entries; the first representing
+                            the weight indices of the features while the second representing
+                            the values that are feature sum/count
         """
-        windx = list(y_windxfval.keys())
-        fval = list(y_windxfval.values())
+        windx, fval = y_windxfval
         return(windx, fval)
 
     def _find_update_violation(self, w, seq_id):
@@ -589,7 +589,7 @@ class Learner(object):
         y_imposter = y_imposters[0]
         if(not viol_indx):
             # we can perform full update
-            print("in full update routine")
+            print("in full update routine ...")
             T = seqs_info[seq_id]['T']
             seq_err_count = self._compute_seq_decerror(y_ref, y_imposter, T)
             if(seq_err_count or method == "SAPO"):       
@@ -597,7 +597,7 @@ class Learner(object):
 
         else:
             if(update_type == "early"):
-                print("in early update routine")
+                print("in early update routine ...")
                 # viol_index is 1-based indexing
                 earlyviol_indx = viol_indx[0]
                 viol_pos, viol_boundindex = self._identify_violation_indx(earlyviol_indx, y_ref_boundaries)
@@ -608,7 +608,7 @@ class Learner(object):
                 # max update is only supported for one imposter sequence
                 max_diff = numpy.inf
                 L = crf_model.model.L
-                print("in max update routine")
+                print("in max-exhaustive update routine ...")
                 test = []
                 # viol_index is 1-based indexing
                 for i in range(len(viol_indx)):
@@ -650,13 +650,14 @@ class Learner(object):
                 # max update is only supported for one imposter sequence
                 max_diff = numpy.inf
                 L = crf_model.model.L
-                print("in max update routine")
+                print("in max-fast update routine ...")
                 # viol_index is 1-based indexing
                 lastviol_indx = viol_indx[-1]
                 viol_pos, viol_boundindex = self._identify_violation_indx(lastviol_indx, y_ref_boundaries)
                 seq_err_count = self._compute_seq_decerror(y_ref, y_imposter, viol_pos)
                 ref_unp_windxfval, imps_unp_windxfval = self._load_gfeatures(seq_id, "globalfeatures_per_boundary", y_imposters, viol_pos, viol_boundindex)
             elif(update_type == 'latest'):
+                # to implement lastest update at some point..
                 pass
                         
         return(ref_unp_windxfval, imps_unp_windxfval, seq_err_count)   
@@ -689,20 +690,20 @@ class Learner(object):
         if(y_ref_boundaries):
             y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures, y_ref_boundaries[:boundpos_indx])
         else:
-            y_ref_windxfval = crf_model.represent_globalfeature(ref_gfeatures, None)
+            y_ref_windxfval = seqs_info[seq_id][gfeatures_type]
 
-        ref_unp_windxfval = self._unpack_windxfval(y_ref_windxfval)
+        #ref_unp_windxfval = self._unpack_windxfval(y_ref_windxfval)
         # generate global features for the imposters
-        imposters_unp_windxfval = []
+        imposters_windxfval = []
         for y_imposter in y_imposters:
             # generate global features for the current imposter 
             imposter_gfeatures_perboundary, y_imposter_boundaries = crf_model.load_imposter_globalfeatures(seq_id, y_imposter[:ypos_indx], seg_other_symbol)                     
             #^print("imposter_gfeatures_perboundary ", imposter_gfeatures_perboundary)
             #^print("imposter y_boundaries ", y_imposter_boundaries)
             y_imposter_windxfval = crf_model.represent_globalfeature(imposter_gfeatures_perboundary, y_imposter_boundaries)
-            imposters_unp_windxfval.append(self._unpack_windxfval(y_imposter_windxfval))
+            imposters_windxfval.append(y_imposter_windxfval)
         
-        return(ref_unp_windxfval, imposters_unp_windxfval)   
+        return(y_ref_windxfval, imposters_windxfval)   
 
     
     def _update_weights_sapo(self, w, ref_unp_windxfval, imps_unp_windxfval, prob_vec):
@@ -710,20 +711,20 @@ class Learner(object):
         
            Args:
                w: weight vector (numpy vector)
-               ref_unp_windxfval: dictionary (unpacked) representing the weight indices and corresponding feature sum/count
-                                  of the reference sequence
-               imps_unp_windxfval: list of dictionaries (unpacked) representing the weight indices and corresponding feature sum/count
-                                   of the imposter sequences
+               ref_unp_windxfval: tuple of two numpy array elements representing the weight indices
+                                  and corresponding feature sum/count of the reference sequence
+               imps_unp_windxfval: list of tuples each comprising two numpy array elements representing 
+                                   the weight indices and corresponding feature sum/count of the imposter sequences
                prob_vec: numpy vector representing the probability of each imposter sequence
         """
         gamma = self.training_description['gamma']
         # update weights using the decoded sequences
         for i in range(len(imps_unp_windxfval)):
             windx, fval = imps_unp_windxfval[i]
-            w[windx] -= (gamma*prob_vec[i]) * numpy.asarray(fval)
+            w[windx] -= (gamma*prob_vec[i]) * fval
         # update weights using the reference sequence   
         windx, fval = ref_unp_windxfval
-        w[windx] += gamma * numpy.asarray(fval)
+        w[windx] += gamma * fval
 
     def _compute_probvec_sapo(self, w, imps_unp_windxfval):
         """compute the probabilty of each imposter sequence in the SAPO algorithm
@@ -746,11 +747,13 @@ class Learner(object):
     
     def _sapo(self, w, train_seqs_id):
         """implements Search-based Probabilistic Online Learning Algorithm (SAPO)
-          
-           .. see:: original paper at https://arxiv.org/pdf/1503.08381v1.pdf
-           
+
            this implementation adapts it to 'violation-fixing' framework (i.e. inexact search is supported)
-            
+          
+           .. see:: 
+           
+              original paper at https://arxiv.org/pdf/1503.08381v1.pdf
+                       
            .. note:: 
                
               the regularization is based on averaging rather than l2 as it seems to be consistent during training
@@ -807,6 +810,8 @@ class Learner(object):
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
         w = w_avg/(num_epochs*N) 
+        ReaderWriter.dump_data(avg_error_list, os.path.join(model_dir, 'avg_decodingerror_training'))
+
         return(w)      
     
     def _update_weights_perceptron(self, w, ref_unp_windxfval, imp_unp_windxfval):
@@ -894,7 +899,8 @@ class Learner(object):
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
-                 
+        ReaderWriter.dump_data(avg_error_list, os.path.join(model_dir, 'avg_decodingerror_training'))
+
         return(w)      
 
     def _track_perceptron_optimizer(self, w, k, avg_error_list):
@@ -956,11 +962,11 @@ class Learner(object):
         if(regularization_type == "l1"):
             u = 0
             q = numpy.zeros(len(w), dtype = "longdouble")
-        
+        # gradient
+        grad = numpy.zeros(len(w), dtype = "longdouble")      
         # instance variable to keep track of elapsed time between optimization iterations
         self._elapsed_time = datetime.now()
         self._exitloop = False
-                
         for k in range(num_epochs):
             # shuffle sequences at the beginning of each epoch 
             numpy.random.shuffle(train_seqs_id)
@@ -972,13 +978,8 @@ class Learner(object):
 #                 print("first seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
                 seq_loglikelihood = crf_model.compute_seq_loglikelihood(w, seq_id)
                 seqs_loglikelihood_vec[seqs_id_mapper[seq_id]] = seq_loglikelihood
-                seq_grad = crf_model.compute_seq_gradient(w, seq_id)
-                windx = list(seq_grad.keys())
-                fval = list(seq_grad.values())
-                
+                target_indx = crf_model.compute_seq_gradient(w, seq_id, grad)                
                 if(C):
-                    grad = numpy.zeros(len(w), dtype = "longdouble")
-                    grad[windx] = fval
                     if(regularization_type == 'l2'):
                         seq_loglikelihood += - ((C/N) * (1/2) * numpy.dot(w, w))
                         grad -= ((C/N)* w)
@@ -999,28 +1000,30 @@ class Learner(object):
                     w += deltaw
                     if(regularization_type == "l1"):
                         u += ratio * (C/N)
-                        w_upd, q_upd = self._apply_l1_penalty(w, q, u, windx)
+                        w_upd, q_upd = self._apply_l1_penalty(w, q, u, target_indx)
                         w = w_upd
                         q = q_upd
                 else:
 
                     # accumulate gradient
+                    fval = grad[target_indx]
                     E_g2 = p_rho * E_g2
-                    E_g2[windx] += (1-p_rho) * numpy.square(fval)
+                    E_g2[target_indx] += (1-p_rho) * numpy.square(fval)
                     RMS_g = numpy.sqrt(E_g2 + epsilon)
                     RMS_deltaw = numpy.sqrt(E_deltaw2 + epsilon)
                     ratio = (RMS_deltaw/RMS_g)
-                    deltaw = ratio[windx] * fval
+                    deltaw = ratio[target_indx] * fval
                     E_deltaw2 = p_rho * E_deltaw2 
-                    E_deltaw2[windx] += (1-p_rho) * numpy.square(deltaw)                    
-                    w[windx] += deltaw
+                    E_deltaw2[target_indx] += (1-p_rho) * numpy.square(deltaw)                    
+                    w[target_indx] += deltaw
                 
 #                 print("second seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
                 # clean cached info
                 crf_model.clear_cached_info([seq_id])
                 numseqs_left -= 1
 #                 print("third seqs_info[{}]={}".format(seq_id, crf_model.seqs_info[seq_id]))
-
+                # reset the gradient
+                grad.fill(0)
                 print("num seqs left: {}".format(numseqs_left))
             
             seqs_cost_vec = [numpy.mean(seqs_loglikelihood_vec[i:i+step_size]) for i in range(0, N, step_size)]
@@ -1034,7 +1037,8 @@ class Learner(object):
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
-                
+        ReaderWriter.dump_data(mean_cost_vec, os.path.join(model_dir, 'avg_loglikelihood_training'))
+
         return(w)  
     
     def _sga_classic(self, w, train_seqs_id):
@@ -1079,7 +1083,8 @@ class Learner(object):
         # 0<a<1 -- a parameter should be between 0 and 1 exclusively
         a = self.training_description["a"]
         t = 0
-        
+        # gradient
+        grad = numpy.zeros(len(w), dtype = "longdouble")
         for k in range(num_epochs):
             # shuffle sequences at the beginning of each epoch 
             numpy.random.shuffle(train_seqs_id)
@@ -1101,13 +1106,9 @@ class Learner(object):
                 
                 seq_loglikelihood = crf_model.compute_seq_loglikelihood(w, seq_id)
                 seqs_loglikelihood_vec[seqs_id_mapper[seq_id]] = seq_loglikelihood
-                seq_grad = crf_model.compute_seq_gradient(w, seq_id)
+                target_index = crf_model.compute_seq_gradient(w, seq_id, grad)
 #                 print("seq_grad {}".format(seq_grad))
-                windx = list(seq_grad.keys())
-                fval = list(seq_grad.values())
                 if(C):
-                    grad = numpy.zeros(len(w), dtype = "longdouble")
-                    grad[windx] = fval
                     if(regularization_type == 'l2'):
                         seq_loglikelihood += - ((C/N) * (1/2) * numpy.dot(w, w))
                         grad -= ((C/N)* w)
@@ -1116,7 +1117,7 @@ class Learner(object):
                     elif(regularization_type == 'l1'):
                         seq_loglikelihood += - (C/N) * numpy.sum(numpy.abs(w))
                         u += eta * (C/N)
-                        w_upd, q_upd = self._apply_l1_penalty(w, q, u, windx)
+                        w_upd, q_upd = self._apply_l1_penalty(w, q, u, target_index)
                         w = w_upd
                         q = q_upd
                         
@@ -1125,11 +1126,13 @@ class Learner(object):
 
                 else:                   
 #                     print("fval {}".format(fval)) 
-                    w[windx] += numpy.multiply(eta, fval)
+                    w[target_index] += eta * grad[target_index]
                 
                 t += 1
                 # clean cached info
                 crf_model.clear_cached_info([seq_id])
+                # reset the gradient
+                grad.fill(0)
                 numseqs_left -= 1
                 print("num seqs left: {}".format(numseqs_left))
                 
@@ -1144,7 +1147,7 @@ class Learner(object):
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
-                
+        ReaderWriter.dump_data(mean_cost_vec, os.path.join(model_dir, 'avg_loglikelihood_training'))
         return(w)
 
     def _sga_svrg(self, w, train_seqs_id):
@@ -1194,6 +1197,8 @@ class Learner(object):
 
         m = 2*N
         saved_grad = {}
+        # gradient
+        grad = numpy.zeros(len(w), dtype = "longdouble")    
         # instance variable to keep track of elapsed time between optimization iterations
         self._elapsed_time = datetime.now()
         self._exitloop = False
@@ -1210,12 +1215,13 @@ class Learner(object):
             for seq_id in train_seqs_id:
                 left -= 1
                 print("average gradient phase: {} seqs left".format(left))
-                seq_grad = crf_model.compute_seq_gradient(w_tilda_c, seq_id)
-                windx = list(seq_grad.keys())
-                fval = list(seq_grad.values())
-                mu_grad[windx] += fval
+                target_indx = crf_model.compute_seq_gradient(w_tilda_c, seq_id, grad)
+                fval = grad[target_indx]
+                mu_grad[target_indx] += fval
                 crf_model.clear_cached_info([seq_id])
-                saved_grad[seq_id] = {'windx':windx, 'fval':numpy.asarray(fval)}
+                saved_grad[seq_id] = (target_indx, fval)
+                # reset grad
+                grad.fill(0)
             if(C and regularization_type == "l2"):
                 mu_grad -= (C* w_tilda_c)
             mu_grad = mu_grad/N
@@ -1231,25 +1237,22 @@ class Learner(object):
                 
                 seq_loglikelihood = crf_model.compute_seq_loglikelihood(w, seq_id)
                 seqs_loglikelihood_vec[seqs_id_mapper[seq_id]] = seq_loglikelihood
-                seq_grad = crf_model.compute_seq_gradient(w, seq_id)
-                windx = list(seq_grad.keys())
-                fval = numpy.asarray(list(seq_grad.values()))
+                target_indx = crf_model.compute_seq_gradient(w, seq_id, grad)
+                fval = grad[target_indx]
                 if(C):
-                    grad = numpy.zeros(len(w), dtype = "longdouble")
-                    grad[windx] = fval
                     if(regularization_type == 'l2'):
                         seq_loglikelihood += - ((C/N) * (1/2) * numpy.dot(w, w))
                         grad -= ((C/N)* w)
-                        grad[saved_grad[seq_id]['windx']] -= saved_grad[seq_id]['fval'] 
+                        grad[saved_grad[seq_id][0]] -= saved_grad[seq_id][1] 
                         grad += ((C/N) * w_tilda_c) + mu_grad
                         w += eta * grad
                         
                     elif(regularization_type == 'l1'):
                         seq_loglikelihood += - (C/N) * numpy.sum(numpy.abs(w))
                         u += eta * (C/N)
-                        grad[saved_grad[seq_id]['windx']] -= saved_grad[seq_id]['fval'] 
+                        grad[saved_grad[seq_id][0]] -= saved_grad[seq_id][1] 
                         grad +=  mu_grad
-                        w_upd, q_upd = self._apply_l1_penalty(w, q, u, windx)
+                        w_upd, q_upd = self._apply_l1_penalty(w, q, u, target_indx)
                         w = w_upd
                         q = q_upd
                         
@@ -1257,12 +1260,13 @@ class Learner(object):
                     seqs_loglikelihood_vec[seqs_id_mapper[seq_id]] = seq_loglikelihood
 
                 else:                    
-                    w[windx] += eta * (fval - saved_grad[seq_id]['fval'])
+                    w[target_indx] += eta * (fval - saved_grad[seq_id][1])
                     w += eta * mu_grad
                     
                 t += 1
                 # clean cached info
                 crf_model.clear_cached_info([seq_id])
+                grad.fill(0)
             w_tilda_p = w
                 
             seqs_cost_vec = [numpy.mean(seqs_loglikelihood_vec[i:i+step_size]) for i in range(0, N, step_size)]
@@ -1276,7 +1280,7 @@ class Learner(object):
             
         line = "---Model training--- end time {} \n".format(datetime.now())
         ReaderWriter.log_progress(line, log_file)
-                
+        ReaderWriter.dump_data(mean_cost_vec, os.path.join(model_dir, 'avg_loglikelihood_training'))
         return(w)     
         
     def _apply_l1_penalty(self, w, q, u, w_indx):
@@ -1288,7 +1292,9 @@ class Learner(object):
                w: weight vector (numpy vector)
                q: total L1 penalty that current weights (corresponding to the features) did receive up to the current time
                u: absolute value of total L1 penalty that each weight could receive up to the current time
-               w_indx: weight indices corresponding to the current feature under update
+               w_indx: weight indices corresponding to the current features under update
+               
+           TODO: vectorize this function
         """
         for indx in w_indx:
             z = w[indx]

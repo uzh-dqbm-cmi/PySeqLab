@@ -154,8 +154,7 @@ class FirstOrderCRF(LCRF):
         potential_matrix = numpy.zeros((M,M), dtype='longdouble')
 
         for y_patt in active_features:
-            f_val = list(active_features[y_patt].values())
-            w_indx = list(active_features[y_patt].keys())
+            w_indx, f_val = active_features[y_patt]
             potential = numpy.dot(w[w_indx], f_val)
             if(Z_len[y_patt] == 1):
                 y_c = Z_elems[y_patt][0]
@@ -276,13 +275,15 @@ class FirstOrderCRF(LCRF):
                 P_marginals[j, Z_codebook[y_patt]] = numpy.exp(accumulator)
         return(P_marginals)
     
-    def compute_feature_expectation(self, seq_id, P_marginals):
+    def compute_feature_expectation(self, seq_id, P_marginals, grad):
         """compute the features expectations (i.e. expected count of the feature based on learned model)
         
            Args:
                seq_id: integer representing unique id assigned to the sequence
                P_marginals: probability matrix for y patterns at each position in time
-            
+               grad: numpy vector with dimension equal to the weight vector. It represents the gradient
+                     that will be computed using the feature expectation and the global features of the sequence
+
            .. note::
             
              - activefeatures (per boundary) dictionary should be available in :attr:`seqs.info`
@@ -290,16 +291,11 @@ class FirstOrderCRF(LCRF):
         """      
         activefeatures = self.seqs_info[seq_id]["activefeatures"]
         Z_codebook = self.model.Z_codebook
-        f_expectation = {}
         for boundary, features_dict in activefeatures.items():
             t = boundary[0]
             for z_patt in features_dict:
-                for w_indx, f_val in features_dict[z_patt].items():
-                    if(w_indx in f_expectation):
-                        f_expectation[w_indx] += f_val * P_marginals[t, Z_codebook[z_patt]]
-                    else:
-                        f_expectation[w_indx] = f_val * P_marginals[t, Z_codebook[z_patt]]
-        return(f_expectation) 
+                w_indx, f_val = features_dict[z_patt]
+                grad[w_indx] += f_val * P_marginals[t, Z_codebook[z_patt]]
             
     def prune_states(self, j, score_mat, beam_size):
         """prune states that fall off the specified beam size
@@ -373,7 +369,6 @@ class FirstOrderCRF(LCRF):
         else:
             # case of inexact search and decoding
             l = {}
-            l['activated_states'] = (seq_id, )
             l['seg_features'] = (seq_id, )
             self.check_cached_info(seq_id, l)
             

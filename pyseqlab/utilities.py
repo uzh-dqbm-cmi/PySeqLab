@@ -8,10 +8,7 @@ from datetime import datetime
 from copy import deepcopy
 from itertools import combinations
 import heapq
-import warnings
 import numpy
-warnings.filterwarnings('error')
-
 
 class SequenceStruct():
     r"""class for representing each sequence/segment
@@ -29,9 +26,9 @@ class SequenceStruct():
            seg_other_symbol: string or None(default), if specified then the task is a segmentation problem 
                              where it represents the non-entity symbol else (None) then it is considered 
                              as sequence labeling problem
-           T: length of a sequence (i.e. len(X))
+           T: int, length of a sequence (i.e. len(X))
            seg_attr: dictionary comprising the extracted attributes per each boundary of a sequence
-           L: longest length of an identified segment in the sequence
+           L: int, longest length of an identified segment in the sequence
            flat_y: list of labels/tags 
            y_sboundaries: sorted list of boundaries of the :attr:`Y` of the sequence
            y_range: range of the sequence
@@ -87,9 +84,9 @@ class SequenceStruct():
                          representing the labels of the elements in X
                        - **non_entity_symbol** which represents the Other category (i.e. non entity element which is 'O' in above example)
            
-           Example::
+           Example:
            
-               Y after the transformation becomes {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
+               Y after the transformation becomes ``{(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}``
         """
         try:
             Y_ref, non_entity_symb = elmtup
@@ -168,11 +165,11 @@ class SequenceStruct():
         r"""flatten the :attr:`Y` attribute 
         
            Args:
-               Y: dictionary of this form {(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}
+               Y: dictionary of this form ``{(1, 1): 'P', (2,2): 'O', (3, 3): 'O', (4, 5): 'L'}``
            
-           Example::
+           Example:
                
-               flattened y becomes ['P','O','O','L','L']
+               flattened y becomes ``['P','O','O','L','L']``
         """
         s_boundaries = sorted(Y)
         flat_y = []
@@ -193,10 +190,9 @@ class SequenceStruct():
         return(boundaries)
     
     def __str__(self):
-        """print parsed sequences"""
-        print("Y sequence: \n {}".format(self.flat_y))
-        print("X sequence: \n {}".format(self.X))
-        print("_"*40)
+        """return string representation of the parsed sequence"""
+        out_str = "Y sequence:\n {}\nX sequence:\n {}\n{}".format(self.flat_y, self.X, "-"*40)
+        return(out_str)
             
 class DataFileParser():
     """class to parse a data file comprising the training/testing data
@@ -229,9 +225,10 @@ class DataFileParser():
             Keyword Arguments:
                 y_ref: boolean specifying if the reference label column in the data file
                 seg_other_sybmol: string or None(default), if specified then the task is a segmentation problem 
-                                  where it represents the non-entity symbol else (None) then it is considered 
-                                  as sequence labeling problem
-                column_sep: separator used between the columns in the file
+                                  where `seg_other_symbol` represents the non-entity symbol. In this case semi-CRF models
+                                  are used. Else (i.e. `seg_other_symbol` is not None) then it is considered 
+                                  as sequence labeling problem.
+                column_sep: string, separator used between the columns in the file
 
         """
         if(y_ref):
@@ -566,15 +563,15 @@ class HO_AStarSearcher(object):
        
        Args:
           P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
-                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+                          e.g. ``{0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}``
           P_elems: dictionary comprising the composing elements of every prefix in the `P` set
-                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+                   e.g. ``{'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}``
 
        Attributes:
           P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
-                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+                          e.g. ``{0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}``
           P_elems: dictionary comprising the composing elements of every prefix in the `P` set
-                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+                   e.g. ``{'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}``
     """
     def __init__(self, P_codebook_rev, P_elems):
         self.P_codebook_rev = P_codebook_rev
@@ -699,15 +696,15 @@ class HOSemi_AStarSearcher(object):
        
        Args:
           P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
-                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+                          e.g. ``{0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}``
           P_elems: dictionary comprising the composing elements of every prefix in the `P` set
-                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+                   e.g. ``{'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}``
 
        Attributes:
           P_codebook_rev: reversed codebook of set of proper prefixes in the `P` set
-                          e.g. {0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}
+                          e.g. ``{0:'', 1:'P', 2:'L', 3:'O', 4:'L|O', ...}``
           P_elems: dictionary comprising the composing elements of every prefix in the `P` set
-                   e.g. {'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}
+                   e.g. ``{'':('',), 'P':('P',), 'L':('L',), 'O':('O',), 'L|O':('L','O'), ...}``
     """
     def __init__(self, P_codebook_rev, pi_elems):
         self.P_codebook_rev = P_codebook_rev
@@ -859,7 +856,7 @@ class TemplateGenerator(object):
                
            Example:
            
-               suppose we have `word` attribute reference by 'w' and we need to use the current word
+               suppose we have `word` attribute referenced by 'w' and we need to use the current word
                with the current label (i.e. unigram of words with the current label) in a range of (0,1)
             
                ::
@@ -1195,8 +1192,10 @@ def vectorized_logsumexp(vec):
     return(max_a)
 
 
-def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class=None):
-    """to update/regenerate CRF models using the save parts/components
+def generate_updated_model(modelparts_dir, modelrepr_class,  
+                           model_class, aextractor_class, 
+                           fextractor_class, seqrepresenter_class, ascaler_class=None):
+    """update/regenerate CRF models using the saved parts/components
     
        Args:
            modelparts_dir: string representing the directory where model parts are saved
@@ -1207,6 +1206,13 @@ def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextra
            fextractor_class: name of the feature extractor class used such as :class:`HOFeatureExtractor`
            seqrepresenter_class: name of the sequence representer class such as :class:`SeqsRepresenter`
            ascaler_class: name of the attribute scaler class such as :class:`AttributeScaler`
+           
+       .. note::
+       
+          This function is equivalent to :func:`generate_trained_model` function. However, this function
+          uses explicit specification of the arguments (i.e. specifying explicitly the classes to be used)
+       
+           
     """
     
     ycodebook = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_Ycodebook"))
@@ -1244,6 +1250,60 @@ def generate_updated_model(modelparts_dir, modelrepr_class,  model_class, aextra
     new_crfmodel = model_class(new_mrepr, new_seqrepr, {})
     new_crfmodel.weights = ReaderWriter.read_data(os.path.join(modelparts_dir, "weights"))
     return(new_crfmodel)
+
+def generate_trained_model(modelparts_dir, aextractor_class):
+    """regenerate trained CRF models using the saved trained model parts/components
+    
+       Args:
+           modelparts_dir: string representing the directory where model parts are saved
+           aextractor_class: name of the attribute extractor class such as :class:`NERSegmentAttributeExtractor`
+
+    """
+    # parse the class description file
+    class_desc = []
+    with open(os.path.join(modelparts_dir, 'class_desc.txt'), 'r') as f:
+        for line in f:
+            class_desc.append(line.strip())
+
+    from pyseqlab.features_extraction import HOFeatureExtractor, FOFeatureExtractor, SeqsRepresenter
+    seqrepresenter_class = SeqsRepresenter
+    if(class_desc[1] == 'HOCRFAD'):
+        from pyseqlab.ho_crf_ad import HOCRFAD, HOCRFADModelRepresentation
+        modelrepr_class = HOCRFADModelRepresentation
+        model_class = HOCRFAD
+        fextractor_class = HOFeatureExtractor
+    elif(class_desc[1] == 'HOCRF'):
+        from pyseqlab.ho_crf import HOCRF, HOCRFModelRepresentation
+        modelrepr_class = HOCRFModelRepresentation
+        model_class = HOCRF
+        fextractor_class = HOFeatureExtractor
+    elif(class_desc[1] == 'HOSemiCRFAD'):
+        from pyseqlab.hosemi_crf_ad import HOSemiCRFAD, HOSemiCRFADModelRepresentation
+        modelrepr_class = HOSemiCRFADModelRepresentation
+        model_class = HOSemiCRFAD
+        fextractor_class = HOFeatureExtractor
+    elif(class_desc[1] == 'HOSemiCRF'):
+        from pyseqlab.hosemi_crf import HOSemiCRF, HOSemiCRFModelRepresentation
+        modelrepr_class = HOSemiCRFModelRepresentation
+        model_class = HOSemiCRF
+        fextractor_class = HOFeatureExtractor
+    elif(class_desc[1] == 'FirstOrderCRF'):
+        from pyseqlab.fo_crf import FirstOrderCRF, FirstOrderCRFModelRepresentation
+        modelrepr_class = FirstOrderCRFModelRepresentation
+        model_class = FirstOrderCRF
+        fextractor_class = FOFeatureExtractor
+    
+    # generate attribute scaler if applicable
+    if(class_desc[-1] != 'None'):
+        from pyseqlab.attributes_extraction import AttributeScaler
+        ascaler_class = AttributeScaler
+    else:
+        ascaler_class = None
+
+    trained_model = generate_updated_model(modelparts_dir, modelrepr_class, model_class,
+                                           aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class)
+
+    return(trained_model)
 
 
 def split_data(seqs_id, options):
@@ -1403,22 +1463,18 @@ def nested_cv(seqs_id, outer_kfold, inner_kfold):
 def get_conll00():
     current_dir = os.path.dirname(os.path.realpath(__file__))
     root_dir = os.path.dirname(current_dir)
-    parser = DataFileParser()
     files_info = {'train_short_main.txt':('main', True, " "), 
                   'train_short_none.txt':(('w','pos'), True, " "),
-                  'train_short_per_sequence.txt':('per_sequence', True, " "),
-                  'train_short_noref.txt':(('w', 'pos'), False, "\t")
+                  'train_short_per_sequence.txt':('per_sequence', True, " ")
                   }
     for file_name in files_info:
+        parser = DataFileParser()
+        print(file_name)
         file_path = os.path.join(root_dir, "tests", "dataset","conll00",file_name)
-        parser.read_file(file_path, header=files_info[file_name][0], y_ref = files_info[file_name][1], column_sep=files_info[file_name][2])
-        parser.print_seqs()
-        print("*"*40)
-        parser.seqs = []
-        parser.header = []
-
+        for seq in parser.read_file(file_path, header=files_info[file_name][0], y_ref = files_info[file_name][1], column_sep=files_info[file_name][2]):
+            print(seq)
     
 if __name__ == "__main__":
     pass
-#     get_conll00()
+    #get_conll00()
 

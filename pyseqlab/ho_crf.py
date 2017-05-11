@@ -180,9 +180,8 @@ class HOCRF(HOCRFAD):
         b_potential = numpy.zeros(len(ysk_codebook))
         # to consider caching the w_indx and fval as in cached_pf
         for z in active_features:
-            w_indx = list(active_features[z].keys())
-            f_val = list(active_features[z].values())
-            potential = numpy.inner(w[w_indx], f_val)
+            w_indx, f_val = active_features[z]
+            potential = numpy.dot(w[w_indx], f_val)
             # get all ysk's in coded format where z maintains a prefix relation with them
             ysk_c_list = z_ysk[z]
             b_potential[ysk_c_list] += potential
@@ -220,7 +219,7 @@ class HOCRF(HOCRFAD):
                     
         return(beta)
     
-    def compute_seq_gradient(self, w, seq_id):
+    def compute_seq_gradient(self, w, seq_id, grad):
         """sequence gradient computation
         
            .. warning::

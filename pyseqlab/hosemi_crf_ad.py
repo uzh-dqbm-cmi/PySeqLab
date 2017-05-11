@@ -136,11 +136,12 @@ class HOSemiCRFADModelRepresentation(LCRFModelRepresentation):
         P_codebook = self.P_codebook
         P_numchar = self.P_numchar
         Z_numchar = self.Z_numchar
-
-        pk_y= {}
-        for p in P_codebook:
-            for y in Y_codebook:
-                pk_y[(p, y)] = 1
+        
+#         pk_y= {}
+#         for p in P_codebook:
+#             for y in Y_codebook:
+#                 pk_y[(p, y)] = 1
+        pk_y = {(p,y) for p in P_codebook for y in Y_codebook}
 
         pk_y_suffix = {}
         for p in P_codebook:
@@ -250,10 +251,14 @@ class HOSemiCRFADModelRepresentation(LCRFModelRepresentation):
         P_codebook = self.P_codebook
         pi_pky_map = {}
         for pi in f_transition:
-            pi_pky_map[pi]=([],[])
+            pi_pky_map[pi]=[[],[]]
             for pky, (pk, __) in f_transition[pi].items():
                 pi_pky_map[pi][0].append(pky_codebook[pky])
                 pi_pky_map[pi][1].append(P_codebook[pk])
+            # convert list to numpy arrays
+#             for i in range(2):
+#                 pi_pky_map[pi][i] = numpy.array(pi_pky_map[pi][i])
+#             pi_pky_map[pi] = tuple(pi_pky_map[pi])
 
         return(pi_pky_map)
     
@@ -344,8 +349,7 @@ class HOSemiCRFAD(LCRF):
 
         # to consider caching the w_indx and fval as in cached_pf
         for z in active_features:
-            w_indx = list(active_features[z].keys())
-            f_val = list(active_features[z].values())
+            w_indx, f_val = active_features[z]
             potential = numpy.dot(w[w_indx], f_val)
             # get all pky's in coded format where z maintains a suffix relation with them
             pky_c_list = z_pky_map[z]
@@ -485,12 +489,14 @@ class HOSemiCRFAD(LCRF):
         
         return(P_marginals)
     
-    def compute_feature_expectation(self, seq_id, P_marginals):
+    def compute_feature_expectation(self, seq_id, P_marginals, grad):
         """compute the features expectations (i.e. expected count of the feature based on learned model)
         
            Args:
                seq_id: integer representing unique id assigned to the sequence
                P_marginals: probability matrix for y patterns at each position in time
+               grad: numpy vector with dimension equal to the weight vector. It represents the gradient
+                     that will be computed using the feature expectation and the global features of the sequence
             
            .. note::
             
@@ -499,18 +505,13 @@ class HOSemiCRFAD(LCRF):
         """        
         activefeatures = self.seqs_info[seq_id]["activefeatures"]
         Z_codebook = self.model.Z_codebook
-        f_expectation = {}
         for boundary, features_dict in activefeatures.items():
             u, v = boundary
             d = v-u
             for z_patt in features_dict:
-                for w_indx, f_val in features_dict[z_patt].items():
-                    if(w_indx in f_expectation):
-                        f_expectation[w_indx] += f_val * P_marginals[d, u, Z_codebook[z_patt]]
-                    else:
-                        f_expectation[w_indx] = f_val * P_marginals[d, u, Z_codebook[z_patt]]
-        return(f_expectation)      
-       
+                w_indx, f_val = features_dict[z_patt]
+                grad[w_indx] += f_val * P_marginals[d, u, Z_codebook[z_patt]]
+                      
     def prune_states(self, score_vec, beam_size):
         """prune states that fall off the specified beam size
         
@@ -558,12 +559,12 @@ class HOSemiCRFAD(LCRF):
         T = self.seqs_info[seq_id]["T"]
         # records max score at every time step
         delta = numpy.ones((T+1,len(P_codebook)), dtype='longdouble') * (-numpy.inf)
+        pi_mat = numpy.ones((len_P, L), dtype='longdouble')* (-numpy.inf)
         # the score for the empty sequence at time 0 is 1
         delta[0, P_codebook[""]] = 0
         back_track = {}
         # records where violation occurs -- it is 1-based indexing 
         viol_index = []
-        
         if(beam_size == num_states):
             # case of exact search and decoding
             l = {}
@@ -571,7 +572,8 @@ class HOSemiCRFAD(LCRF):
             self.check_cached_info(seq_id, l)
             active_features = self.seqs_info[seq_id]['activefeatures']
             for j in range(1, T+1):
-                pi_mat = numpy.zeros((len_P, L), dtype='longdouble')
+                # reset pi_mat at every loop
+                pi_mat.fill(-numpy.inf)
                 backpointer = {}
                 for d in range(L):
                     u = j-d
@@ -585,6 +587,9 @@ class HOSemiCRFAD(LCRF):
                         pi_c = P_codebook[pi]
                         pky_c_list, pk_c_list = pi_pky_map[pi]
                         vec = f_potential[pky_c_list] + delta[u-1, pk_c_list]
+#                         print("f_potential[pky_c_list] ", f_potential[pky_c_list])
+#                         print("delta[u-1, pk_c_list] ", delta[u-1, pk_c_list])
+#                         print("vec ", vec)
                         pi_mat[pi_c, d] = numpy.max(vec)
                         argmax_indx = numpy.argmax(vec)
                         #print("argmax chosen ", argmax_ind)
@@ -593,17 +598,31 @@ class HOSemiCRFAD(LCRF):
                         pk = P_codebook_rev[pk_c_max]
                         y = P_elems[pk][-1]
                         backpointer[d, pi_c] =  (pk_c_max, y)
-            
+#                 print("backpointer  ")
+#                 print(backpointer)
+#                 print("pi_mat")
+#                 print(pi_mat)
+                # get the max for each pi across all segment lengths
+                for pi in pi_pky_map:
+                    pi_c = P_codebook[pi]
+                    delta[j, pi_c] = numpy.max(pi_mat[pi_c, :])
+                    argmax_indx = numpy.argmax(pi_mat[pi_c, :])     
+                    pk_c, y = backpointer[argmax_indx, pi_c] 
+                    back_track[j, pi_c] = (argmax_indx, pk_c, y)
+#             print("delta ")
+#             print(delta)
+#             print("backtrack ")
+#             print(back_track)
         else:
             # case of inexact search and decoding
             l = {}
-            l['activated_states'] = (seq_id, )
             l['seg_features'] = (seq_id, )
             self.check_cached_info(seq_id, l)
             # tracks active states by boundary
             accum_activestates = {}
             for j in range(1, T+1):
-                pi_mat = numpy.zeros((len_P, L), dtype='longdouble')
+                # reset pi_mat at every loop
+                pi_mat.fill(-numpy.inf)
                 backpointer = {}
                 for d in range(L):
                     u = j-d

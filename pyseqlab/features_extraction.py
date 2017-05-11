@@ -41,7 +41,20 @@ class FeatureExtractor(object):
         self.template_X = templateX
         self.template_Y = templateY
         self.attr_desc = attr_desc
-
+        self.attr_represent_func = self.attr_represent_funcmapper()
+    
+    def attr_represent_funcmapper(self):
+        """assign a representation function based on the encoding (i.e. categorical or continuous) of each attribute name
+        """
+        attr_represent_func = {}
+        attr_desc = self.attr_desc
+        for attr_name in attr_desc:
+            if(attr_desc[attr_name]["encoding"] == "categorical"):
+                attr_represent_func[attr_name] = self._represent_categorical_attr
+            else:
+                attr_represent_func[attr_name] = self._represent_continuous_attr
+        return(attr_represent_func)
+    
     @property
     def template_X(self):
         return self._template_X
@@ -154,7 +167,6 @@ class FeatureExtractor(object):
             #print("boundary {}".format(boundary))
             #print("y_feat {}".format(y_feat))
             #print("xy_feat {}".format(xy_feat))
-            #TOUPDATEEEEE
             for offset_tup_y in y_feat:
                 for y_patt in y_feat[offset_tup_y]:
                     if(y_patt in xy_feat):
@@ -164,14 +176,13 @@ class FeatureExtractor(object):
             features[boundary] = xy_feat
 #             #print("features {}".format(features[boundary]))
 #             #print("*"*40)
-                
         return(features)
 
     
     def aggregate_seq_features(self, features, boundaries):
         """aggregate features across all boundaries
         
-           it is usually used to aggregate features in the dictionary obtainted from
+           it is usually used to aggregate features in the dictionary obtained from
            :func:`extract_seq_features_perboundary()` function
            
            Args:
@@ -206,6 +217,8 @@ class FeatureExtractor(object):
                           It has the form: {Y: tuple(y_offsets)}  
                           e.g. ``{'Y': ((0,), (-1,0), (-2,-1,0))}``
         """
+        # to remove y_range and substitute it by checking if pos is within 0 and seq.T
+        
         template_Y = templateY['Y']
 
         if(template_Y):
@@ -255,7 +268,6 @@ class FeatureExtractor(object):
         """
         # get template X
         template_X = self.template_X
-        attr_desc = self.attr_desc
         x_featurenames = self.x_featurenames
         # current boundary begin and end
         u, v = boundary
@@ -263,13 +275,10 @@ class FeatureExtractor(object):
 #         #print("positions {}".format(positions))
         seg_features = {}
         for attr_name in template_X:
+            attr_represent_func = self.attr_represent_func[attr_name]
 #             #print("attr_name {}".format(attr_name))
             # check the type of attribute
-            if(attr_desc[attr_name]["encoding"] == "categorical"):
-                represent_attr = self._represent_categorical_attr
-            else:
-                represent_attr = self._represent_continuous_attr
-            
+            # to use instead a function mapper -- check the init method     
             feat_template = {}
             for offset_tup_x in template_X[attr_name]:
                 attributes = []
@@ -291,7 +300,7 @@ class FeatureExtractor(object):
                         break
                 if(attributes):
 #                     feat_template[offset_tup_x] = represent_attr(attributes, feature_name)
-                    feat_template[offset_tup_x] = represent_attr(attributes, x_featurenames[attr_name][offset_tup_x])
+                    feat_template[offset_tup_x] = attr_represent_func(attributes, x_featurenames[attr_name][offset_tup_x])
             seg_features[attr_name] = feat_template
 #         
 #         #print("X"*40)
@@ -344,7 +353,7 @@ class FeatureExtractor(object):
                             if(y_patt in xy_features):
                                 xy_features[y_patt].update(seg_feat_template[offset_tup_x])
                             else:
-                                xy_features[y_patt] = seg_feat_template[offset_tup_x]
+                                xy_features[y_patt] = dict(seg_feat_template[offset_tup_x])
 #                         #print("xy_features {}".format(xy_features))
         return(xy_features)
     
@@ -358,7 +367,6 @@ class FeatureExtractor(object):
         """
         # get template X
         template_X = self.template_X
-        attr_desc = self.attr_desc
         x_featurenames = self.x_featurenames
         # current boundary begin and end
         u = boundary[0]
@@ -369,11 +377,8 @@ class FeatureExtractor(object):
         for attr_name in template_X:
 #             #print("attr_name {}".format(attr_name))
             # check the type of attribute
-            if(attr_desc[attr_name]["encoding"] == "categorical"):
-                represent_attr = self._represent_categorical_attr
-            else:
-                represent_attr = self._represent_continuous_attr
-            
+            attr_represent_func = self.attr_represent_func[attr_name]        
+            # the offset_tup_x is sorted tuple -- this is helpful in case of out of boundary tuples    
             for offset_tup_x in template_X[attr_name]:
                 attributes = []
 #                 feature_name = '|'.join(['{}[{}]'.format(attr_name, offset_x) for offset_x in offset_tup_x])
@@ -395,7 +400,7 @@ class FeatureExtractor(object):
                         attributes = []
                         break
                 if(attributes):
-                    seg_features.update(represent_attr(attributes, x_featurenames[attr_name][offset_tup_x]))
+                    seg_features.update(attr_represent_func(attributes, x_featurenames[attr_name][offset_tup_x]))
 
 #         #print("seg_features lookup {}".format(seg_features))
         return(seg_features)
@@ -426,11 +431,6 @@ class FeatureExtractor(object):
         # segment length
         L = model.L
         T = seq.T
-        # maximum pattern length 
-        max_patt_len = model.max_patt_len
-        patts_len = model.patts_len
-        ypatt_activestates = model.ypatt_activestates
-        activated_states = {}
         seg_features = {}
         l_segfeatures = {}
             
@@ -443,38 +443,14 @@ class FeatureExtractor(object):
                 # end boundary
                 v = j
                 boundary = (u, v)
-                
-                if(u < max_patt_len):
-                    max_len = u
-                else:
-                    max_len = max_patt_len
-                    
-                allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
-                
                 # used in the case of model training
                 if(learning):
                     l_segfeatures[boundary] = self.extract_features_X(seq, boundary)
                     seg_features[boundary] = self.flatten_segfeatures(l_segfeatures[boundary])
                 else:
                     seg_features[boundary] = self.lookup_features_X(seq, boundary)
-                    
-                activated_states[boundary] = model.find_activated_states(seg_features[boundary], allowed_z_len)
-                #^print("allowed_z_len ", allowed_z_len)
-                #^print("seg_features ", seg_features)
-                #^print("activated_states ", activated_states)
-                if(ypatt_activestates):
-                    ypatt_activated_states = {z_len:ypatt_activestates[z_len] for z_len in allowed_z_len if z_len in ypatt_activestates}
-                    #^print("ypatt_activated_states ", ypatt_activated_states)
-                    for zlen, ypatts in ypatt_activated_states.items():
-                        if(zlen in activated_states[boundary]):
-                            activated_states[boundary][zlen].update(ypatts)
-                        else:
-                            activated_states[boundary][zlen] = set(ypatts) 
-                #^print("activated_states ", activated_states)
-        #^print("activated_states from feature_extractor ", activated_states)
-        #^print("seg_features from feature_extractor ", seg_features)
 
-        return(activated_states, seg_features, l_segfeatures)
+        return(seg_features, l_segfeatures)
     
     
     ########################################################
@@ -613,77 +589,7 @@ class FOFeatureExtractor(FeatureExtractor):
         else:
             y_patt_features = {'Y':{}}
 
-        return(y_patt_features)
-    
-        
-    def lookup_seq_modelactivefeatures(self, seq, model, learning=False):
-        """lookup/search model active features for a given sequence using varying boundaries (i.e. g(X, u, v))
-           
-           Args:
-               seq: a sequence instance of :class:`SequenceStruct`
-               model: a model representation instance of the CRF class (i.e. the class having `ModelRepresentation` suffix)
-            
-           Keyword Arguments:
-               learning: optional boolean indicating if this function is used wile learning model parameters
-        """
-        # segment length
-        L = model.L
-        T = seq.T
-        # maximum pattern length 
-        max_patt_len = model.max_patt_len
-        patts_len = model.patts_len
-        ypatt_activestates = model.ypatt_activestates
-        startstate_flag = self.start_state
-        
-        activated_states = {}
-        seg_features = {}
-        l_segfeatures = {}
-            
-        for j in range(1, T+1):
-            for d in range(L):
-                if(j-d <= 0):
-                    break
-                # start boundary
-                u = j-d
-                # end boundary
-                v = j
-                boundary = (u, v)
-                
-                if(u < max_patt_len):
-                    if(startstate_flag):
-                        max_len = max_patt_len
-                    else:
-                        max_len = u
-                else:
-                    max_len = max_patt_len
-                    
-                allowed_z_len = {z_len for z_len in patts_len if z_len <= max_len}
-                
-                # used while learning model parameters
-                if(learning):
-                    l_segfeatures[boundary] = self.extract_features_X(seq, boundary)
-                    seg_features[boundary] = self.flatten_segfeatures(l_segfeatures[boundary])
-                else:
-                    seg_features[boundary] = self.lookup_features_X(seq, boundary)
-                    
-                activated_states[boundary] = model.find_activated_states(seg_features[boundary], allowed_z_len)
-                #^print("allowed_z_len ", allowed_z_len)
-                #^print("seg_features ", seg_features)
-                #^print("activated_states ", activated_states)
-                if(ypatt_activestates):
-                    ypatt_activated_states = {z_len:ypatt_activestates[z_len] for z_len in allowed_z_len if z_len in ypatt_activestates}
-                    #^print("ypatt_activated_states ", ypatt_activated_states)
-                    for zlen, ypatts in ypatt_activated_states.items():
-                        if(zlen in activated_states[boundary]):
-                            activated_states[boundary][zlen].update(ypatts)
-                        else:
-                            activated_states[boundary][zlen] = set(ypatts) 
-                #^print("activated_states ", activated_states)
-        #^print("activated_states from feature_extractor ", activated_states)
-        #^print("seg_features from feature_extractor ", seg_features)
-
-        return(activated_states, seg_features, l_segfeatures)
-        
+        return(y_patt_features)        
 
 class SeqsRepresenter(object):
     """Sequence representer class that prepares, pre-process and transform sequences for learning/decoding tasks
@@ -727,7 +633,7 @@ class SeqsRepresenter(object):
                           each sequence is an instance of the :class:`SequenceStruct` class
                corpus_name: string specifying the name of the corpus that will be used as corpus folder name
                working_dir: string representing the directory where the parsing and saving info on disk will occur
-               unique_id: boolean indicating if the generated root folder will include a generated id
+               unique_id: boolean indicating if the generated corpus folder will include a generated id
                
            Return:
                seqs_info (dictionary): dictionary comprising the the info about the prepared sequences
@@ -876,7 +782,7 @@ class SeqsRepresenter(object):
                 attr_scaler.scale_continuous_attributes(seq, boundaries)
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
 
-    def extract_seqs_globalfeatures(self, seqs_id, seqs_info):
+    def extract_seqs_globalfeatures(self, seqs_id, seqs_info, perc_training=False):
         r"""extract globalfeatures (i.e. F(X,Y)) from every sequence
         
             Main task:
@@ -897,6 +803,7 @@ class SeqsRepresenter(object):
         feature_extractor = self.feature_extractor
         
         start_time = datetime.now()
+        counter = 0 
         for seq_id in seqs_id:
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"), mode = "rb")
@@ -907,8 +814,10 @@ class SeqsRepresenter(object):
             gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, y_boundaries)                 
             # store the features' sum (i.e. F_j(X,Y) for every sequence on disk)
             ReaderWriter.dump_data(gfeatures, os.path.join(seq_dir, "globalfeatures"))
-            ReaderWriter.dump_data(gfeatures_perboundary, os.path.join(seq_dir, "globalfeatures_per_boundary"))
-            print("dumping seq with id ", seq_id)
+            if(perc_training):
+                ReaderWriter.dump_data(gfeatures_perboundary, os.path.join(seq_dir, "globalfeatures_per_boundary"))
+            counter+=1
+            print("dumping globalfeatures -- processed seqs: ", counter)
 
         end_time = datetime.now()
         
@@ -953,7 +862,7 @@ class SeqsRepresenter(object):
         modelfeatures = {}
         # length of default entity in a segment
         L = 1
-        
+        counter = 0
         start_time = datetime.now()
         for seq_id in seqs_id:
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
@@ -972,8 +881,9 @@ class SeqsRepresenter(object):
                 # record all encountered states/labels
                 parts = y_patt.split("|")
                 for state in parts:
-                    Y_states[state] = 1       
-                   
+                    Y_states[state] = 1 
+            counter+=1      
+            print("constructing model -- processed seqs: ", counter)
         # apply a filter 
         if(filter_obj):
             # this will trim unwanted features from modelfeatures dictionary
@@ -1033,22 +943,22 @@ class SeqsRepresenter(object):
         output_dir = create_directory("model_activefeatures_{}".format(output_foldername), root_dir)
         L = model.L
         f_extractor = self.feature_extractor
-         
+        counter = 0
         start_time = datetime.now()
         for seq_id in seqs_id:
+            counter += 1
             # lookup active features for the current sequence and store them on disk
-            print("looking for model active features for seq {}".format(seq_id))
+            print("identifying model active features -- processed seqs: ", counter)
             seq_dir = seqs_info[seq_id]["globalfeatures_dir"]
             seq = ReaderWriter.read_data(os.path.join(seq_dir, "sequence"))
             if(L > 1):
                 self._lookup_seq_attributes(seq, L)
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
-            activated_states, seg_features, l_segfeatures = f_extractor.lookup_seq_modelactivefeatures(seq, model, learning=learning)
+            seg_features, l_segfeatures = f_extractor.lookup_seq_modelactivefeatures(seq, model, learning=learning)
 
             # dump model active features data
             activefeatures_dir = create_directory("seq_{}".format(seq_id), output_dir)
             seqs_info[seq_id]["activefeatures_dir"] = activefeatures_dir
-            ReaderWriter.dump_data(activated_states, os.path.join(activefeatures_dir, "activated_states"))
             ReaderWriter.dump_data(seg_features, os.path.join(activefeatures_dir, "seg_features"))
             # to add condition regarding learning
             ReaderWriter.dump_data(l_segfeatures, os.path.join(activefeatures_dir, "l_segfeatures"))
@@ -1172,9 +1082,16 @@ class SeqsRepresenter(object):
         if(per_boundary):
             fname = "globalfeatures_per_boundary"
         else:
-            fname = "globalfeatures"
-        gfeatures = ReaderWriter.read_data(os.path.join(seq_dir, fname))
-        return(gfeatures)
+            fname = "globalfeatures_repr"
+        try:
+            exception_fired = False
+            gfeatures = ReaderWriter.read_data(os.path.join(seq_dir, fname))
+        except FileNotFoundError:
+            # read the saved globalfeatures on disk
+            gfeatures = ReaderWriter.read_data(os.path.join(seq_dir, "globalfeatures"))
+            exception_fired = True
+        finally:
+            return(gfeatures, exception_fired)
     
     def aggregate_gfeatures(self, gfeatures, boundaries):
         """aggregate global features using specified list of boundaries
