@@ -782,7 +782,7 @@ class SeqsRepresenter(object):
                 attr_scaler.scale_continuous_attributes(seq, boundaries)
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
 
-    def extract_seqs_globalfeatures(self, seqs_id, seqs_info):
+    def extract_seqs_globalfeatures(self, seqs_id, seqs_info, perc_training=False):
         r"""extract globalfeatures (i.e. F(X,Y)) from every sequence
         
             Main task:
@@ -814,7 +814,8 @@ class SeqsRepresenter(object):
             gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, y_boundaries)                 
             # store the features' sum (i.e. F_j(X,Y) for every sequence on disk)
             ReaderWriter.dump_data(gfeatures, os.path.join(seq_dir, "globalfeatures"))
-            ReaderWriter.dump_data(gfeatures_perboundary, os.path.join(seq_dir, "globalfeatures_per_boundary"))
+            if(perc_training):
+                ReaderWriter.dump_data(gfeatures_perboundary, os.path.join(seq_dir, "globalfeatures_per_boundary"))
             counter+=1
             print("dumping globalfeatures -- processed seqs: ", counter)
 

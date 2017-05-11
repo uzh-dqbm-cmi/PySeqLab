@@ -171,13 +171,6 @@ def run_training(model_type, trainconfig, optimization_options):
     dsplit_options = {'method':"none"}
     return(train_crfs(model_type, optimization_options, dsplit_options, trainconfig))
 
-def run_lbfgs(model_type, trainconfig):
-    optimization_options = {'method': "L-BFGS-B",
-                            'regularization_type': 'l2',
-                            'regularization_value': 0
-                            }
-    dsplit_options = {'method':"none"}
-    return(train_crfs(model_type, optimization_options, dsplit_options, trainconfig))
 
 def run_perceptron(model_type, trainconfig):
     optimization_options = {"method" : "COLLINS-PERCEPTRON",
@@ -186,24 +179,6 @@ def run_perceptron(model_type, trainconfig):
                             'beam_size':-1,
                             'shuffle_seq':False,
                             'avg_scheme':'avg_error',
-                            "tolerance":1e-16
-                            }
-    dsplit_options = {'method':"none"}
-    return(train_crfs(model_type, optimization_options, dsplit_options, trainconfig))
-
-def run_sga_classic(model_type, trainconfig):
-    optimization_options = {"method" : "SGA",
-                            "num_epochs":15,
-                            "regularization_value":1,
-                            "tolerance":1e-16
-                            }
-    dsplit_options = {'method':"none"}
-    return(train_crfs(model_type, optimization_options, dsplit_options, trainconfig))
-
-def run_svrg(model_type, trainconfig):
-    optimization_options = {"method" : "SVRG",
-                            "num_epochs":10,
-                            "regularization_value":1,
                             "tolerance":1e-16
                             }
     dsplit_options = {'method':"none"}

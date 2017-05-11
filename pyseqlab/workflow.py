@@ -65,7 +65,10 @@ class TrainingWorkflow(object):
         seq_representer.preprocess_attributes(seqs_id, seqs_info, method = scaling_method)
         
         # extract global features F(X,Y)
-        seq_representer.extract_seqs_globalfeatures(seqs_id, seqs_info)
+        percep_training = False
+        if(self.optimization_options['method'] in {"COLLINS-PERCEPTRON", "SAPO"}):
+            percep_training = True
+        seq_representer.extract_seqs_globalfeatures(seqs_id, seqs_info, percep_training)
         
         # save the link to seqs_info and seq_representer as instance variables
         self.seqs_info = seqs_info
@@ -297,7 +300,10 @@ class TrainingWorkflowIterative(object):
         seq_representer.preprocess_attributes(seqs_id, seqs_info, method = scaling_method)
         
         # extract global features F(X,Y)
-        seq_representer.extract_seqs_globalfeatures(seqs_id, seqs_info)
+        percep_training = False
+        if(self.optimization_options['method'] in {"COLLINS-PERCEPTRON", "SAPO"}):
+            percep_training = True
+        seq_representer.extract_seqs_globalfeatures(seqs_id, seqs_info, percep_training)
         
         # save the link to seqs_info and seq_representer as instance variables
         self.seqs_info = seqs_info

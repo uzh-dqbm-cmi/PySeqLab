@@ -716,8 +716,8 @@ class LCRF(object):
         grad[target_indx] *= -1
         grad[gwindx] += gfval
         # update target_indx
-        #target_indx = numpy.unique(numpy.concatenate((target_indx, gwindx)))
-        target_indx = numpy.where(grad!=0)[0]
+        target_indx = numpy.unique(numpy.concatenate((target_indx, gwindx)))
+        #target_indx = numpy.where(grad!=0)[0]
         return(target_indx)
     
     def compute_seqs_loglikelihood(self, w, seqs_id):

@@ -1287,7 +1287,7 @@ def generate_trained_model(modelparts_dir, aextractor_class):
         modelrepr_class = HOSemiCRFModelRepresentation
         model_class = HOSemiCRF
         fextractor_class = HOFeatureExtractor
-    elif(class_desc[1] == 'FOCRF'):
+    elif(class_desc[1] == 'FirstOrderCRF'):
         from pyseqlab.fo_crf import FirstOrderCRF, FirstOrderCRFModelRepresentation
         modelrepr_class = FirstOrderCRFModelRepresentation
         model_class = FirstOrderCRF
