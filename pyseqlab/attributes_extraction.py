@@ -87,9 +87,7 @@ class GenericAttributeExtractor(object):
        
        Args:
            attr_desc: dictionary defining the atomic observation/attribute names including
-                      the encoding of such attribute (i.e. {continuous, categorical}}
-           seg_attr:  dictionary comprising the extracted attributes per each boundary of a sequence
-    
+                      the encoding of such attribute (i.e. {continuous, categorical}}    
        Attributes:
            attr_desc: dictionary defining the atomic observation/attribute names including
                       the encoding of such attribute (i.e. {continuous, categorical}}
@@ -172,7 +170,6 @@ class NERSegmentAttributeExtractor(GenericAttributeExtractor):
        Args:
            attr_desc: dictionary defining the atomic observation/attribute names including
                       the encoding of such attribute (i.e. {continuous, categorical}}
-           seg_attr:  dictionary comprising the extracted attributes per each boundary of a sequence
     
        Attributes:
            attr_desc: dictionary defining the atomic observation/attribute names including
@@ -181,7 +178,6 @@ class NERSegmentAttributeExtractor(GenericAttributeExtractor):
 
     """
     def __init__(self):
-        #if(not attr_desc):
         attr_desc = self.generate_attributes_desc()
         super().__init__(attr_desc)
     
