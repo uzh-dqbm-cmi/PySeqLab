@@ -183,10 +183,10 @@ class Learner(object):
                 # setting beam size
                 beam_size = optimization_options.get("beam_size")
                 # default beam size
-                default_beam = self.crf_model.beam_size
+                default_beam = len(self.crf_model.model.Y_codebook)
                 if(type(beam_size) != int):
                     beam_size = default_beam
-                elif(beam_size < 0 or beam_size > default_beam):
+                elif(beam_size <= 0 or beam_size > default_beam):
                     beam_size = default_beam
                 optimization_config["beam_size"] = beam_size
                 self.crf_model.beam_size = beam_size
