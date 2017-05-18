@@ -454,7 +454,9 @@ class Learner(object):
         line += "\n \n"
         ReaderWriter.log_progress(line, log_file)
           
-        #print("results \n {}".format(result))
+#         print("results \n {}".format(result))
+        print("success: ", result['success'])
+#         print(result.keys())
  
         # estimated optimal weights
         w_hat = result.x

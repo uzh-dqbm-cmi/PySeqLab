@@ -1,6 +1,8 @@
-PySeqLab package
+pyseqlab package
 ================
 
+Submodules
+----------
 
 pyseqlab.attributes_extraction module
 -------------------------------------
@@ -14,6 +16,14 @@ pyseqlab.crf_learning module
 ----------------------------
 
 .. automodule:: pyseqlab.crf_learning
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pyseqlab.cythonized_utilities module
+------------------------------------
+
+.. automodule:: pyseqlab.cythonized_utilities
     :members:
     :undoc-members:
     :show-inheritance:
@@ -83,9 +93,18 @@ pyseqlab.utilities module
     :show-inheritance:
 
 pyseqlab.workflow module
--------------------------
+------------------------
 
 .. automodule:: pyseqlab.workflow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+Module contents
+---------------
+
+.. automodule:: pyseqlab
     :members:
     :undoc-members:
     :show-inheritance:

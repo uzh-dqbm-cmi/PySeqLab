@@ -1193,7 +1193,7 @@ def vectorized_logsumexp(vec):
 
 
 def generate_updated_model(modelparts_dir, modelrepr_class,  
-                           model_class, aextractor_class, 
+                           model_class, aextractor_obj, 
                            fextractor_class, seqrepresenter_class, ascaler_class=None):
     """update/regenerate CRF models using the saved parts/components
     
@@ -1229,7 +1229,7 @@ def generate_updated_model(modelparts_dir, modelrepr_class,
     new_mrepr.generate_instance_properties()
     
     # generate attribute extractor
-    new_attrextractor = aextractor_class()
+    new_attrextractor = aextractor_obj
 
     # generate feature extractor
     templateX = ReaderWriter.read_data(os.path.join(modelparts_dir, "FE_templateX"))
@@ -1251,7 +1251,7 @@ def generate_updated_model(modelparts_dir, modelrepr_class,
     new_crfmodel.weights = ReaderWriter.read_data(os.path.join(modelparts_dir, "weights"))
     return(new_crfmodel)
 
-def generate_trained_model(modelparts_dir, aextractor_class):
+def generate_trained_model(modelparts_dir, aextractor_obj):
     """regenerate trained CRF models using the saved trained model parts/components
     
        Args:
@@ -1301,7 +1301,7 @@ def generate_trained_model(modelparts_dir, aextractor_class):
         ascaler_class = None
 
     trained_model = generate_updated_model(modelparts_dir, modelrepr_class, model_class,
-                                           aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class)
+                                           aextractor_obj, fextractor_class, seqrepresenter_class, ascaler_class)
 
     return(trained_model)
 
