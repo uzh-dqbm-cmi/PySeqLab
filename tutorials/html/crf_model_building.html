@@ -177,7 +177,7 @@ div#notebook {
 
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[1]:</div>
+<div class="prompt input_prompt">In&nbsp;[5]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># to use for customizing the display/format of the cells</span>
@@ -271,7 +271,7 @@ div#notebook {
 <div class="output">
 
 
-<div class="output_area"><div class="prompt output_prompt">Out[1]:</div>
+<div class="output_area"><div class="prompt output_prompt">Out[5]:</div>
 
 <div class="output_html rendered_html output_subarea output_execute_result">
 
@@ -415,8 +415,8 @@ font-size:0.85em;
 
 </pre><p>We suggest going through the earlier tutorials:</p>
 <ol>
-<li>[sequence_and_input_structure tutorial](./sequence_and_input_structure.html)</li>
-<li>[templates_and_feature_extraction](templates_and_features_extraction.html)</li>
+<li><a href="sequence_and_input_structure.ipynb">sequence_and_input_structure tutorial</a>
+<li><a href="templates_and_features_extraction.ipynb">templates_and_feature_extraction tutorial</a></li>
 </ol><p>before continuing through this notebook. We will use part of the <a href="http://www.cnts.ua.ac.be/conll2000/chunking/">CoNLL 2000 training dataset</a> throughout this tutorial.</p>
 <p>As a <strong><em>reminder</em></strong>, the CoNLL 2000 task states: <blockquote> Given a set of sentences (our sequences) where each sentence is composed of <span style="font-weight:bold;color:green;">words</span> and their corresponding <span style="font-weight:bold;color:green;">part-of-speech</span>, the goal is to predict the <span style="font-weight:bold;color:green;">chunk/shallow parse label</span> of every word in the sentence. </blockquote></p>
 <p>We start by parsing/reading the sentences in the training dataset into sequences.</p>
@@ -426,7 +426,7 @@ font-size:0.85em;
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[2]:</div>
+<div class="prompt input_prompt">In&nbsp;[1]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># importing and defining relevant directories</span>
@@ -588,7 +588,7 @@ Below is another table comprising pointers to papers and literature in which the
 <p><strong>Examples: </strong></p>
 <ul>
 <li><code class="pseq_class">FirstOrderCRF</code> could be used if our training data consists of sequences and we aim to model features that include at most one or two state/label transitions. Moreover, the <code class="pseq_class">FirstOrderCRF</code> naturally supports the 
-inclusion of __START__ state for building models supporting initial labels and transition label features at the starting position of the sequences. For more info about extracting features that include __START__ state, please see the [templates_and_feature_extraction](templates_and_features_extraction.html) tutorial).</li><br/>
+inclusion of __START__ state for building models supporting initial labels and transition label features at the starting position of the sequences. For more info about extracting features that include __START__ state, please see the <a href="templates_and_features_extraction.ipynb">templates_and_feature_extraction tutorial</a>.</li><br/>
 
 <li><code class="pseq_class">HOCRF</code> and <code class="pseq_class">HOCRFAD</code> could be used if our training data consists of sequences and we aim to model features with first order and/or higher-order (i.e. that includes label pattern transitions with more than two states). There are no restrictions on the label patterns when using those models. Additionally, both models are equivalent to <code class="pseq_class">FirstOrderCRF</code> when we model features with first order label patterns without including the __START__ state. However, there is a subtle difference between <code class="pseq_class">HOCRF</code> and <code class="pseq_class">HOCRFAD</code> models, where <code class="pseq_class">HOCRFAD</code> provides a more <em>efficient implementation</em> for the forward-backward algorithm. In addition, the <code class="pseq_class">HOCRFAD</code> supports gradient-based training methods while <code class="pseq_class">HOCRF</code> supports perceptron/search-based training methods (see the training section for more info). Hence, we <strong>suggest</strong> using <code class="pseq_class">HOCRFAD</code> as a primary choice in similar contexts/scenario.</li><br/>
 
@@ -647,7 +647,7 @@ inclusion of __START__ state for building models supporting initial labels and t
 <p><a id="pseq_modelbuild_workflow"></a>
 A typical process for building CRF models starting from the file comprising the training data (i.e. sequences or segments) is described as follows:</p>
 <ol>
-<li> We are given a dataset (i.e. file) comprising sequences or segments (see [sequence_and_input_structure tutorial](./sequence_and_input_structure.html) tutorial for a refresher).</li>
+<li> We are given a dataset (i.e. file) comprising sequences or segments (see <a href="sequence_and_input_structure.ipynb">sequence_and_input_structure tutorial</a> for a refresher).</li>
 <li> We read the file and generate sequences/segments</li>
 <li> We decide on a data split strategy in which we obtain a set of sequences for training CRFs model (training set) and another set of sequences for testing/validating the model (testing/validation set)</li>
 <li> We process the training set (i.e. comprising sequences) and dump them on disk in a relevant format to be later used in the learning framework </li>
@@ -658,9 +658,9 @@ A typical process for building CRF models starting from the file comprising the 
 </ol><p>The listed points represent a common and recurrent workflow in sequence labeling and segmentation problems. For this reason, <a href="https://bitbucket.org/A_2/pyseqlab">PySeqLab</a> provides a <code class="pseq_class">GenericTrainingWorkflow</code> class that takes care of the tasks 1-8, which we aim to further explore in this section.</p>
 <p>But first, we describe the arguments passed to <code class="pseq_class">GenericTrainingWorkflow</code> constructor:</p>
 <ul>
-<li><code class="pseq_attr">aextractor_obj</code>: initialized instance of <code class="pseq_class">GenericAttributeExtractor</code> class/subclass (see attributes extraction in [templates_and_feature_extraction](templates_and_features_extraction.html) tutorial) </li>
-<li><code class="pseq_attr">fextractor_obj</code>: initialized instance of <code class="pseq_class">FeatureExtractor</code> class/subclass (see <code class="pseq_class">FOFeatureExtractor</code> or <code class="pseq_class">HOFeatureExtractor</code> classes in the [templates_and_feature_extraction](templates_and_features_extraction.html) tutorial)</li>
-<li><code class="pseq_attr">feature_filter_obj</code>: <code class="pseq_code" style="color:blue;">None</code> or an initialized instance of <code class="pseq_class">FeatureFilter</code> class (see feature filter section in the [templates_and_feature_extraction](templates_and_features_extraction.html) tutorial)</li>
+<li><code class="pseq_attr">aextractor_obj</code>: initialized instance of <code class="pseq_class">GenericAttributeExtractor</code> class/subclass (see attributes extraction in <a href="templates_and_features_extraction.ipynb">templates_and_feature_extraction tutorial</a>) </li>
+<li><code class="pseq_attr">fextractor_obj</code>: initialized instance of <code class="pseq_class">FeatureExtractor</code> class/subclass (see <code class="pseq_class">FOFeatureExtractor</code> or <code class="pseq_class">HOFeatureExtractor</code> classes in the <a href="templates_and_features_extraction.ipynb">templates_and_feature_extraction tutorial</a>)</li>
+<li><code class="pseq_attr">feature_filter_obj</code>: <code class="pseq_code" style="color:blue;">None</code> or an initialized instance of <code class="pseq_class">FeatureFilter</code> class (see feature filter section in the <a href="templates_and_features_extraction.ipynb">templates_and_feature_extraction tutorial</a>)</li>
 <li><code class="pseq_attr">model_repr_class</code>: the CRFs model representation class (see 2nd column <a href="#pseq_crfmodels_repr_map"> in this table</a> for model representation classes)</li>
 <li><code class="pseq_attr">model_class</code>: the CRFs model class (see 1st column <a href="pseq_crfmodels_repr_map">in this table</a> for model classes)</li>
 <li><code class="pseq_attr">root_dir</code>: string representing the directory/path where working directory will be created</li>
@@ -711,7 +711,7 @@ A typical process for building CRF models starting from the file comprising the 
                options = {'method':'none'
                          }
 
-      To perform weighted sampling (i.e. based on the length of sequences/segments), we need to specify
+      To perform weighted sampling (i.e. based on sequences' length), we need to specify
                - wsample for the `method`
 
                options = {'method':'wsample'
@@ -723,7 +723,7 @@ A typical process for building CRF models starting from the file comprising the 
 <p><strong>Keyword args</strong>:</p>
 <ul><li>
 <a id="pseq_seqfile_option"></a>
-<code class="pseq_args">seq_file</code>: string representing the path to the file comprising the sequences/segments. For this option, we have to specify additionally the following keyword arguments: <ul><li><code class="pseq_args">data_parser_options</code>: a dictionary defining the arguments of the <code class="pseq_method">read_file(args)</code> method in the <code class="pseq_class">DataFileParser</code> class (see [sequence_and_input_structure tutorial](./sequence_and_input_structure.html) for more info about this class).</li>
+<code class="pseq_args">seq_file</code>: string representing the path to the file comprising the sequences/segments. For this option, we have to specify additionally the following keyword arguments: <ul><li><code class="pseq_args">data_parser_options</code>: a dictionary defining the arguments of the <code class="pseq_method">read_file(args)</code> method in the <code class="pseq_class">DataFileParser</code> class (see <a href="sequence_and_input_structure.ipynb">sequence_and_input_structure tutorial</a> for more info about this class).</li>
 <li><code class="pseq_args">num_seqs</code>: the maximum number of sequences to read/parse from a file. By default it is equal to <code class="pseq_code">-1</code>, which will read the whole file</li><br/>
 <strong>Example</strong>:
 <pre style='font-size:0.75em;'>
@@ -1376,10 +1376,10 @@ data_split:  wsample
 <p>After we parsed and generated a <code class="pseq_var">data_split</code> (i.e. decided the sequences to be used for training/building a CRFs model), we can proceed to build our first CRFs model. Using <code class="pseq_method">build_crf_model(args)</code> method, we can generate our CRFs model that will be an instance of <code class="pseq_class">FirstOrderCRF</code> because it was the class we passed to the <code class="pseq_class">GenericTrainingWorkflow</code> constructor. The <code class="pseq_method">build_crf_model(args)</code> takes the following main arguments:</p>
 <ul>
 <li><code class="pseq_args">seqs_id</code>: list of sequence ids referring to the sequences to be used for building the model. These ids are the generated ones after we parsed and prepared the sequences. They are found in the <code class="pseq_var">data_split</code> variable.</li>
-<li><code class="pseq_args">folder_name</code>: string representing the folder name which will be created under the <code class="pseq_code">reference_corpus_date/time</code> directory. It will hold additional processed sequence info generated by the model building process.
+<li><code class="pseq_args">folder_name</code>: string representing the folder name which will be created under the <code class="pseq_code">reference_corpus_date/time</code> directory. It will hold additional processed sequence info generated by the model building process.</li>
 </ul><p>The method will return a CRFs model (<a href="#pseq_buildcrfmodel">see code</a>) that we will later train its parameters (i.e. the weights of the features in the model). Moreover, if we inspect the <code class="pseq_code">reference_corpus_date/time</code> directory, we will notice a new folder having a suffix equal to the <code class="pseq_args">folder_name</code> we specified. More importantly, if we check <code class="pseq_code">log.txt</code> in <code class="pseq_code">global_features</code> folder, we will see the generated log for the number of features created. 
 Tree path/directory of reference corpus:</p>
-<p><pre style="font-size:0.8em;">
+<pre style="font-size:0.8em;">
 working_dir
 │   ├── reference_corpus_2017_5_17-8_56_49_631884
 │   │   ├── data_split
@@ -1411,22 +1411,24 @@ working_dir
 │   │   │   ├── seq_8
 │   │   │   ├── seq_9
 │   │   ├── model_activefeatures_f_0 
-</pre>
-Inspecting <code class="pseq_code">log.txt</code> under <code class="pseq_code">global_features</code> folder we get the following excerpt:</p>
-<p><pre style="font-size:0.8em;">
+</pre><p>Inspecting <code class="pseq_code">log.txt</code> under <code class="pseq_code">global_features</code> folder we get the following excerpt:</p>
+<pre style="font-size:0.8em;">
 ---Preparing/parsing sequences--- starting time: 2017-05-17 08:56:49.635522 
 Number of sequences prepared/parsed: 25 
----Preparing/parsing sequences--- end time: 2017-05-17 08:56:49.691309</p>
-<p>---Generating Global Features F_j(X,Y)--- starting time: 2017-05-17 08:56:49.703424 
+---Preparing/parsing sequences--- end time: 2017-05-17 08:56:49.691309 
+
+
+---Generating Global Features F_j(X,Y)--- starting time: 2017-05-17 08:56:49.703424 
 Number of instances/training data processed: 25
----Generating Global Features F_j(X,Y)--- end time: 2017-05-17 08:56:49.901177</p>
-<p>---Constructing model--- starting time: 2017-05-17 08:56:49.912083 
+---Generating Global Features F_j(X,Y)--- end time: 2017-05-17 08:56:49.901177 
+
+
+---Constructing model--- starting time: 2017-05-17 08:56:49.912083 
 Number of instances/training data processed: 25
 Number of features: 3318 
 Number of labels: 13 
 ---Constructing model--- end time: 2017-05-17 08:57:05.827288 
-&lt;/pre&gt;
-To verify and see these features, we can inspect them by checking the output of <a href="#pseq_inspect_modelfeatures">this code snippet</a> below.</p>
+</pre><p>To verify and see these features, we can inspect them by checking the output of <a href="#pseq_inspect_modelfeatures">this code snippet</a> below.</p>
 
 </div>
 </div>
@@ -1779,7 +1781,7 @@ To do so, we use the <code class="pseq_method">train_model(args)</code> method i
          'method': {'L-BFGS-B', 'BFGS'}
          'regularization_type': 'l2'
          'regularization_value': float
-         (options below are eqivalent to one provided by [scipy.optimize package](https://docs.scipy.org/doc/scipy/reference/optimize.minimize-lbfgsb.html))
+         (options below are eqivalent to one provided by <a href="https://docs.scipy.org/doc/scipy/reference/optimize.minimize-lbfgsb.html">scipy.optimize package</a>)
          'disp': boolean
          'maxcor': integer, 
          'ftol': float, 
@@ -1792,25 +1794,23 @@ To do so, we use the <code class="pseq_method">train_model(args)</code> method i
 </td>
 </tr>
 </table><p>General comments on the options provided to <strong>perceptron/search-based</strong> methods:</p>
-<p><ul></p>
-<p><li><code class="pseq_code">num_epochs</code> refers to the number of epochs/passes to go through the sequences/segments</li></p>
-<p><li><code class="pseq_code">shuffle_seq</code> decides if to shuffle the sequences in every epoch </li></p>
-<p><li><code class="pseq_code">tolerance</code> represents the threshold to check against as a stopping criterion. If the relative difference between the average decoding error across all sequences between the current and previous epoch is below the threshold (tolerance), then we stop the training.</li></p>
-<p><li><code class="pseq_code">update_type</code> and <code class="pseq_code">beam_size</code> are related options. <a href="https://bitbucket.org/A_2/pyseqlab">PySeqLab</a> supports inexact search by using beam search (i.e. pruning states falling off a specified beam size) allowing for faster inference and training. This is implemented within the <strong>violation-fixing framework</strong> (see (Huang et al., 2012) for more details). Hence, if we want to prune states (i.e. use beam search) while learning the parameters, we can specify the <code class="pseq_code">update_type</code> we want based on the <strong>violation-fixing framework</strong>. If we are to use a full beam (i.e. no pruning), then the <code class="pseq_code">update_type</code> is irrelevant as we will be doing full update.</li></p>
-<p><li><code class="pseq_code">topK</code> is an available option in <code class="pseq_code">SAPO</code> method. It specifies how many sequences to decode/use while learning the parameters of the model. For more info on the procedure, see (Sun, 2015).</li>
-&lt;/ul&gt;
-Lastly, the learned parameters are based on the average values across the training updates in all the epochs. This  provides a sort of regularization and as a result reduces overfitting. As a reminder, many of these options are set by default. What only matters is to specify the <code class="pseq_code">method</code> and the rest is figured out automatically.</p>
+<ul>
+<li><code class="pseq_code">num_epochs</code> refers to the number of epochs/passes to go through the sequences/segments</li>
+<li><code class="pseq_code">shuffle_seq</code> decides if to shuffle the sequences in every epoch </li>
+<li><code class="pseq_code">tolerance</code> represents the threshold to check against as a stopping criterion. If the relative difference between the average decoding error across all sequences between the current and previous epoch is below the threshold (tolerance), then we stop the training.</li>
+<li><code class="pseq_code">update_type</code> and <code class="pseq_code">beam_size</code> are related options. <a href="https://bitbucket.org/A_2/pyseqlab">PySeqLab</a> supports inexact search by using beam search (i.e. pruning states falling off a specified beam size) allowing for faster inference and training. This is implemented within the <strong>violation-fixing framework</strong> (see (Huang et al., 2012) for more details). Hence, if we want to prune states (i.e. use beam search) while learning the parameters, we can specify the <code class="pseq_code">update_type</code> we want based on the <strong>violation-fixing framework</strong>. If we are to use a full beam (i.e. no pruning), then the <code class="pseq_code">update_type</code> is irrelevant as we will be doing full update.</li>
+<li><code class="pseq_code">topK</code> is an available option in <code class="pseq_code">SAPO</code> method. It specifies how many sequences to decode/use while learning the parameters of the model. For more info on the procedure, see (Sun, 2015).</li>
+</ul><p>Lastly, the learned parameters are based on the average values across the training updates in all the epochs. This  provides a sort of regularization and as a result reduces overfitting. As a reminder, many of these options are set by default. What only matters is to specify the <code class="pseq_code">method</code> and the rest is figured out automatically.</p>
 <p>General comments on the options provided to <strong>gradient-based</strong> methods:</p>
-<p><ul></p>
-<p><li><code class="pseq_code">num_epochs</code> refers to the number of epochs/passes to go through the sequences/segments</li></p>
-<p><li><code class="pseq_code">shuffle_seq</code> decides if to shuffle the sequences in every epoch </li></p>
-<p><li><code class="pseq_code">tolerance</code> represents the threshold to check against as a stopping criterion. If the relative difference between the estimated average log-likelihood across all sequences between the current and previous epoch is below the threshold (tolerance), then we stop the training.</li></p>
-<p><li><code class="pseq_code">regularization_type</code> and <code class="pseq_code">regularization_value</code> are related options. <a href="https://bitbucket.org/A_2/pyseqlab">PySeqLab</a> supports maximum likelihood (MLE) and maximum a posteriori (MAP) estimation. This is done by offering two regularization schemes: (1) L2 regularization (i.e. assuming prior Gaussian distribution on the model weights) and (2) L1 regularization using the approach in (Tsuruoka et al., 2009). Hence, once we specify the type of regularization (i.e. <code class="pseq_code">regularization_type</code>), we specify the regularization value (i.e. <code class="pseq_code">regularization_value</code>)
-</li></p>
-<p><li><code class="pseq_code">learning_rate_schedule</code> option for methods <code class="pseq_code">SGA</code> and <code class="pseq_code">SVRG</code> specifies the computation of the step size parameter multiplying the gradient. <code class="pseq_code">constant</code> supports fixed step size while <code class="pseq_code">bottu</code>, <code class="pseq_code">exponential_decay</code> and <code class="pseq_code">t_inverse</code> updates the step size iteratively each using different methods/formulas. All approaches require to specify the initial step size <code class="pseq_code">t0</code>. Additionally, <code class="pseq_code">exponential_decay</code> option requires the specification of <code class="pseq_code">alpha</code> and <code class="pseq_code">eta0</code> (see Tsuruoka et al., 2009 for more info about <code class="pseq_code">exponential_decay</code> approach).</li></p>
-<p><li><code class="pseq_code">rho</code> and <code class="pseq_code">epsilon</code> options are related to <code class="pseq_code">SGA-ADADELTA</code> method. In this method, the step size is an adaptive vector where each component represent a step size for a corresponding parameter in the CRFs model. For more info regarding both options (<code class="pseq_code">rho</code> and <code class="pseq_code">epsilon</code>) and their role in the computation of the adaptive step size, consult to ADADELTA (Zeiler, 2012).</li> 
-&lt;/ul&gt;
-Again as a reminder, many of these options are set by default. What only matters is to specify the <code class="pseq_code">method</code> and the rest is figured out automatically.</p>
+<ul>
+<li><code class="pseq_code">num_epochs</code> refers to the number of epochs/passes to go through the sequences/segments</li>
+<li><code class="pseq_code">shuffle_seq</code> decides if to shuffle the sequences in every epoch </li>
+<li><code class="pseq_code">tolerance</code> represents the threshold to check against as a stopping criterion. If the relative difference between the estimated average log-likelihood across all sequences between the current and previous epoch is below the threshold (tolerance), then we stop the training.</li>
+<li><code class="pseq_code">regularization_type</code> and <code class="pseq_code">regularization_value</code> are related options. <a href="https://bitbucket.org/A_2/pyseqlab">PySeqLab</a> supports maximum likelihood (MLE) and maximum a posteriori (MAP) estimation. This is done by offering two regularization schemes: (1) L2 regularization (i.e. assuming prior Gaussian distribution on the model weights) and (2) L1 regularization using the approach in (Tsuruoka et al., 2009). Hence, once we specify the type of regularization (i.e. <code class="pseq_code">regularization_type</code>), we specify the regularization value (i.e. <code class="pseq_code">regularization_value</code>)
+</li>
+<li><code class="pseq_code">learning_rate_schedule</code> option for methods <code class="pseq_code">SGA</code> and <code class="pseq_code">SVRG</code> specifies the computation of the step size parameter multiplying the gradient. <code class="pseq_code">constant</code> supports fixed step size while <code class="pseq_code">bottu</code>, <code class="pseq_code">exponential_decay</code> and <code class="pseq_code">t_inverse</code> updates the step size iteratively each using different methods/formulas. All approaches require to specify the initial step size <code class="pseq_code">t0</code>. Additionally, <code class="pseq_code">exponential_decay</code> option requires the specification of <code class="pseq_code">alpha</code> and <code class="pseq_code">eta0</code> (see Tsuruoka et al., 2009 for more info about <code class="pseq_code">exponential_decay</code> approach).</li>
+<li><code class="pseq_code">rho</code> and <code class="pseq_code">epsilon</code> options are related to <code class="pseq_code">SGA-ADADELTA</code> method. In this method, the step size is an adaptive vector where each component represent a step size for a corresponding parameter in the CRFs model. For more info regarding both options (<code class="pseq_code">rho</code> and <code class="pseq_code">epsilon</code>) and their role in the computation of the adaptive step size, consult to ADADELTA (Zeiler, 2012).</li> 
+</ul><p>Again as a reminder, many of these options are set by default. What only matters is to specify the <code class="pseq_code">method</code> and the rest is figured out automatically.</p>
 
 </div>
 </div>
@@ -6435,8 +6435,10 @@ b8UOq+YAAAAASUVORK5CYII=
 <p><strong>Args</strong>:</p>
 <ul>
 <li><code class="pseq_args">savedmodel_dir</code>: the path to the trained model dumped on disk. In our setting/example, the <code class="pseq_var">trained_models_dir</code> contains the directory of the models we trained.</li>
-<li><code class="pseq_args">options</code>: dictionary that specifies options needed to performs tasks (<strong>A</strong>, <strong>B</strong> and <strong>C</strong>). Generally, we have two scenarios:
-<ul><li>If we already parsed and processed the sequences like in our example, then we use <code class="pseq_var">seqs_info</code> key, passing the <code class="pseq_attr">seqs_info</code> instance attribute in our workflow trainer (<a href="#pseq_wft_seqsinfo_decoding">see code example</a>).<br/><br/>
+<li>
+<code class="pseq_args">options</code>: dictionary that specifies options needed to performs tasks (<strong>A</strong>, <strong>B</strong> and <strong>C</strong>). Generally, we have two scenarios:
+<ul>
+<li>If we already parsed and processed the sequences like in our example, then we use <code class="pseq_var">seqs_info</code> key, passing the <code class="pseq_attr">seqs_info</code> instance attribute in our workflow trainer (<a href="#pseq_wft_seqsinfo_decoding">see code example</a>).<br/><br/>
 
 <strong>Example</strong>: <br/><br/>
 
@@ -6475,24 +6477,26 @@ options = {'seqs_file': path to the sequences file
            }
 </pre>
 </li>
+</ul>
+</li>
 </ul><p>A direct approach for using a trained CRFs model without the use of <code class="pseq_class">GenericWorkflowTrainer</code> class/subclass is through <code class="pseq_method">generate_trained_model(args)</code> function found in the <code class="pseq_code">utilities</code> module. The function takes the following arguments:</p>
-<ul><li><code class="pseq_args">model_parts_dir</code>: directory to the <code class="pseq_code">model_parts</code> folder of a trained CRFs model (<a href="#pseq_modelparts_pointer">see here</a> for a refresher)</li>
+<ul>
+<li><code class="pseq_args">model_parts_dir</code>: directory to the <code class="pseq_code">model_parts</code> folder of a trained CRFs model (<a href="#pseq_modelparts_pointer">see here</a> for a refresher)</li>
 <li><code class="pseq_args">aextractor_obj</code>: initialized instance of class/subclass of <code class="pseq_class">GenericAttributeExtractor</code></li>
 </ul><p>Below is <a href="#pseq_reviveandusemodel_demo">an example</a> on reviving a trained model (the trained model used <code class="pseq_code">COLLINS-PERCEPTRON</code> method). Once, we have the revived model, it is ready for decoding sequences. For that purpose, we use the main decoding method<br>
-<code class="pseq_method">decode_seqs(decoding_method, out_dir, **kwargs)</code> that takes two arguments and multiple keyword arguments (<a href="#pseq_reviveandusemodel_demo">see code for a demo</a>)
+<code class="pseq_method">decode_seqs(decoding_method, out_dir, **kwargs)</code> (<a href="#pseq_reviveandusemodel_demo">see code for a demo</a>)
 <br/></p>
-<p>Args:</p>
-<p><ol></p>
+<p><strong>Args</strong>:</p>
+<ol>
 <li>
 <code class="pseq_args">decoding_method</code>: string defining the decoding method. It is one of <code class="pseq_code">{'viterbi', 'per_state_decoding'}</code>. As not all decoders support <code class="pseq_code">'per_state_decoding'</code>, we primarily use <code class="pseq_code">'viterbi'</code> for now.
 </li>
 <li>
 <code class="pseq_args">out_dir</code>: string representing the path to the output directory where sequence parsing will take place
 </li>
-</ol>
-<br/>
-For the keyword arguments, the main ones to specify are:<br/>
-
+</ol><p><br/>
+<strong>Keyword arguments</strong>:</p>
+<p>The main ones to specify are:<br/></p>
 <ul>
 <li>
 We choose one of the following options <code class="pseq_code">{'seqs', 'seqs_dict', 'seqs_info'}</code>
@@ -6500,16 +6504,19 @@ We choose one of the following options <code class="pseq_code">{'seqs', 'seqs_di
 <li>
 <code class="pseq_args">seqs</code>: list of sequences that are instances of <code class="pseq_class">SequenceStruct</code> class
 </li>
-<li><code class="pseq_args">seqs_dict</code>: a dictionary comprising of ids as keys (i.e. representing sequence ids) and corresponding sequences that are instances of <code class="pseq_class">SequenceStruct</code> class as values</li><p><li><code class="pseq_args">seqs_info</code>: dictionary containing the info about already parsed and processed sequences</li>
-&lt;/ul&gt;&lt;/li&gt;</p>
-<p><li>
+<li><code class="pseq_args">seqs_dict</code>: a dictionary comprising of ids as keys (i.e. representing sequence ids) and corresponding sequences that are instances of <code class="pseq_class">SequenceStruct</code> class as values
+</li>
+<li><code class="pseq_args">seqs_info</code>: dictionary containing the info about already parsed and processed sequences
+</li>
+</ul>
+</li>
+<li>
 <code class="pseq_args">file_name</code>: string representing the name of the file where the CRFs model writes the decoded sequences to (it is optional)
-</li></p>
-<p><li>
+</li>
+<li>
 <code class="pseq_args">sep</code>: string representing separator between the columns/observations when writing decoded sequences on the specified file using <code class="pseq_args">file_name</code> keyword argument
 </li>
-&lt;/ul&gt;</p>
-<p>Now that we know how to revive a CRFs model and decode sequences, we need to evaluate how good is our decoding. This will be tackled using <code class="pseq_class">SeqDecodingEvaluator</code> class. Its constructor takes an instance of a CRFs model representation class (<a href="#pseq_crfmodels_repr_map">see this table</a> for a refresher). This is an <a href="#pseq_seqdecodingevaluator_class">example</a> demonstrating the use of <code class="pseq_class">SeqDecodingEvaluator</code> class for evaluating the decoded sequences by our revived model. In addition, it shows how to obtain/show the confusion matrix for every decoded label/state.</p>
+</ul><p>Now that we know how to revive a CRFs model and decode sequences, we need to evaluate how good is our decoding. This will be tackled using <code class="pseq_class">SeqDecodingEvaluator</code> class. Its constructor takes an instance of a CRFs model representation class (<a href="#pseq_crfmodels_repr_map">see this table</a> for a refresher). This is an <a href="#pseq_seqdecodingevaluator_class">example</a> demonstrating the use of <code class="pseq_class">SeqDecodingEvaluator</code> class for evaluating the decoded sequences by our revived model. In addition, it shows how to obtain/show the confusion matrix for every decoded label/state.</p>
 
 </div>
 </div>
@@ -7513,7 +7520,7 @@ confusion_matrix for state=O:
 </div>
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>There are still many aspects to explore and experiment with. We show the potentials of the package by developing <a href="./applications.html">applications</a> in three different areas:</p>
+<p>There are still many aspects to explore and experiment with. We show the potentials of the package by developing <a href="/applications">applications</a> in three different areas:</p>
 <ol>
 <li>Natural language processing (i.e. shallow parsing, part-of-speech tagging, bio-medical named entity recognition)</li>
 <li>Wearable and sensor measurement sequences (human activity recognition)</li>
