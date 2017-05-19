@@ -20,13 +20,6 @@ pyseqlab.crf_learning module
     :undoc-members:
     :show-inheritance:
 
-pyseqlab.cythonized_utilities module
-------------------------------------
-
-.. automodule:: pyseqlab.cythonized_utilities
-    :members:
-    :undoc-members:
-    :show-inheritance:
 
 pyseqlab.features_extraction module
 -----------------------------------
