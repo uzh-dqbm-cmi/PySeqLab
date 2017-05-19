@@ -9,6 +9,7 @@ from copy import deepcopy
 from itertools import combinations
 import heapq
 import numpy
+from .attributes_extraction import GenericAttributeExtractor
 
 class SequenceStruct():
     r"""class for representing each sequence/segment
@@ -1229,7 +1230,10 @@ def generate_updated_model(modelparts_dir, modelrepr_class,
     new_mrepr.generate_instance_properties()
     
     # generate attribute extractor
-    new_attrextractor = aextractor_obj
+    if(type(aextractor_obj) == type(GenericAttributeExtractor)): # case it is a class
+        new_attrextractor = aextractor_obj()
+    else: # case it is an instance of a class 
+        new_attrextractor = aextractor_obj
 
     # generate feature extractor
     templateX = ReaderWriter.read_data(os.path.join(modelparts_dir, "FE_templateX"))
