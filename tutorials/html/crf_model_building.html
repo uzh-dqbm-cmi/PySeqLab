@@ -415,8 +415,8 @@ font-size:0.85em;
 
 </pre><p>We suggest going through the earlier tutorials:</p>
 <ol>
-<li>[sequence_and_input_structure tutorial](./sequence_and_input_structure.ipynb)</li>
-<li>[templates_and_feature_extraction](templates_and_features_extraction.ipynb)</li>
+<li>[sequence_and_input_structure tutorial](./sequence_and_input_structure.html)</li>
+<li>[templates_and_feature_extraction](templates_and_features_extraction.html)</li>
 </ol><p>before continuing through this notebook. We will use part of the <a href="http://www.cnts.ua.ac.be/conll2000/chunking/">CoNLL 2000 training dataset</a> throughout this tutorial.</p>
 <p>As a <strong><em>reminder</em></strong>, the CoNLL 2000 task states: <blockquote> Given a set of sentences (our sequences) where each sentence is composed of <span style="font-weight:bold;color:green;">words</span> and their corresponding <span style="font-weight:bold;color:green;">part-of-speech</span>, the goal is to predict the <span style="font-weight:bold;color:green;">chunk/shallow parse label</span> of every word in the sentence. </blockquote></p>
 <p>We start by parsing/reading the sentences in the training dataset into sequences.</p>
@@ -588,7 +588,7 @@ Below is another table comprising pointers to papers and literature in which the
 <p><strong>Examples: </strong></p>
 <ul>
 <li><code class="pseq_class">FirstOrderCRF</code> could be used if our training data consists of sequences and we aim to model features that include at most one or two state/label transitions. Moreover, the <code class="pseq_class">FirstOrderCRF</code> naturally supports the 
-inclusion of __START__ state for building models supporting initial labels and transition label features at the starting position of the sequences. For more info about extracting features that include __START__ state, please see the [templates_and_feature_extraction](templates_and_features_extraction.ipynb) tutorial).</li><br/>
+inclusion of __START__ state for building models supporting initial labels and transition label features at the starting position of the sequences. For more info about extracting features that include __START__ state, please see the [templates_and_feature_extraction](templates_and_features_extraction.html) tutorial).</li><br/>
 
 <li><code class="pseq_class">HOCRF</code> and <code class="pseq_class">HOCRFAD</code> could be used if our training data consists of sequences and we aim to model features with first order and/or higher-order (i.e. that includes label pattern transitions with more than two states). There are no restrictions on the label patterns when using those models. Additionally, both models are equivalent to <code class="pseq_class">FirstOrderCRF</code> when we model features with first order label patterns without including the __START__ state. However, there is a subtle difference between <code class="pseq_class">HOCRF</code> and <code class="pseq_class">HOCRFAD</code> models, where <code class="pseq_class">HOCRFAD</code> provides a more <em>efficient implementation</em> for the forward-backward algorithm. In addition, the <code class="pseq_class">HOCRFAD</code> supports gradient-based training methods while <code class="pseq_class">HOCRF</code> supports perceptron/search-based training methods (see the training section for more info). Hence, we <strong>suggest</strong> using <code class="pseq_class">HOCRFAD</code> as a primary choice in similar contexts/scenario.</li><br/>
 
@@ -647,7 +647,7 @@ inclusion of __START__ state for building models supporting initial labels and t
 <p><a id="pseq_modelbuild_workflow"></a>
 A typical process for building CRF models starting from the file comprising the training data (i.e. sequences or segments) is described as follows:</p>
 <ol>
-<li> We are given a dataset (i.e. file) comprising sequences or segments (see [sequence_and_input_structure tutorial](./sequence_and_input_structure.ipynb) tutorial for a refresher).</li>
+<li> We are given a dataset (i.e. file) comprising sequences or segments (see [sequence_and_input_structure tutorial](./sequence_and_input_structure.html) tutorial for a refresher).</li>
 <li> We read the file and generate sequences/segments</li>
 <li> We decide on a data split strategy in which we obtain a set of sequences for training CRFs model (training set) and another set of sequences for testing/validating the model (testing/validation set)</li>
 <li> We process the training set (i.e. comprising sequences) and dump them on disk in a relevant format to be later used in the learning framework </li>
@@ -658,9 +658,9 @@ A typical process for building CRF models starting from the file comprising the 
 </ol><p>The listed points represent a common and recurrent workflow in sequence labeling and segmentation problems. For this reason, <a href="https://bitbucket.org/A_2/pyseqlab">PySeqLab</a> provides a <code class="pseq_class">GenericTrainingWorkflow</code> class that takes care of the tasks 1-8, which we aim to further explore in this section.</p>
 <p>But first, we describe the arguments passed to <code class="pseq_class">GenericTrainingWorkflow</code> constructor:</p>
 <ul>
-<li><code class="pseq_attr">aextractor_obj</code>: initialized instance of <code class="pseq_class">GenericAttributeExtractor</code> class/subclass (see attributes extraction in [templates_and_feature_extraction](templates_and_features_extraction.ipynb) tutorial) </li>
-<li><code class="pseq_attr">fextractor_obj</code>: initialized instance of <code class="pseq_class">FeatureExtractor</code> class/subclass (see <code class="pseq_class">FOFeatureExtractor</code> or <code class="pseq_class">HOFeatureExtractor</code> classes in the [templates_and_feature_extraction](templates_and_features_extraction.ipynb) tutorial)</li>
-<li><code class="pseq_attr">feature_filter_obj</code>: <code class="pseq_code" style="color:blue;">None</code> or an initialized instance of <code class="pseq_class">FeatureFilter</code> class (see feature filter section in the [templates_and_feature_extraction](templates_and_features_extraction.ipynb) tutorial)</li>
+<li><code class="pseq_attr">aextractor_obj</code>: initialized instance of <code class="pseq_class">GenericAttributeExtractor</code> class/subclass (see attributes extraction in [templates_and_feature_extraction](templates_and_features_extraction.html) tutorial) </li>
+<li><code class="pseq_attr">fextractor_obj</code>: initialized instance of <code class="pseq_class">FeatureExtractor</code> class/subclass (see <code class="pseq_class">FOFeatureExtractor</code> or <code class="pseq_class">HOFeatureExtractor</code> classes in the [templates_and_feature_extraction](templates_and_features_extraction.html) tutorial)</li>
+<li><code class="pseq_attr">feature_filter_obj</code>: <code class="pseq_code" style="color:blue;">None</code> or an initialized instance of <code class="pseq_class">FeatureFilter</code> class (see feature filter section in the [templates_and_feature_extraction](templates_and_features_extraction.html) tutorial)</li>
 <li><code class="pseq_attr">model_repr_class</code>: the CRFs model representation class (see 2nd column <a href="#pseq_crfmodels_repr_map"> in this table</a> for model representation classes)</li>
 <li><code class="pseq_attr">model_class</code>: the CRFs model class (see 1st column <a href="pseq_crfmodels_repr_map">in this table</a> for model classes)</li>
 <li><code class="pseq_attr">root_dir</code>: string representing the directory/path where working directory will be created</li>
@@ -723,7 +723,7 @@ A typical process for building CRF models starting from the file comprising the 
 <p><strong>Keyword args</strong>:</p>
 <ul><li>
 <a id="pseq_seqfile_option"></a>
-<code class="pseq_args">seq_file</code>: string representing the path to the file comprising the sequences/segments. For this option, we have to specify additionally the following keyword arguments: <ul><li><code class="pseq_args">data_parser_options</code>: a dictionary defining the arguments of the <code class="pseq_method">read_file(args)</code> method in the <code class="pseq_class">DataFileParser</code> class (see [sequence_and_input_structure tutorial](./sequence_and_input_structure.ipynb) for more info about this class).</li>
+<code class="pseq_args">seq_file</code>: string representing the path to the file comprising the sequences/segments. For this option, we have to specify additionally the following keyword arguments: <ul><li><code class="pseq_args">data_parser_options</code>: a dictionary defining the arguments of the <code class="pseq_method">read_file(args)</code> method in the <code class="pseq_class">DataFileParser</code> class (see [sequence_and_input_structure tutorial](./sequence_and_input_structure.html) for more info about this class).</li>
 <li><code class="pseq_args">num_seqs</code>: the maximum number of sequences to read/parse from a file. By default it is equal to <code class="pseq_code">-1</code>, which will read the whole file</li><br/>
 <strong>Example</strong>:
 <pre style='font-size:0.75em;'>
@@ -7513,7 +7513,7 @@ confusion_matrix for state=O:
 </div>
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>There are still many aspects to explore and experiment with. We show the potentials of the package by developing <a href="/applications">applications</a> in three different areas:</p>
+<p>There are still many aspects to explore and experiment with. We show the potentials of the package by developing <a href="./applications.html">applications</a> in three different areas:</p>
 <ol>
 <li>Natural language processing (i.e. shallow parsing, part-of-speech tagging, bio-medical named entity recognition)</li>
 <li>Wearable and sensor measurement sequences (human activity recognition)</li>

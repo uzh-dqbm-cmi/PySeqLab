@@ -396,7 +396,7 @@ font-size:0.85em;
     │   │   ├── conll2000
     │   │   ├── segments
 
-</pre><p>We suggest going through the <a href="./sequence_and_input_structure.ipynb">sequence_and_input_structure tutorial</a> before continuing through this notebook. We will use constructed sequences (short sentences) while explaining the features/attributes extraction process.</p>
+</pre><p>We suggest going through the <a href="./sequence_and_input_structure.html">sequence_and_input_structure tutorial</a> before continuing through this notebook. We will use constructed sequences (short sentences) while explaining the features/attributes extraction process.</p>
 <blockquote>A reminder regarding the terminology we are using and planning to expand:
 <ul>
 <li><em><span style="color:green;">sequence</span></em>: to refer to a list of elements that follow an order</li>
@@ -803,7 +803,7 @@ extracted attributes saved in seq_1.seg_attr:
 <ol>
 <li> combining the computed/extracted attributes with the <code class="pseq_code">Y labels</code></li>
 <li> using only the <code class="pseq_code">Y</code> labels and/or the transitions among them</li>
-</ol><p>A combination of the above two options will lead to generating different CRFs models that we can train/estimate their features' parameters during the learning phase (consult to <a href="./crf_model_building.ipynb">crf_model_building tutorial</a> for more info).</p>
+</ol><p>A combination of the above two options will lead to generating different CRFs models that we can train/estimate their features' parameters during the learning phase (consult to <a href="./crf_model_building.html">crf_model_building tutorial</a> for more info).</p>
 <p>Question: What could be used as features? <br/>
 Answer: Everything we can think of could be used as features (a good analogy would be <a href="http://idioms.thefreedictionary.com/everything+but+the+kitchen+sink">kitchen sink</a>).</p>
 <p>The first features we can think of are the values of the attributes at each position in the sequence combined with the corresponding label/tag. Those type of features are called <strong>node features</strong>. For our sequence $s$, we specified '$w$' to be the name of the words track and hence the features resulting from combining those attributes with labels at each position will be:</p>
@@ -1425,7 +1425,7 @@ extracted features
 </div>
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>Using <strong><em>Specification 1</em></strong> for <code class="pseq_attr">template_XY</code> (i.e get current attribute and combine it with the current label at each position in the sequence) and <strong><em>Specification 7</em></strong> for <code class="pseq_attr">template_Y</code> (i.e. get the current label at each position in the sequence), our feature extractor would generate features based on the specified templates. It uses <code class="pseq_method">extract_seq_features_perboundary(seq)</code> method. The method takes as an argument a sequence (i.e an instance of <code class="pseq_class">SequenceStruct</code> class). See the <a href="./sequence_and_input_structure.ipynb">sequence_and_input_structure tutorial</a> for more info about building sequences.</p>
+<p>Using <strong><em>Specification 1</em></strong> for <code class="pseq_attr">template_XY</code> (i.e get current attribute and combine it with the current label at each position in the sequence) and <strong><em>Specification 7</em></strong> for <code class="pseq_attr">template_Y</code> (i.e. get the current label at each position in the sequence), our feature extractor would generate features based on the specified templates. It uses <code class="pseq_method">extract_seq_features_perboundary(seq)</code> method. The method takes as an argument a sequence (i.e an instance of <code class="pseq_class">SequenceStruct</code> class). See the <a href="./sequence_and_input_structure.html">sequence_and_input_structure tutorial</a> for more info about building sequences.</p>
 <p>The generated features are:</p>
 <pre style="font-size:0.8em;"> 
 extracted features
@@ -1662,7 +1662,7 @@ extracted features using FOFeatureExtractor with start state enabled
 extracted features using FOFeatureExtractor with start state disabled
 {(2, 2): {'DT|N': {'DT|N': 1, 'w[-1]|w[0]=The|dog': 1, 'w[0]|w[1]=dog|barks': 1, 'w[0]=dog': 1, 'w[-1]|w[0]|w[1]=The|dog|barks': 1}, 'N': {'numchars[-1]|numchars[0]|numchars[1]': 11.0, 'numchars[-1]|numchars[0]': 6.0, 'w[0]|w[1]=dog|barks': 1, 'numchars[0]|numchars[1]': 8.0, 'w[0]=dog': 1, 'w[-1]|w[0]|w[1]=The|dog|barks': 1, 'N': 1, 'shape[0]=aaa': 1, 'w[-1]|w[0]=The|dog': 1, 'numchars[0]': 3.0, 'shaped[0]=a': 1}}, (4, 4): {'.': {'.': 1, 'numchars[-1]|numchars[0]': 6.0, 'w[0]=.': 1, 'w[-1]|w[0]=barks|.': 1, 'numchars[0]': 1.0, 'shaped[0]=_': 1, 'shape[0]=_': 1}, 'V|.': {'V|.': 1, 'w[0]=.': 1, 'w[-1]|w[0]=barks|.': 1}}, (3, 3): {'V': {'V': 1, 'numchars[-1]|numchars[0]|numchars[1]': 9.0, 'numchars[-1]|numchars[0]': 8.0, 'numchars[0]|numchars[1]': 6.0, 'shape[0]=aaaaa': 1, 'w[0]|w[1]=barks|.': 1, 'w[-1]|w[0]=dog|barks': 1, 'w[-1]|w[0]|w[1]=dog|barks|.': 1, 'numchars[0]': 5.0, 'w[0]=barks': 1, 'shaped[0]=a': 1}, 'N|V': {'w[-1]|w[0]|w[1]=dog|barks|.': 1, 'w[-1]|w[0]=dog|barks': 1, 'N|V': 1, 'w[0]=barks': 1, 'w[0]|w[1]=barks|.': 1}}, (1, 1): {'DT': {'DT': 1, 'w[0]|w[1]=The|dog': 1, 'shape[0]=Aaa': 1, 'numchars[0]|numchars[1]': 6.0, 'shaped[0]=Aa': 1, 'numchars[0]': 3.0, 'w[0]=The': 1}, '__START__|DT': {'w[0]|w[1]=The|dog': 1, '__START__|DT': 1, 'w[0]=The': 1}}}
 </pre>
-Bottom line, the distinction between both classes will depend on what type of CRFs model we want to build (consult to <a href="./crf_model_building.ipynb">crf_model_building tutorial</a> for further info).</p>
+Bottom line, the distinction between both classes will depend on what type of CRFs model we want to build (consult to <a href="./crf_model_building.html">crf_model_building tutorial</a> for further info).</p>
 
 </div>
 </div>
@@ -2003,7 +2003,7 @@ filtered extracted features: filtering label patterns in {&apos;N|V&apos;,&apos;
 </div>
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>The ideas and concepts explained in this tutorial are very important for the next stages especially when it comes to building/training CRFs models. Understanding the concepts such as <strong><em>attributes</em></strong>, <strong><em>features</em></strong>, <strong><em>feature template</em></strong>, <strong><em>feature extraction</em></strong>, and <strong><em> feature filter</em></strong> will help in deciding what CRFs model we want to build and how the feature parameters are going to be trained during the learning phase. We tackle the model training in the <a href="./crf_model_building.ipynb">crf_model_building tutorial</a>.</p>
+<p>The ideas and concepts explained in this tutorial are very important for the next stages especially when it comes to building/training CRFs models. Understanding the concepts such as <strong><em>attributes</em></strong>, <strong><em>features</em></strong>, <strong><em>feature template</em></strong>, <strong><em>feature extraction</em></strong>, and <strong><em> feature filter</em></strong> will help in deciding what CRFs model we want to build and how the feature parameters are going to be trained during the learning phase. We tackle the model training in the <a href="./crf_model_building.html">crf_model_building tutorial</a>.</p>
 
 </div>
 </div>
