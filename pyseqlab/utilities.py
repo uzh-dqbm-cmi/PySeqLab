@@ -9,9 +9,8 @@ from copy import deepcopy
 from itertools import combinations
 import heapq
 import numpy
-from .attributes_extraction import GenericAttributeExtractor
 
-class SequenceStruct():
+class SequenceStruct(object):
     r"""class for representing each sequence/segment
     
        Args:
@@ -195,7 +194,7 @@ class SequenceStruct():
         out_str = "Y sequence:\n {}\nX sequence:\n {}\n{}".format(self.flat_y, self.X, "-"*40)
         return(out_str)
             
-class DataFileParser():
+class DataFileParser(object):
     """class to parse a data file comprising the training/testing data
     
        Attributes:
@@ -1215,6 +1214,8 @@ def generate_updated_model(modelparts_dir, modelrepr_class,
        
            
     """
+    from pyseqlab.attributes_extraction import GenericAttributeExtractor
+
     
     ycodebook = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_Ycodebook"))
     mfeatures  = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_modelfeatures"))
