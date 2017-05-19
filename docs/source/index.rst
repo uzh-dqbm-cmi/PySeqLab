@@ -14,10 +14,16 @@
    :caption: Download and Installation:
    
    install
-   
+
 .. toctree::
    :maxdepth: 2
-   :caption: Tutorials and Applications:
+   :caption: Methods and Tutorials:
+   
+   methods_tutorials
+     
+.. toctree::
+   :maxdepth: 2
+   :caption: Applications:
    
    applications
    

@@ -1,6 +1,6 @@
-.. _Tutorials and Applications:
+.. _Applications:
 
-Tutorials and Applications
+Applications
 ==========================
 To illustrate the use of ``PySeqLab`` package, we give examples from the natural language processing (NLP) domain.
 

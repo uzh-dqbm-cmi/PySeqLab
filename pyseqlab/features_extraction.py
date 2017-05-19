@@ -782,7 +782,7 @@ class SeqsRepresenter(object):
                 attr_scaler.scale_continuous_attributes(seq, boundaries)
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
 
-    def extract_seqs_globalfeatures(self, seqs_id, seqs_info, perc_training=False):
+    def extract_seqs_globalfeatures(self, seqs_id, seqs_info, gfeatures_perboundary=False):
         r"""extract globalfeatures (i.e. F(X,Y)) from every sequence
         
             Main task:
@@ -814,7 +814,8 @@ class SeqsRepresenter(object):
             gfeatures = feature_extractor.aggregate_seq_features(gfeatures_perboundary, y_boundaries)                 
             # store the features' sum (i.e. F_j(X,Y) for every sequence on disk)
             ReaderWriter.dump_data(gfeatures, os.path.join(seq_dir, "globalfeatures"))
-            if(perc_training):
+            # case of perceptron/search based training with pruned beam
+            if(gfeatures_perboundary):
                 ReaderWriter.dump_data(gfeatures_perboundary, os.path.join(seq_dir, "globalfeatures_per_boundary"))
             counter+=1
             print("dumping globalfeatures -- processed seqs: ", counter)
@@ -1230,7 +1231,7 @@ class FeatureFilter(object):
                  this filter would delete all features that have count less than five
                  
            *pattern filter*:
-               - ``filter_info = {'filter_type': 'pattern', 'filter_val': ["O|L", "L|L"], 'filter_relation':'in'}``
+               - ``filter_info = {'filter_type': 'pattern', 'filter_val': {"O|L", "L|L"}, 'filter_relation':'in'}``
                  this filter would delete all features that have associated y pattern ["O|L", "L|L"]
 
     """
@@ -1260,29 +1261,15 @@ class FeatureFilter(object):
         rel_func = self.rel_func
         if(filter_info['filter_type'] == "count"):
             threshold = filter_info['filter_val']
-            relation = filter_info['filter_realtion']
+            relation = filter_info['filter_relation']
             # filter binary/categorical features that have counts less than specified threshold
             for z in featuresum_dict:
                 for fname, fsum in featuresum_dict[z].items():
-                    # determine if the feature is binary/categorical
-                    if(type(fsum) == int):
-                        rel_func[relation](fsum, threshold, filtered_dict[z][fname])
-#                         if(relation == "="):
-#                             if(fsum == threshold):
-#                                 del filtered_dict[z][fname] 
-#                         elif(relation == "<="):
-#                             if(fsum <= threshold):
-#                                 del filtered_dict[z][fname] 
-#                         elif(relation == "<"):
-#                             if(fsum < threshold):
-#                                 del filtered_dict[z][fname] 
-#                         elif(relation == ">="):
-#                             if(fsum >= threshold):
-#                                 del filtered_dict[z][fname] 
-#                         elif(relation == ">"):
-#                             if(fsum > threshold):
-#                                 del filtered_dict[z][fname] 
-                        
+                    # apply filtering only to binary/categorical features if the threshold is of type int
+                    if(type(threshold) == int and type(fsum) == int):
+                        rel_func[relation](fsum, threshold, filtered_dict[z], fname)
+                    elif(type(threshold)==float): # threshold is of type float -- apply to both categorical and continuous
+                        rel_func[relation](fsum, threshold, filtered_dict[z], fname)
 
                             
         elif(filter_info['filter_type'] == "pattern"):
@@ -1292,43 +1279,32 @@ class FeatureFilter(object):
             for z in featuresum_dict:
                 #^print("z ", z)
                 rel_func[relation](z, filter_pattern, filtered_dict)
-#                 if(relation == "="):
-#                     # delete any z that matches any of the provided filter patterns
-#                     if(z in filter_pattern):
-#                         del filtered_dict[z]
-#                 elif(relation == "!="):
-# 
-#                     # delete any z that does not match any of the provided filter patterns
-#                     if(z not in filter_pattern):
-#                         #print("deleting z {}".format(z))
-# 
-#                         del filtered_dict[z]
         #^print("filtered_dict ", filtered_dict)
         return(filtered_dict)
     
     @staticmethod
-    def _equal_rel(x, y, z):
-        if(x==y): del z
+    def _equal_rel(x, y, f, z):
+        if(x==y): del f[z]
 
     @staticmethod
-    def _lequal_rel(x, y, z):
-        if(x<=y): del z
+    def _lequal_rel(x, y, f, z):
+        if(x<=y): del f[z]
         
     @staticmethod
-    def _less_rel(x, y, z):
-        if(x<y): del z
+    def _less_rel(x, y, f, z):
+        if(x<y): del f[z]
         
     @staticmethod
-    def _gequal_rel(x, y, z):
-        if(x>=y): del z
+    def _gequal_rel(x, y, f, z):
+        if(x>=y): del f[z]
         
     @staticmethod
-    def _greater_rel(x, y, z):
-        if(x>y): del z
+    def _greater_rel(x, y, f, z):
+        if(x>y): del f[z]
 
     @staticmethod
     def _in_rel(x, y, z):
-        if(x in y): del z
+        if(x in y): del z[x]
     @staticmethod
     def _notin_rel(x, y, z):
         if(x not in y): 

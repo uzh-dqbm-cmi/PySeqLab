@@ -10,7 +10,7 @@ from itertools import combinations
 import heapq
 import numpy
 
-class SequenceStruct():
+class SequenceStruct(object):
     r"""class for representing each sequence/segment
     
        Args:
@@ -194,7 +194,7 @@ class SequenceStruct():
         out_str = "Y sequence:\n {}\nX sequence:\n {}\n{}".format(self.flat_y, self.X, "-"*40)
         return(out_str)
             
-class DataFileParser():
+class DataFileParser(object):
     """class to parse a data file comprising the training/testing data
     
        Attributes:
@@ -1193,7 +1193,7 @@ def vectorized_logsumexp(vec):
 
 
 def generate_updated_model(modelparts_dir, modelrepr_class,  
-                           model_class, aextractor_class, 
+                           model_class, aextractor_obj, 
                            fextractor_class, seqrepresenter_class, ascaler_class=None):
     """update/regenerate CRF models using the saved parts/components
     
@@ -1214,6 +1214,8 @@ def generate_updated_model(modelparts_dir, modelrepr_class,
        
            
     """
+    from pyseqlab.attributes_extraction import GenericAttributeExtractor
+
     
     ycodebook = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_Ycodebook"))
     mfeatures  = ReaderWriter.read_data(os.path.join(modelparts_dir, "MR_modelfeatures"))
@@ -1229,7 +1231,10 @@ def generate_updated_model(modelparts_dir, modelrepr_class,
     new_mrepr.generate_instance_properties()
     
     # generate attribute extractor
-    new_attrextractor = aextractor_class()
+    if(type(aextractor_obj) == type(GenericAttributeExtractor)): # case it is a class
+        new_attrextractor = aextractor_obj()
+    else: # case it is an instance of a class 
+        new_attrextractor = aextractor_obj
 
     # generate feature extractor
     templateX = ReaderWriter.read_data(os.path.join(modelparts_dir, "FE_templateX"))
@@ -1251,7 +1256,7 @@ def generate_updated_model(modelparts_dir, modelrepr_class,
     new_crfmodel.weights = ReaderWriter.read_data(os.path.join(modelparts_dir, "weights"))
     return(new_crfmodel)
 
-def generate_trained_model(modelparts_dir, aextractor_class):
+def generate_trained_model(modelparts_dir, aextractor_obj):
     """regenerate trained CRF models using the saved trained model parts/components
     
        Args:
@@ -1301,7 +1306,7 @@ def generate_trained_model(modelparts_dir, aextractor_class):
         ascaler_class = None
 
     trained_model = generate_updated_model(modelparts_dir, modelrepr_class, model_class,
-                                           aextractor_class, fextractor_class, seqrepresenter_class, ascaler_class)
+                                           aextractor_obj, fextractor_class, seqrepresenter_class, ascaler_class)
 
     return(trained_model)
 
