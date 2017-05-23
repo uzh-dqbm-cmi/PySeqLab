@@ -737,7 +737,8 @@ class GenericTrainingWorkflow(object):
         model_class = self.model_class
         model_repr = seq_representer.create_model(seqs_id, seqs_info, model_repr_class, filter_obj)
         # extract for each sequence model active features
-        seq_representer.extract_seqs_modelactivefeatures(seqs_id, seqs_info, model_repr, folder_name, learning=full_parsing)
+        # use all seq ids in the self.seqs_info
+        seq_representer.extract_seqs_modelactivefeatures(self.seqs_id, seqs_info, model_repr, folder_name, learning=full_parsing)
         # create a CRF model
         crf_model = model_class(model_repr, seq_representer, seqs_info, load_info_fromdisk = load_info_fromdisk)
         return(crf_model)
