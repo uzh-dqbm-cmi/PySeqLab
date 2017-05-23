@@ -8,7 +8,7 @@ from pyseqlab.utilities import create_directory, generate_datetime_str, ReaderWr
                                group_seqs_by_length, weighted_sample, aggregate_weightedsample, \
                                generate_updated_model, generate_trained_model
 
-
+import numpy
 class TrainingWorkflow(object):
     """general training workflow
     
@@ -591,7 +591,7 @@ class GenericTrainingWorkflow(object):
                                          seg_other_symbol=seg_other_symbol):
             yield seq
     
-    def build_seqsinfo_from_seqfile(self, seq_file, data_parser_options, num_seqs=-1):
+    def build_seqsinfo_from_seqfile(self, seq_file, data_parser_options, num_seqs=numpy.inf):
         """prepares and process sequences to disk and return info dictionary about the parsed sequences
         
           Args:
@@ -599,7 +599,7 @@ class GenericTrainingWorkflow(object):
                data_parser_options: dictionary containing options to be passed
                                     to :func:`read_file` method of :class:`DataFileParser` class
                num_seqs: integer, maximum number of sequences to read from file
-                         (default -1 -- means read all file)
+                         (default numpy.inf -- means read all file)
 
         """
         seq_representer = self.seq_representer
@@ -671,7 +671,7 @@ class GenericTrainingWorkflow(object):
             data_parser_options = kwargs.get('data_parser_options')
             num_seqs = kwargs.get('num_seqs')
             if(not num_seqs): # default read all file
-                num_seqs = -1
+                num_seqs = numpy.inf
             # build the seqs_info by parsing the sequences from file iteratively
             seqs_info = self.build_seqsinfo_from_seqfile(seq_file, data_parser_options, num_seqs=num_seqs)
         elif(kwargs.get('seqs')):
@@ -688,7 +688,7 @@ class GenericTrainingWorkflow(object):
         # this is mostly used in perceptron/search based training
         full_parsing = kwargs.get('full_parsing')
         # extract global features F(X,Y)
-        seq_representer.extract_seqs_globalfeatures(seqs_id, seqs_info, gfeatures_perboundary=full_parsing)
+        seq_representer.extract_seqs_globalfeatures(seqs_id, seqs_info, dump_gfeat_perboundary=full_parsing)
         
         # save the link to seqs_info and seq_representer as instance variables
         # because the seqs_info and seq_representer is updated
@@ -859,7 +859,7 @@ class GenericTrainingWorkflow(object):
             data_parser_options = options.get("data_parser_options")
             num_seqs = options.get("num_seqs")
             if(not num_seqs):
-                num_seqs = -1
+                num_seqs = numpy.inf
             # the folder name where intermediary sequences and data are stored
             procseqs_foldername = "processed_seqs_" + generate_datetime_str()
             dparser = DataFileParser()

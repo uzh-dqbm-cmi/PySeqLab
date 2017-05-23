@@ -782,7 +782,7 @@ class SeqsRepresenter(object):
                 attr_scaler.scale_continuous_attributes(seq, boundaries)
                 ReaderWriter.dump_data(seq, os.path.join(seq_dir, "sequence"), mode = "wb")
 
-    def extract_seqs_globalfeatures(self, seqs_id, seqs_info, gfeatures_perboundary=False):
+    def extract_seqs_globalfeatures(self, seqs_id, seqs_info, dump_gfeat_perboundary=False):
         r"""extract globalfeatures (i.e. F(X,Y)) from every sequence
         
             Main task:
@@ -815,7 +815,7 @@ class SeqsRepresenter(object):
             # store the features' sum (i.e. F_j(X,Y) for every sequence on disk)
             ReaderWriter.dump_data(gfeatures, os.path.join(seq_dir, "globalfeatures"))
             # case of perceptron/search based training with pruned beam
-            if(gfeatures_perboundary):
+            if(dump_gfeat_perboundary):
                 ReaderWriter.dump_data(gfeatures_perboundary, os.path.join(seq_dir, "globalfeatures_per_boundary"))
             counter+=1
             print("dumping globalfeatures -- processed seqs: ", counter)

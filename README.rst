@@ -4,7 +4,7 @@ PySeqLab
 ``PySeqLab`` is an open source package for performing supervised learning in structured prediction tasks. It implements most known implementations of conditional random fields (CRFs), that is discriminative models from (1) first-order to higher-order linear-chain CRFs, and from (2) first-order to higher-order semi-Markov CRFs (semi-CRFs). 
 
 Documentation & Tutorials
-=========================
+-------------------------
 
 Documentation and tutorials are available through `readthedocs website <http://pyseqlab.readthedocs.io/en/latest/>`__.
 
@@ -13,11 +13,11 @@ References
 
 ``PySeqLab`` implements/features models and optimization methods reported in the following references.
 
-	- Bottou, L., & Le Cun, Y. (2004). Large Scale Online Learning. Advances in Neural Information Processing Systems, 16, 217–225. Retrieved from http://leon.bottou.org/papers/bottou-lecun-2004\npapers://616814c5-046b-40e4-b13b-55fce5f60979/Paper/p6996
+	- Bottou, L., & Le Cun, Y. (2004). Large Scale Online Learning. Advances in Neural Information Processing Systems, 16, 217–225. 
 	- Collins, M. (2002). Discriminative training methods for hidden Markov models: theory and experiments with perceptron algorithms. In Proceedings of the ACL-02 conference on Empirical methods in natural language processing - EMNLP ’02 (pp. 1–8). http://dx.doi.org/10.3115/1118693.1118694
 	- Cuong, V. N., Ye, N., Lee, W. S., & Chieu, H. L. (2014). Conditional Random Field with High-order Dependencies for Sequence Labeling and Segmentation. Journal of Machine Learning Research, 15, 981–1009.
 	- Huang, L., Fayong, S., & Guo, Y. (2012). Structured perceptron with inexact search. 2012 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, 142–151. Retrieved from http://dl.acm.org/citation.cfm?id=2382029.2382049
-	- Johnson, R., & Zhang, T. (2013). Accelerating Stochastic Gradient Descent using Predictive Variance Reduction. Advances in Neural Information Processing Systems 26, 1(3), 315–323. Retrieved from http://papers.nips.cc/paper/4937-accelerating-stochastic-gradient-descent-using-predictive-variance-reduction.pdf\nhttp://papers.nips.cc/paper/4937-accelerating-stochastic-gradient-descent-using-predictive-variance-reduction\nAll Papers/J/Johnson and Zhan
+	- Johnson, R., & Zhang, T. (2013). Accelerating Stochastic Gradient Descent using Predictive Variance Reduction. Advances in Neural Information Processing Systems 26, 1(3), 315–323. Retrieved from http://papers.nips.cc/paper/4937-accelerating-stochastic-gradient-descent-using-predictive-variance-reduction.pdf
 	- Kim, J.-D., Ohta, T., Tsuruoka, Y., Tateisi, Y., & Collier, N. (2004). Introduction to the Bio-entity Recognition Task at JNLPBA. Proceedings of the International Joint Workshop on Natural Language Processing in Biomedicine and Its Applications, 70–75. http://dx.doi.org/10.3115/1567594.1567610
 	- Lafferty, J., McCallum, A., & Pereira, F. C. N. (2001). Conditional random fields: Probabilistic models for segmenting and labeling sequence data. ICML ’01 Proceedings of the Eighteenth International Conference on Machine Learning, 8(June), 282–289. http://dx.doi.org/10.1038/nprot.2006.61
 	- Sarawagi, S., & Cohen, W. W. (2005). Semi-Markov Conditional Random Fields for Information Extraction. Advances in Neural Information Processing Systems, 1185–1192. http://dx.doi.org/10.1.1.128.3524
