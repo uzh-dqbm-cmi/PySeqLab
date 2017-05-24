@@ -1409,22 +1409,29 @@ class SeqDecodingEvaluator(object):
         Y_codebook = self.model_repr.Y_codebook
         M = len(Y_codebook)
         # add another state in case unseen states occur in the test data
-        model_taglevel_performance = numpy.zeros((M + 1, 2, 2))
-
+        self.model_confusion_matrix = numpy.zeros((M+1, M+1), dtype="float")
         for seq_id in Y_seqs_dict:
             Y_pred = Y_seqs_dict[seq_id]['Y_pred']
             Y_ref = Y_seqs_dict[seq_id]['Y_ref']
-            #^print("Y_pred ", Y_pred)
-            #^print("Y_ref ", Y_ref)
-            taglevel_performance = self._compute_tags_confusionmatrix(self.map_states_to_num(Y_ref, Y_codebook, M),
-                                                                      self.map_states_to_num(Y_pred, Y_codebook, M),
-                                                                      M)
-#             print("taglevel_performance {}".format(taglevel_performance))
-#             print("tagging performance \n {}".format(taglevel_performance))
-            model_taglevel_performance += taglevel_performance
-            #^print("model_taglevel_performance ", model_taglevel_performance)
-
-        return(model_taglevel_performance)
+            self._compute_model_confusionmatrix(self.map_states_to_num(Y_ref, Y_codebook, M),
+                                                self.map_states_to_num(Y_pred, Y_codebook, M)
+                                                )
+        statelevel_confmatrix  = self._generate_statelevel_confusion_matrix()
+        
+        return(statelevel_confmatrix)
+    
+    def _generate_statelevel_confusion_matrix(self):
+        model_confusion_matrix = self.model_confusion_matrix
+        num_states = model_confusion_matrix.shape[0]
+        total = model_confusion_matrix.sum()
+        statelevel_confmatrix = numpy.zeros((num_states, 2, 2), dtype='float')
+        for i in range(num_states):
+            tp = model_confusion_matrix[i, i]
+            fp = model_confusion_matrix[i, :].sum() - tp
+            fn = model_confusion_matrix[:, i].sum() - tp
+            tn = total - (tp+fp+fn)
+            statelevel_confmatrix[i] = numpy.array([[tp, fn], [fp, tn]])
+        return(statelevel_confmatrix)
     
     def get_performance_metric(self, taglevel_performance, metric, exclude_states=[]):
         """compute the performance of the model using a requested metric
@@ -1448,8 +1455,8 @@ class SeqDecodingEvaluator(object):
         collapsed_performance = taglevel_performance[include_indices].sum(axis = 0)
 #         print("collapsed performance \n {}".format(collapsed_performance))
         tp = collapsed_performance[0,0]
-        fp = collapsed_performance[0,1]
-        fn = collapsed_performance[1,0]
+        fp = collapsed_performance[1,0]
+        fn = collapsed_performance[0,1]
         tn = collapsed_performance[1,1]
                     
         perf_measure = 0
@@ -1493,37 +1500,23 @@ class SeqDecodingEvaluator(object):
 #         print("Y_coded {}".format(Y_coded))
         return(Y_coded)
         
-    def _compute_tags_confusionmatrix(self, Y_ref, Y_pred, M):
+
+
+    def _compute_model_confusionmatrix(self, Y_ref, Y_pred):
         """compute confusion matrix on the level of the tag/state
         
            Args:
                Y_ref: list of reference label sequence (represented by the states code)
                Y_pred: list of predicted label sequence (represented by the states code) 
-               M: number of states
         """
-        #^print("Y_ref coded ", Y_ref)
-        #^print("Y_pred coded ", Y_pred)
-        detected_statescode = set(Y_ref)
         Y_ref = numpy.asarray(Y_ref)
         Y_pred = numpy.asarray(Y_pred)
-#         print("Y_ref as numpy array {}".format(Y_ref))
-        tagslevel_performance = numpy.zeros((M + 1, 2, 2), dtype="float")
-        
-        for statecode in detected_statescode:
-            # get all indices of the target tag (gold-standard)
-            tag_indx_origin = numpy.where(Y_ref == statecode)[0]
-            # get all indices of the target tag (predicted)
-            tag_indx_pred = numpy.where(Y_pred == statecode)[0]
-            tag_tp = len(numpy.where(numpy.in1d(tag_indx_origin, tag_indx_pred))[0])
-            tag_fn = len(tag_indx_origin) - tag_tp
-            other_indx_origin = numpy.where(Y_ref != statecode)[0]
-            tag_fp = len(numpy.where(numpy.in1d(other_indx_origin, tag_indx_pred))[0])
-            tag_tn = len(other_indx_origin) - tag_fp
-            tagslevel_performance[statecode] = numpy.array([[tag_tp, tag_fp], [tag_fn, tag_tn]])
-            
-        return(tagslevel_performance)
-
-
+        model_confusion_matrix = self.model_confusion_matrix
+        for i in range(len(Y_ref)):
+            ref_state = Y_ref[i]
+            pred_state = Y_pred[i]
+            model_confusion_matrix[ref_state, pred_state] += 1
+    
 class Evaluator(object):
     """Evaluator class to evaluate performance of the models 
     
