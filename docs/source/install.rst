@@ -16,7 +16,7 @@ Installation
 
 To install the latest version of PySeqLab::
 
-    > pip install https://bitbucket.org/A_2/pyseqlab/downloads/PySeqLab-1.3.2.tar.gz
+    > pip install git+https://bitbucket.org/A_2/pyseqlab.git
     
 
 Requirements
@@ -24,7 +24,7 @@ Requirements
 
 -  `Python 3.4.0 <http://python.org>`__
 -  `NumPy 1.8.0 <http://numpy.org>`__
--  `SciPy 0.13 <http://scipy.org>`__
+-  `SciPy 0.13 <http://scipy.org>`__ (only for using L-BFGS-B optimization method)
 
 Anaconda 
 --------------------------------------------------------------------------------

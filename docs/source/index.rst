@@ -16,7 +16,7 @@
    install
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Methods and Tutorials:
    
    methods_tutorials
