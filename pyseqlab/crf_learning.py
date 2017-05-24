@@ -1458,7 +1458,7 @@ class SeqDecodingEvaluator(object):
             if(metric == "f1"):
                 precision = tp/(tp + fp)
                 recall = tp/(tp + fn)
-                f1 = 2 * ((precision * recall)/(precision +  recall))
+                f1 = (2 * precision * recall)/(precision +  recall)
                 print("f1 {}".format(f1))
                 perf_measure = f1
             elif(metric == "precision"):
@@ -1507,7 +1507,7 @@ class SeqDecodingEvaluator(object):
         Y_ref = numpy.asarray(Y_ref)
         Y_pred = numpy.asarray(Y_pred)
 #         print("Y_ref as numpy array {}".format(Y_ref))
-        tagslevel_performance = numpy.zeros((M + 1, 2, 2))
+        tagslevel_performance = numpy.zeros((M + 1, 2, 2), dtype="float")
         
         for statecode in detected_statescode:
             # get all indices of the target tag (gold-standard)
