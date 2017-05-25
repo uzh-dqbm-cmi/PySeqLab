@@ -23,8 +23,8 @@ in `this tutorial <_static/part_of_speech_tagger_tutorial.html>`__. The project 
 Bio-named entity recognizer
 +++++++++++++++++++++++++++
 
-We conclude the NLP examples by training a biomedical named entity recognizer (``BioNER``) using `BioNLP/NLPBA 2004 dataset <http://www.nactem.ac.uk/tsujii/GENIA/ERtask/report.html>`__.
-The code is accessible through this `bitbucket repository <https://bitbucket.org/A_2/bio-entity-recognition>`__.
+We conclude the NLP examples by `this tutorial <_static/bioner_tagger_tutorial.html>`__ on training a biomedical named entity recognizer (``BioNER``) using `BioNLP/NLPBA 2004 dataset <http://www.nactem.ac.uk/tsujii/GENIA/ERtask/report.html>`__.
+The project repository is available on `bitbucket repository <https://bitbucket.org/A_2/bio-entity-recognition>`__.
 
 Eukaryotic splice-junction sequences predictor
 ----------------------------------------------

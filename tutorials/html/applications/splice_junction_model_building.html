@@ -205,7 +205,7 @@ div#notebook {
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[20]:</div>
+<div class="prompt input_prompt">In&nbsp;[22]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># first we define relevant directories</span>
@@ -239,7 +239,7 @@ div#notebook {
 <div class="output">
 
 
-<div class="output_area"><div class="prompt output_prompt">Out[20]:</div>
+<div class="output_area"><div class="prompt output_prompt">Out[22]:</div>
 
 <div class="output_html rendered_html output_subarea output_execute_result">
 
@@ -458,7 +458,7 @@ font-size:0.85em;
 </div>
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>We start by defining our attribute extractor that we will use to generate attributes from the parsed sequences. Our attribute extractor <code class="pseq_class">SpliceJunctionAttributeExtractor</code> is subclass of <code class="pseq_class">GenericAttributeExtractor</code> class implemented in <code class="pseq_code">splice_junction_attribute_extractor.py</code> module. It defines attributes based on the <code class="pseq_code">num_obs</code> track we defined earlier (<a href="#spljun_track">see here</a>) at each position in the sequence. Below is <a href="#spljun_attrext_demo">an example</a> of the extractd attributes using our <code class="pseq_class">SpliceJunctionAttributeExtractor</code> class from a sequence in our training file.</p>
+<p>We start by defining our attribute extractor that we will use to generate attributes from the parsed sequences. Our attribute extractor <code class="pseq_class">SpliceJunctionAttributeExtractor</code> is subclass of <code class="pseq_class">GenericAttributeExtractor</code> class implemented in <code class="pseq_code">splice_junction_attribute_extractor.py</code> module. It defines attributes based on the <code class="pseq_code">num_obs</code> track we defined earlier (<a href="#spljun_track">see here</a>) at each position in the sequence. Below is <a href="#spljun_attrext_demo">an example</a> of the extracted attributes using our <code class="pseq_class">SpliceJunctionAttributeExtractor</code> class from a sequence in our training file.</p>
 <p>After defining our attribute extractor, we define the feature templates that are used by the feature extractors to generate features. Feature templates and feature extraction are described in detail in <a href="http://pyseqlab.readthedocs.io/en/latest/_static/templates_and_features_extraction.html">this tutorial</a>.</p>
 <p>In the <code class="pseq_code">train_splicejunction_predictor_workflow.py</code> module, we define our feature templates using <code class="pseq_function">template_config()</code> function.</p>
 <pre style="font-size:0.75em">
@@ -472,7 +472,7 @@ def template_config():
     templateY = template_generator.generate_template_Y('2-states')
     return(templateXY, templateY)
 </pre><p>The defined templates include only one track (i.e. <code class="pseq_code">num_obs</code>) representing the numbered position nucleotide letter. <br/></p>
-<ul><li>We define a window of size 30 centered at each position in the sequence. That is, we pass through the sequence from left to right, where at each position, we construct a window of size 30 (a window that includes attributes from 15 previous positions, current position,  and 15 forward/future positions)</li>
+<ul><li>We define a window of size 31 centered at each position in the sequence. That is, we pass through the sequence from left to right, where at each position, we construct a window of size 31 (a window that includes attributes from 15 previous positions, current position,  and 15 forward/future positions)</li>
 <li>We extract 1 to 6 grams (i.e. <code class="pseq_code">1-gram:2-gram:3-gram:4-gram:5-gram:6-gram</code>) in the specified window </li>
 <li>We join these attributes with the current state (i.e. <code class="pseq_code">Y labels</code>)</li>
 </ul><p>For the <code class="pseq_code">Y labels only</code>:</p>
