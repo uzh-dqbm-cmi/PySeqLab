@@ -18,13 +18,13 @@ Part-of-Speech tagger
 +++++++++++++++++++++
 
 Similarly, we demonstrate how to train a ``part-of-speech tagger`` using `GENIA corpus 3.02 part of speech annotation <http://www.geniaproject.org/genia-corpus/pos-annotation>`__
-in `this tutorial <_static/part_of_speech_tagger_tutorial.html>`__. The project repository is available on `bitbucket<https://bitbucket.org/A_2/part-of-speech-tagger>`__.
+in `this tutorial <_static/part_of_speech_tagger_tutorial.html>`__. The project repository is available on `bitbucket <https://bitbucket.org/A_2/part-of-speech-tagger>`__.
 
 Bio-named entity recognizer
 +++++++++++++++++++++++++++
 
 We conclude the NLP examples by `this tutorial <_static/bioner_tagger_tutorial.html>`__ on training a biomedical named entity recognizer (``BioNER``) using `BioNLP/NLPBA 2004 dataset <http://www.nactem.ac.uk/tsujii/GENIA/ERtask/report.html>`__.
-The project repository is available on `bitbucket<https://bitbucket.org/A_2/bio-entity-recognition>`__.
+The project repository is available on `bitbucket <https://bitbucket.org/A_2/bio-entity-recognition>`__.
 
 Eukaryotic splice-junction sequences predictor
 ----------------------------------------------
