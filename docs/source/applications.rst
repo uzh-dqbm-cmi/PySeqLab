@@ -31,3 +31,9 @@ Eukaryotic splice-junction sequences predictor
 
 We demonstrate how to train a ``splice-junction classifier`` using `Molecular Biology (Splice-junction Gene Sequences) Data Set <http://archive.ics.uci.edu/ml/datasets/Molecular+Biology+%28Splice-junction+Gene+Sequences%29>`__
 in `this tutorial <_static/splice_junction_model_building.html>`__. Moreover, the project repository is available on `bitbucket <https://bitbucket.org/A_2/splice_junction_prediction>`__.
+
+Human activity recognition (HAR) classifiers
+----------------------------------------------
+
+We demonstrate how to train a ``modes of locomotion classifier`` and ``gestures movements classifier`` using the `OPPORTUNITY activity recognition dataset <https://archive.ics.uci.edu/ml/datasets/OPPORTUNITY+Activity+Recognition#>`__ in `this tutorial <_static/har_recognition_tutorial.html>`__.
+Moreover, the project repository is available on `bitbucket <https://bitbucket.org/A_2/har_activity_recognition>`__.
