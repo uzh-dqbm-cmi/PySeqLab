@@ -161,7 +161,7 @@ def revive_learnedmodel(model_dir):
     lmodel = generate_trained_model(modelpart_dir, AttributeExtractor)
     return(lmodel)
             
-def build_model(model_type, template_config):
+def build_model(model_type, template_config, num_seqs):
     if(model_type == 'HOCRFAD'):
         modelrepr_class = HOCRFADModelRepresentation
         model_class = HOCRFAD
@@ -190,7 +190,7 @@ def build_model(model_type, template_config):
     # init feature extractor
     fextractor = fextractor_class(template_XY, template_Y, attr_extractor.attr_desc)
     # generate data 
-    seqs = seq_generator.generate_seqs(5)
+    seqs = seq_generator.generate_seqs(num_seqs)
     # use all passed data as training data -- no splitting
     data_split_options = {'method':'none'}
     # no feature filter 

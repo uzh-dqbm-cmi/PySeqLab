@@ -370,7 +370,7 @@ class Learner(object):
         else:
             if(x != y):            
                 reldiff = numpy.abs(x - y) / (numpy.abs(x) + numpy.abs(y))
-                print("reldiff = {}".format(reldiff))
+                #print("reldiff = {}".format(reldiff))
                 if(reldiff <= tolerance):
                     self._exitloop = True
                 else:
@@ -638,14 +638,14 @@ class Learner(object):
                     
                     diff = numpy.dot(w[ref_windx], ref_fval) - numpy.dot(w[imp_windx], imp_fval)
                     test.append(diff)
-                    print("diff = {}, max_diff = {} ".format(diff, max_diff))
+#                     print("diff = {}, max_diff = {} ".format(diff, max_diff))
                     if(diff <= max_diff):
                         # using less than or equal would allow for getting the longest sequence having max difference
                         max_diff = diff
                         ref_unp_windxfval = (ref_windx, ref_fval)
                         imp_unp_windxfval = (imp_windx, imp_fval)
                 imps_unp_windxfval = [imp_unp_windxfval]
-                print("test ", test)
+#                 print("test ", test)
             elif(update_type == "max-fast"):
                 # based on empirical observation, the last violation index (i.e. where the beam falls off) is almost always yielding the max violation
                 # this is a heuristic, for an exhaustive procedure, choose `max-exhaustive`
@@ -763,10 +763,10 @@ class Learner(object):
         """
         self._report_training()
         num_epochs = self.training_description["num_epochs"]
-        regularization_type = self.training_description["regularization_type"]
+#         regularization_type = self.training_description["regularization_type"]
         # regularization parameter lambda
-        C = self.training_description['regularization_value']
-        gamma = self.training_description['gamma']
+#         C = self.training_description['regularization_value']
+#         gamma = self.training_description['gamma']
         shuffle_seq = self.training_description['shuffle_seq']
         model_dir = self.training_description["model_dir"]
         log_file = os.path.join(model_dir, "crf_training_log.txt")
@@ -803,8 +803,8 @@ class Learner(object):
             avg_error_list.append(float(error_count/N))
             self._track_perceptron_optimizer(w, k, avg_error_list)
             ReaderWriter.dump_data(w_avg/((k+1)*N), os.path.join(model_dir, "model_avgweights_epoch_{}".format(k+1)))
-            print("average error : {}".format(avg_error_list))
-            print("self._exitloop {}".format(self._exitloop))
+            print("average error : {}".format(avg_error_list[1:]))
+#             print("self._exitloop {}".format(self._exitloop))
             if(self._exitloop):
                 break
             self._elapsed_time = datetime.now()
@@ -891,8 +891,8 @@ class Learner(object):
                 else:
                     w_dump = w_avg
                 ReaderWriter.dump_data(w_dump, os.path.join(model_dir, "model_avgweights_epoch_{}".format(k+1)))
-                print("average error : {}".format(avg_error_list))
-                print("self._exitloop {}".format(self._exitloop))
+                print("average error : {}".format(avg_error_list[1:]))
+#                 print("self._exitloop {}".format(self._exitloop))
                 if(self._exitloop):
                     break
                 self._elapsed_time = datetime.now()
@@ -1163,11 +1163,12 @@ class Learner(object):
                train_seqs_id: list of integers representing sequences IDs
            
         """
-        
+        # keep the original number of epochs requested
         num_epochs = self.training_description["num_epochs"]
-        # rung stochastic gradient ascent to initialize the weights
+        # run stochastic gradient ascent to initialize the weights
         self.training_description["num_epochs"] = 1
-        w_tilda_p = self._sga_classic(w, train_seqs_id)
+        # current snapshot of w (i.e. w tilda)
+        w_tilda_c = self._sga_classic(w, train_seqs_id)
         self.cleanup()
 
         self.training_description["num_epochs"] = num_epochs
@@ -1207,16 +1208,13 @@ class Learner(object):
         
         for s in range(num_epochs):
             print("stage {}".format(s))
-            w_tilda_c = w_tilda_p
             
             # ###################################
-            # compute the average gradient 
+            # compute the average gradient using the snapshot of w (i.e. w tilda)
             mu_grad = numpy.zeros(len(w_tilda_c), dtype = "longdouble")
             # compute average gradient
-            left = N
+            seqs_left = N
             for seq_id in train_seqs_id:
-                left -= 1
-                print("average gradient phase: {} seqs left".format(left))
                 target_indx = crf_model.compute_seq_gradient(w_tilda_c, seq_id, grad)
                 fval = grad[target_indx]
                 mu_grad[target_indx] += fval
@@ -1224,18 +1222,16 @@ class Learner(object):
                 saved_grad[seq_id] = (target_indx, fval)
                 # reset grad
                 grad.fill(0)
-            if(C and regularization_type == "l2"):
-                mu_grad -= (C* w_tilda_c)
-            mu_grad = mu_grad/N
+                seqs_left -= 1
+                print("average gradient phase: {} seqs left".format(seqs_left))
+            mu_grad /= N
             #######################################
                 
             w = numpy.copy(w_tilda_c) 
                 
             for t in range(m):
                 seq_id = numpy.random.choice(train_seqs_id, 1)[0]
-#                 print("eta {}".format(eta))
-#                 print(seq_id)
-                print("we are in round {} out of {}".format(t+1, m))
+                print("round {} out of {}".format(t+1, m))
                 
                 seq_loglikelihood = crf_model.compute_seq_loglikelihood(w, seq_id)
                 seqs_loglikelihood_vec[seqs_id_mapper[seq_id]] = seq_loglikelihood
@@ -1245,8 +1241,10 @@ class Learner(object):
                     if(regularization_type == 'l2'):
                         seq_loglikelihood += - ((C/N) * (1/2) * numpy.dot(w, w))
                         grad -= ((C/N)* w)
+                        
                         grad[saved_grad[seq_id][0]] -= saved_grad[seq_id][1] 
-                        grad += ((C/N) * w_tilda_c) + mu_grad
+                        grad += mu_grad
+                        
                         w += eta * grad
                         
                     elif(regularization_type == 'l1'):
@@ -1264,12 +1262,11 @@ class Learner(object):
                 else:                    
                     w[target_indx] += eta * (fval - saved_grad[seq_id][1])
                     w += eta * mu_grad
-                    
                 t += 1
                 # clean cached info
                 crf_model.clear_cached_info([seq_id])
                 grad.fill(0)
-            w_tilda_p = w
+            w_tilda_c = w
                 
             seqs_cost_vec = [numpy.mean(seqs_loglikelihood_vec[i:i+step_size]) for i in range(0, N, step_size)]
             # to consider plotting this vector
@@ -1326,7 +1323,6 @@ class Learner(object):
         """
         delta_time = datetime.now() - self._elapsed_time 
         self._check_reldiff(mean_loglikelihood[-2], mean_loglikelihood[-1])
-#         
         epoch_num = k
         # log file 
         model_dir = self.training_description["model_dir"]
@@ -1335,41 +1331,6 @@ class Learner(object):
         line += "Estimated training cost (average loglikelihood) is {} \n".format(mean_loglikelihood[-1])
         line += "Number of seconds spent: {} \n".format(delta_time.total_seconds())
         ReaderWriter.log_progress(line, log_file)
-        ####  dump data for every epoch/pass ####
-        # dump the learned weights for every pass
-#         self.dump_file(w, os.path.join(model_dir, "model_weights_epoch_{}".format(k+1)))
-#         self.dump_file(seqs_loglikelihood, os.path.join(model_dir, "seqs_loglikelihood_epoch_{}".format(k+1)))
-#         
-        # plot the estimated seqs_loglikelihood
-#         colormap = plt.cm.get_cmap("Spectral")
-#         colors = [colormap(i) for i in numpy.linspace(0, 0.9, total_epochs)]
-#         color = colors[epoch_num]
-#         plt_dir = create_directory("plot", model_dir)
-#         self._plot_cost(seqs_loglikelihood, fig_num = epoch_num+1, plt_dir = plt_dir, color=color)
-        
-#     def _plot_cost(self, seqs_cost, fig_num, plt_dir, color):
-#         # fig_num = 1 means we are in the first epoch and hence new training -- 
-#         if(fig_num == 1):
-#             plt.clf()
-#             plt.figure(1)
-#         group_num = numpy.arange(1, len(seqs_cost)+1)
-#         plt_axis = plt.subplot(111)
-#         plt_axis.plot(group_num, seqs_cost, marker = "o", color=color)
-#         plt.ylabel('Average log-likelihood per group of sequences')
-#         plt.xlabel('Group number')
-# #         plt_box = plt_axis.get_position()
-# #         plt_axis.set_position([plt_box.x0, plt_box.y0 + plt_box.height * 0.05, plt_box.width, plt_box.height * 0.95])
-#         plt_axis.legend(["Epoch {}".format(i+1) for i in range(fig_num)],
-#                     ncol=4, 
-#                     loc='best', 
-#                     numpoints = 1,
-#                     #bbox_to_anchor=[0.5, -0.15], 
-#                     prop = {'size':10},
-#                     columnspacing=1.0, labelspacing=0.0,
-#                     handletextpad=0.0, handlelength=1,
-#                     fancybox=False, shadow=False)
-#         plt.savefig(os.path.join(plt_dir,'pass_{}.pdf'.format(fig_num)))
-
     
     def cleanup(self):
         """End of training -- cleanup"""

@@ -14,8 +14,11 @@ class TrainingWorkflow(object):
     
       .. note::
       
-        It is **highly recommended** to start using :class:`TrainingWorkflowIterative` class instead
-        of the :class:`TrainingWorkflow` class.
+        It is **highly recommended** to start using :class:`GenericTrainingWorkflow` class
+        
+      .. warning::
+      
+        This class will be deprecated ...
         
     """
     def __init__(self, template_y, template_xy, model_repr_class, model_class,
@@ -227,8 +230,15 @@ class TrainingWorkflow(object):
         print(statement)
         
 class TrainingWorkflowIterative(object):
-    r"""general training workflow that support reading/preparing **large** training sets
+    """general training workflow that support reading/preparing **large** training sets
+    
+       .. note::
        
+          It is **highly recommended** to start using :class:`GenericTrainingWorkflow` class
+        
+       .. warning::
+       
+          This class will be deprecated ...   
     """
     def __init__(self, template_y, template_xy, model_repr_class, model_class,
                  fextractor_class, aextractor_class, scaling_method, ascaler_class, 
@@ -542,23 +552,23 @@ class TrainingWorkflowIterative(object):
 
 
 class GenericTrainingWorkflow(object):
-    """general training workflow for building and training CRF models
+    """generic training workflow for building and training CRF models
        
        Args:
-           aextractor_obj: 
-           fextractor_obj:
-           feature_filter_obj:
-           model_repr_class:
-           model_class:
-           root_dir:
+           aextractor_obj: initialized instance of :class:`GenericAttributeExtractor` class/subclass 
+           fextractor_obj: initialized instance of :class:`FeatureExtractor` class/subclass 
+           feature_filter_obj: None or an initialized instance of :class:`FeatureFilter` class
+           model_repr_class: a CRFs model representation class such as :class:`HOCRFADModelRepresentation` 
+           model_class: a CRFs model class such as :class:`HOCRFAD`
+           root_dir: string representing the directory/path where working directory will be created
            
        Attributes:
-           aextractor_obj: 
-           fextractor_obj:
-           feature_filter_obj:
-           model_repr_class:
-           model_class:
-           root_dir:
+           aextractor_obj: initialized instance of :class:`GenericAttributeExtractor` class/subclass 
+           fextractor_obj: initialized instance of :class:`FeatureExtractor` class/subclass 
+           feature_filter_obj: None or an initialized instance of :class:`FeatureFilter` class
+           model_repr_class: a CRFs model representation class such as :class:`HOCRFADModelRepresentation` 
+           model_class: a CRFs model class such as :class:`HOCRFAD`
+           root_dir: string representing the directory/path where working directory will be created
     """
     def __init__(self, aextractor_obj, fextractor_obj, feature_filter_obj,
                  model_repr_class, model_class,
