@@ -10,6 +10,11 @@ Documentation & Tutorials
 
 Documentation and tutorials are available through `readthedocs website <http://pyseqlab.readthedocs.io/en/latest/>`__.
 
+Citation
+---------
+More info about the models and optimization algorithms included in ``PySeqLab`` package is reported in **Bionformatics** paper:
+
+Ahmed Allam, Michael Krauthammer, PySeqLab: an open source Python package for sequence labeling and segmentation, Bioinformatics, Volume 33, Issue 21, 01 November 2017, Pages 3497–3499, https://doi.org/10.1093/bioinformatics/btx451
 
 References
 -----------
@@ -31,9 +36,5 @@ References
 	- Viterbi, A. (1967). Error bounds for convolutional codes and an asymptotically optimum decoding algorithm. IEEE Transactions on Information Theory, 13(2), 260–269. http://dx.doi.org/10.1109/TIT.1967.1054010
 	- Ye, N., Lee, W. S., Chieu, H. L., & Wu, D. (2009). Conditional Random Fields with High-Order Features for Sequence Labeling. Neural Information Processing Systems, 2, 2. Retrieved from http://www.comp.nus.edu.sg/~leews/publications/nips09_paper.pdf
 	- Zeiler, M. D. (2012). ADADELTA: An Adaptive Learning Rate Method. Retrieved from http://arxiv.org/abs/1212.5701
-	
-More info about the models and optimization algorithms included in ``PySeqLab`` package is reported in a **submitted** paper:
-
-	**Allam A, Krauthammer M.** PySeqLab an open source Python package for sequence labeling and segmentation.
 	
 	
