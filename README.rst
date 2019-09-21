@@ -12,9 +12,10 @@ Documentation and tutorials are available through `readthedocs website <http://p
 
 Citation
 ---------
-More info about the models and optimization algorithms included in ``PySeqLab`` package is reported in **Bionformatics** paper:
+More info about the models and optimization algorithms implemented in ``PySeqLab`` package is reported in **Bioinformatics** paper:
 
 Ahmed Allam, Michael Krauthammer, PySeqLab: an open source Python package for sequence labeling and segmentation, Bioinformatics, Volume 33, Issue 21, 01 November 2017, Pages 3497–3499, https://doi.org/10.1093/bioinformatics/btx451
+
 
 References
 -----------
